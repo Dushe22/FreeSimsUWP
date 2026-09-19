@@ -1,0 +1,78 @@
+name: Xbox UWP proof and desktop baseline
+
+on:
+  push:
+    branches: [xbox-uwp-port]
+    paths:
+      - 'experiments/XboxUwpProof/**'
+      - 'scripts/**'
+      - '.github/workflows/xbox-proof.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  desktop-baseline:
+    runs-on: windows-2022
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - name: Compile untouched desktop runtime
+        id: baseline
+        continue-on-error: true
+        shell: pwsh
+        run: ./scripts/Build-DesktopBaseline.ps1
+      - name: Record baseline outcome separately
+        if: always()
+        shell: pwsh
+        env:
+          BASELINE_OUTCOME: ${{ steps.baseline.outcome }}
+        run: |
+          "Desktop Release/x86 compiler outcome: $env:BASELINE_OUTCOME. Runtime not tested." >> $env:GITHUB_STEP_SUMMARY
+          New-Item -ItemType Directory -Force artifacts/desktop-baseline | Out-Null
+          "Compiler outcome: $env:BASELINE_OUTCOME; runtime not tested." | Set-Content artifacts/desktop-baseline/CI-RESULT.txt
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: desktop-baseline-${{ github.sha }}
+          path: artifacts/desktop-baseline/
+          retention-days: 14
+  uwp-proof:
+    runs-on: windows-2022
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+      - name: Record Windows build tools
+        shell: pwsh
+        run: |
+          & "${env:ProgramFiles(x86)}/Microsoft Visual Studio/Installer/vswhere.exe" -latest -format json
+          Get-ChildItem "${env:ProgramFiles(x86)}/Windows Kits/10/bin" -Directory | Select-Object Name
+      - name: Build and sign Release x64 UWP proof
+        shell: pwsh
+        env:
+          SOURCE_COMMIT: ${{ github.sha }}
+        run: ./scripts/Build-XboxProof.ps1 -SourceCommit $env:SOURCE_COMMIT -Sign
+      - name: Reject private keys in artifact output
+        shell: pwsh
+        run: |
+          $keys = Get-ChildItem artifacts/proof -Recurse -File | Where-Object { $_.Extension -in '.pfx', '.p12', '.key', '.pem' }
+          if ($keys) { throw 'Private-key-like file found in proof artifact output.' }
+      - uses: actions/upload-artifact@v4
+        if: success()
+        with:
+          name: xbox-uwp-proof-${{ github.sha }}
+          path: |
+            artifacts/proof/AppPackages/
+            artifacts/proof/FreeSimsXboxDevelopment.cer
+            artifacts/proof/BUILD.txt
+          if-no-files-found: error
+          retention-days: 30
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: xbox-uwp-proof-logs-${{ github.sha }}
+          path: |
+            artifacts/proof/build.log
+            artifacts/proof/proof.binlog
+          retention-days: 14

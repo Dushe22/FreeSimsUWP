@@ -37,3 +37,7 @@ TestResults/
 *credentials*.json
 /deployment.local.json
 /xbox.local.json
+
+# Reproducibly generated proof resources and build identity
+/experiments/XboxUwpProof/Assets/
+**/BuildInfo.g.cs

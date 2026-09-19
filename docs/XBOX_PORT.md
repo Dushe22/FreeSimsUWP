@@ -2,7 +2,8 @@
 
 ## Current status
 
-Experimental, not yet compiled or tested on Xbox. Work is confined to
+Experimental, UWP proof source added; first Windows CI compilation pending. Not
+tested on Xbox. Work is confined to
 `xbox-uwp-port` in `Dushe22/FreeSimsUWP`; never push to original upstream.
 Source baseline: `a7e9dba6cd4067b4efec54ae8e0443787da22992`.
 No game engine implementation has been changed. No hardware milestones are tagged.
@@ -111,15 +112,66 @@ Windows CI will record the actual desktop baseline separately from UWP results.
 
 ## Build and deployment instructions
 
-No deployable package exists yet. Windows build automation and the proof project
-are the next milestone. Do not treat this document as confirmation of a build.
-Signing keys must be created outside the repository and never uploaded in build
-artifacts. A public test certificate may accompany a signed test package.
+The `Xbox UWP proof and desktop baseline` workflow runs on windows-2022 for proof,
+script or workflow changes pushed to xbox-uwp-port; it can also be dispatched
+manually. Desktop baseline failures are reported separately and do not prevent
+the independent proof job. A green workflow alone is not evidence that the
+desktop baseline passed: inspect its explicit compiler outcome and logs.
+
+On Windows with VS2022 managed UWP/.NET Native tooling and SDK 10.0.19041.0:
+
+```powershell
+./scripts/Build-XboxProof.ps1 -Sign
+# Separate baseline diagnostic (requires nuget.exe on PATH):
+./scripts/Build-DesktopBaseline.ps1
+```
+
+The proof script generates its own geometric PNG logos and source commit identity,
+restores pinned packages, compiles Release/x64 with .NET Native and produces AppX.
+Its optional signing step creates an ephemeral development key in the Windows
+certificate store, signs the application, exports only the public .cer, and deletes
+the private key. No PFX or signing password is created. Build the project through
+this script first; generated assets/BuildInfo are intentionally not committed.
+
+Artifacts are named `xbox-uwp-proof-<full commit>` and
+`xbox-uwp-proof-logs-<full commit>`. The package artifact includes AppPackages with
+framework dependencies, a public certificate and BUILD.txt with commit and SHA256.
+Failed compilations upload diagnostic logs only. The desktop job uploads logs,
+not the original engine binaries or content. First CI results are still pending.
 
 Future deployment: enable Xbox Developer Mode/Device Portal, deploy the exact
 Release/x64 test package and its x64 framework dependencies, then test on hardware.
 Record source commit, Actions run, package identity, expected scene, controls and
 log retrieval instructions when a package actually exists.
+
+### Proof hardware procedure (use only after a successful package build)
+
+1. Download the package artifact for the specified source commit in GitHub Actions.
+   Extract it on the deployment computer. Read BUILD.txt and verify the SHA256.
+2. On the console enable Developer Mode and Xbox Device Portal/remote access.
+   Open the console's displayed Device Portal URL on the same local network.
+3. In Device Portal's application deployment page select the main `.appx` from
+   AppPackages (not a framework dependency). Add the x64 framework `.appx` files
+   from its Dependencies/x64 directory if included/required; install the package.
+   Do not upload the .cer as an application or any .pfx. The .cer is the public
+   development certificate, useful for trust setup when testing on Windows PCs.
+4. Launch **FreeSims Xbox Proof**. If Dev Home offers an App/Game classification,
+   select Game. Report the actual console OS and classification with results.
+5. Expect a dark background, title, commit prefix, controller/audio status and a
+   moving blue rectangle. This is a toolchain proof, not a Sims menu.
+6. On controller 1 test left stick (crosshair), A (toggle rectangle color/count),
+   B (recenter), X (quarter-second generated tone), Menu (pause/resume animation).
+   Disconnect/reconnect and optionally leave/reopen the app; note any failures.
+7. In Device Portal File Explorer, select this application's local data and
+   download LocalState/proof.log (and proof.log.previous if present). Portal labels
+   vary; LocalState is the app-local storage, not its installation directory.
+   Log events report submission only, not proof that pixels/sound reached hardware.
+8. Return full commit/BUILD.txt, Series X or S, console OS, visible/audio/input
+   results, any deployment HRESULT, and proof.log. If it fails before writing a
+   log, return the Device Portal deployment/launch error and available crash dump.
+
+Do not load any Sims data for this test. Stop here and wait for user results before
+claiming hardware success or tagging xbox-poc-uwp/first-launch/first-render.
 
 ## Game-data layout for the later engine target
 
@@ -138,6 +190,8 @@ The proof does not load Sims data and must not request it.
 - GitHub write access verified; xbox-uwp-port pushed and tracking origin.
 - Ignore rules added for build output, local game data, saves and private keys.
 - Known secret-format scan found no matches (not a comprehensive security audit).
+- Minimal CoreApplication/MonoGame proof source added, pinned to 3.8.1.303.
+- Separate Windows desktop baseline and signed UWP package CI paths added.
 
 ## Current blockers / next milestones
 
@@ -149,7 +203,11 @@ The proof does not load Sims data and must not request it.
 
 ## Xbox-specific modifications
 
-None yet. This initial milestone adds documentation and ignore rules only.
+The proof is isolated in experiments/XboxUwpProof and shares no engine source yet.
+It exercises DirectX rendering, GamePad input, generated PCM audio, local log
+storage and lifecycle event logging. Lifecycle events are diagnostic only; full
+engine save safety/device recovery remains later work. All desktop sources remain
+unchanged.
 
 ## Hardware test results
 
