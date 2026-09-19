@@ -1,0 +1,39 @@
+# Build and local IDE state
+**/bin/
+**/obj/
+.vs/
+.idea/
+*.user
+*.suo
+*.userosscache
+*.sln.docstates
+packages/
+AppPackages/
+artifacts/
+TestResults/
+*.binlog
+*.log
+*.tmp
+
+# User-supplied Sims installations and private save data (never package these)
+/GameData/
+/UserData/
+/UserData*/
+/SimsData/
+/LocalState/
+/Downloads/
+/Saves/
+
+# Credentials, signing keys and machine-specific deployment configuration
+.env
+.env.*
+*.pfx
+*.p12
+*.key
+*.pem
+*.snk
+*.publishsettings
+*.pubxml.user
+*credentials*.json
+/deployment.local.json
+/xbox.local.json
