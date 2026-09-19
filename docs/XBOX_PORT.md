@@ -2,8 +2,8 @@
 
 ## Current status
 
-Experimental, UWP proof source added; first Windows CI compilation pending. Not
-tested on Xbox. Work is confined to
+Experimental, UWP proof source added; Windows CI is blocked before compilation
+by a GitHub account restriction. Not tested on Xbox. Work is confined to
 `xbox-uwp-port` in `Dushe22/FreeSimsUWP`; never push to original upstream.
 Source baseline: `a7e9dba6cd4067b4efec54ae8e0443787da22992`.
 No game engine implementation has been changed. No hardware milestones are tagged.
@@ -137,7 +137,22 @@ Artifacts are named `xbox-uwp-proof-<full commit>` and
 `xbox-uwp-proof-logs-<full commit>`. The package artifact includes AppPackages with
 framework dependencies, a public certificate and BUILD.txt with commit and SHA256.
 Failed compilations upload diagnostic logs only. The desktop job uploads logs,
-not the original engine binaries or content. First CI results are still pending.
+not the original engine binaries or content. The first run was blocked before
+either runner started; consequently no build logs or package artifacts exist yet.
+
+### Recorded CI attempt
+
+- Source commit: `da8369358a8042d584ef8629301c63ec7fdc0e88`.
+- Run: https://github.com/Dushe22/FreeSimsUWP/actions/runs/35454183333
+- Both `desktop-baseline` and `uwp-proof` failed with **zero executed steps**.
+- GitHub check annotation: "The job was not started because your account is locked
+  due to a billing issue."
+- This is an account/runner provisioning failure, not a compiler or package error.
+  No Windows compiler result can be claimed for either configuration.
+- User action: resolve the GitHub Actions account restriction. Then rerun all jobs
+  on this run (it tests the exact commit above), or dispatch `xbox-proof.yml` with
+  ref `xbox-uwp-port` to test the latest branch. Do not change account billing or
+  spend limits automatically.
 
 Future deployment: enable Xbox Developer Mode/Device Portal, deploy the exact
 Release/x64 test package and its x64 framework dependencies, then test on hardware.
@@ -195,7 +210,8 @@ The proof does not load Sims data and must not request it.
 
 ## Current blockers / next milestones
 
-1. Establish Windows desktop compiler baseline and capture failures separately.
+1. Wait for the user to unlock GitHub Actions, then establish the Windows desktop
+   compiler baseline and capture failures separately.
 2. Compile/package asset-free MonoGame 3.8.1 UWP proof with rendering, input,
    diagnostic logging and generated tone audio.
 3. Stop for user Xbox test results; no hardware success tags before confirmation.
