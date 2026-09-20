@@ -16,13 +16,13 @@ TestResults/
 *.tmp
 
 # User-supplied Sims installations and private save data (never package these)
-/GameData/
-/UserData/
-/UserData*/
-/SimsData/
-/LocalState/
-/Downloads/
-/Saves/
+**/GameData/
+**/UserData/
+**/UserData*/
+**/SimsData/
+**/LocalState/
+**/Downloads/
+**/Saves/
 
 # Credentials, signing keys and machine-specific deployment configuration
 .env

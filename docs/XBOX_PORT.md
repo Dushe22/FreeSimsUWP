@@ -2,8 +2,9 @@
 
 ## Current status
 
-Experimental, UWP proof source added; Windows CI is blocked before compilation
-by a GitHub account restriction. Not tested on Xbox. Work is confined to
+Recovered on Windows; desktop Release/x86 compilation passes. UWP proof
+validation is in progress. Historical CI was blocked by an account restriction.
+Not tested on Xbox. Work is confined to
 `xbox-uwp-port` in `Dushe22/FreeSimsUWP`; never push to original upstream.
 Source baseline: `a7e9dba6cd4067b4efec54ae8e0443787da22992`.
 No game engine implementation has been changed. No hardware milestones are tagged.
@@ -99,7 +100,8 @@ Pin `MonoGame.Framework.WindowsUniversal` to **3.8.1.303**. UWP was removed in
 wrapped in an AppX. Use Release/x64 and .NET Native from the first proof build.
 Build-time and runtime framework versions must remain consistent.
 
-Local host: Linux x86_64, Git 2.43.0; no dotnet, Mono or MSBuild found.
+Historical (previous workspace) host: Linux x86_64, Git 2.43.0; no dotnet, Mono
+or MSBuild found. See Recovered Project State below for the new Windows host.
 Desktop baseline attempt:
 
 ```text
@@ -210,8 +212,8 @@ The proof does not load Sims data and must not request it.
 
 ## Current blockers / next milestones
 
-1. Wait for the user to unlock GitHub Actions, then establish the Windows desktop
-   compiler baseline and capture failures separately.
+1. Desktop Release/x86 now compiles locally. Complete local UWP toolchain
+   validation; GitHub Actions billing remains a separate historical blocker.
 2. Compile/package asset-free MonoGame 3.8.1 UWP proof with rendering, input,
    diagnostic logging and generated tone audio.
 3. Stop for user Xbox test results; no hardware success tags before confirmation.
@@ -399,3 +401,58 @@ Finish local toolchain setup, checkpoint/push this recovery, correct the baselin
 invocation, then compile/package the existing proof with minimal evidence-driven
 fixes. Do not change the engine or upgrade MonoGame to compensate for missing
 tooling. Keep the historical failed CI experiment for context.
+
+## Windows recovery validation: desktop baseline
+
+Recovery checkpoint `be5baa1cc96c5376e5407b114ff5a3e54d33d784` was pushed to
+origin/xbox-uwp-port and its remote hash verified after GitHub browser sign-in.
+
+- Installed VS2022 Build Tools reports 17.14.41 / 17.14.37710.0; MSBuild
+  17.14.60.43110. The outer installer is still completing remaining components.
+- Microsoft-signed NuGet CLI 6.14.0 obtained from
+  https://dist.nuget.org/win-x86-commandline/v6.14.0/nuget.exe.
+- Restored Microsoft.NETFramework.ReferenceAssemblies.net45 **1.0.3**.
+  No desktop retargeting or dependency upgrade was necessary.
+- The original baseline script failed under modern MSBuild with the same invalid
+  Release/x86 library configuration, confirming a recovered script defect.
+- Building `SimsVille/SimsVille.sln /t:SimsVille` with Release/x86 and the restored
+  TargetFrameworkRootPath **PASS** (exit 0). It compiled Simslib.dll, Common.dll and
+  SimsVille.exe. Existing warnings include obsolete graphics calls, unused fields
+  and the unassigned SteamInstallPath. No source errors were found.
+- Updated `Build-DesktopBaseline.ps1` to use that solution target, check tools,
+  accept `-NuGetPath`, and normalize its log output directory.
+  The updated script also **PASS** (exit 0).
+- The proof restored MonoGame **3.8.1.303** / UWP **6.2.14** successfully, then failed
+  with MSB3644 for `.NETCore,Version=v5.0` while the toolchain installation was still
+  completing. This is the legacy UWP framework identity, not a request to upgrade
+  this application to modern .NET 5. Wait for installation completion and retry.
+- Desktop runtime/game loading and all Xbox behavior remain NOT TESTED.
+
+### Reproducible Windows setup
+
+`.vsconfig` records the VS2022 **Build Tools** workload/component selections.
+Use the VS2022 bootstrapper from https://aka.ms/vs/17/release/vs_buildtools.exe,
+verify its Microsoft signature, and install from an elevated PowerShell:
+
+```powershell
+# Run from the repository root. Wait for the installer to finish before building.
+$setup = Start-Process .\vs_buildtools.exe -ArgumentList @(
+    '--quiet', '--wait', '--norestart', '--nocache',
+    '--config', ('"' + (Join-Path $PWD '.vsconfig') + '"')
+) -WindowStyle Hidden -PassThru -Wait
+$setup.ExitCode # 0 = success; 3010 = restart required
+# NuGet CLI can be placed outside the repository; pass its full path:
+./scripts/Build-DesktopBaseline.ps1 -NuGetPath 'C:\Tools\nuget.exe'
+./scripts/Build-XboxProof.ps1 -Sign
+```
+
+The Visual Studio IDE itself is optional for command-line builds. Keep the Windows
+SDK at 10.0.19041.0 and the package pins above. Generated output remains ignored.
+`.gitignore` now also excludes nested GameData/UserData/LocalState/Downloads/Saves
+directories, because desktop output and UWP local data need not be at repo root.
+No game data, private keys, credentials or newly obtained binary dependencies were
+staged or committed. No application assets were downloaded.
+
+Local logs: `artifacts/desktop-baseline/build.log`, `desktop.binlog`, and the
+initial diagnostic `solution.log`/`solution.binlog`; proof diagnostics under
+`artifacts/proof`. These are ignored machine-specific artifacts, not release files.
