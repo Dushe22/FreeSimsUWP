@@ -242,3 +242,160 @@ latest-MonoGame upgrade and porting standalone desktop utilities are also exclud
 - https://www.nuget.org/packages/MonoGame.Framework.WindowsUniversal/3.8.1.303
 - https://monogame.net/blog/2024-08-16-monogame-382/
 - https://github.com/actions/runner-images/blob/main/images/windows/Windows2022-Readme.md
+
+# Recovered Project State
+
+Recovery date: 2026-09-20. This section records the recovered state before new
+implementation changes. Later validation entries supersede its build status.
+
+## Repository state
+
+- Working repository: https://github.com/Dushe22/FreeSimsUWP
+- Recovered branch: `xbox-uwp-port`, tracking `origin/xbox-uwp-port`.
+- Recovered latest commit: `0d47e33c5610d3806de08f3e58b7cecbebcd4bfa`,
+  `docs: record GitHub Actions account blocker and unverified build status`.
+- Default branch: `master`, at `a7e9dba6cd4067b4efec54ae8e0443787da22992`.
+- Origin fetch/push: `https://github.com/Dushe22/FreeSimsUWP.git`.
+- Comparison-only upstream: `https://github.com/francot514/FreeSims.git`.
+- Fresh full clone; fetched all branches and tags, inspected all-history graph
+  and commit subjects, each port commit and its complete source changes.
+  No shallow history, reset, upstream merge or force push was used.
+- Origin has only master and xbox-uwp-port; no origin tags. Port is three commits
+  ahead of master. Origin master and upstream master have the same commit/tree.
+- Upstream also has `fixes` at `4a882a65c46f652c605302d4b1e15a062f355d2a`
+  and `upgrades` at `4a248431741656598ffba697d61fafd75cbef878`.
+  These unmerged reference branches contain engine/desktop changes, not surviving
+  Xbox work (no UWP/Xbox/WindowsUniversal project or source matches).
+  They are not substitutes for the recovered port branch.
+- 323 reachable commits across fetched references; 51 upstream SimsVille release
+  tags. These are upstream history, not Xbox milestones. No tags were created.
+
+### Previous development commits
+
+1. `a4a0ee84693561d2c9fbb6db3cf729b100fde1ab`: original dependency/port audit,
+   documentation and ignore rules.
+2. `da8369358a8042d584ef8629301c63ec7fdc0e88`: isolated UWP proof, build scripts
+   and Windows CI.
+3. `0d47e33c5610d3806de08f3e58b7cecbebcd4bfa`: recorded CI account failure and
+   explicitly unverified compilation/hardware status.
+
+## Existing Xbox/UWP work
+
+All 13 files changed from upstream are listed below. No engine source changed.
+"Unverified" means no successful compatible compiler run exists at recovery,
+not that the implementation is known to be broken. Retain all recovered work.
+
+| File | Purpose and recovered implementation | Compilation/completeness |
+| --- | --- | --- |
+| `docs/XBOX_PORT.md` | Architecture, dependency audit, blockers and future hardware procedure | Documentation exists; local Linux environment description is historical |
+| `.gitignore` | Build output, root game data/saves and private-key exclusions | Retain; nested data-directory coverage needs expansion before provisioning |
+| `.github/workflows/xbox-proof.yml` | Independent desktop and UWP jobs on windows-2022 | Present; only recorded run failed before either job executed |
+| `scripts/Build-DesktopBaseline.ps1` | Restore .NET 4.5 references and invoke Release/x86 build | Partial: missing-tool diagnostics and x86 propagation to AnyCPU libraries need correction |
+| `scripts/Build-XboxProof.ps1` | Generate original logos/build identity, restore/build/package and optionally sign with temporary key | Present; not yet executed past toolchain discovery |
+| `experiments/XboxUwpProof/XboxUwpProof.csproj` | Explicit-source x64 UWP project, .NET Native Release, MonoGame 3.8.1.303 and UWP 6.2.14 | Unverified; retain pins and DirectX target |
+| `experiments/XboxUwpProof/Package.appxmanifest` | App identity, universal device family, original generated logo references | Unverified packaging/activation |
+| `experiments/XboxUwpProof/Program.cs` | CoreApplication + MonoGame framework view, exception/lifecycle logging | Unverified; no engine startup integration |
+| `experiments/XboxUwpProof/ProofGame.cs` | SpriteBatch geometry, generated PCM tone, controller pointer and buttons | Unverified; fixed 500 px/s proof pointer, not full requested engine controls |
+| `experiments/XboxUwpProof/PixelText.cs` | Original grid font without content pipeline assets | Unverified; complete enough for proof source |
+| `experiments/XboxUwpProof/ProofLog.cs` | LocalFolder log, rotation, diagnostic fallback | Unverified runtime; save/lifecycle safety not implemented |
+| `experiments/XboxUwpProof/Properties/AssemblyInfo.cs` | Proof assembly metadata | Unverified build |
+| `experiments/XboxUwpProof/Properties/Default.rd.xml` | Application metadata preservation for .NET Native | Unverified native compilation |
+
+### Engine audit rechecked
+
+- SimsVille, sims.common and sims.files remain legacy .NET Framework 4.5 projects.
+  Client is x86; the two libraries define AnyCPU configurations.
+- `SimsVille/Program.cs` still chooses OpenGL (`useDX = false`), calls
+  MonogameLinker and uses Assembly.LoadFrom. The UWP proof bypasses this startup.
+- WinForms and System.Drawing still appear in runtime project references.
+  `sims.files/ImageLoader.cs` still decodes through GDI+ Bitmap/LockBits.
+- `SimsVille/Utils/GameLocator/WindowsLocator.cs` still uses Registry APIs and
+  reads an unassigned SteamInstallPath field. These are upstream code.
+- GamePad/LocalFolder use exists in the proof, not an engine platform abstraction.
+- Existing DirectX/OpenGL content and shader sources are inherited unchanged.
+  No new shader pipeline, engine decoder, storage or controller adapter survived.
+- Debug/parser/server tools remain excluded from planned UWP integration.
+  Building only the SimsVille solution target can use existing library mappings
+  without building those separate executables.
+
+## Missing work
+
+Compatible local build validation; successful proof packaging; Xbox launch,
+render/audio/controller/lifecycle hardware confirmation; shared-source engine UWP
+host; UWP image decoding; explicit game/user/content paths; removal of desktop-only
+dependencies from that host; reflection/native validation; engine controller
+adapter; shader rebuild/provenance audit; neighborhood/lot/simulation/save/reload.
+These are planned milestones, not recovered implementations.
+
+## Suspected lost work
+
+**LOST OR UNCONFIRMED WORK**: Any claimed compiled UWP package, console deployment,
+hardware test, integrated engine UWP runtime, working decoder/platform services,
+controller-driven engine UI or save/resume implementation beyond this proof.
+No such implementation is present on origin branches/tags or in port commits.
+The recovered documentation does not claim these existed. A lost local workspace
+cannot establish their existence; do not recreate an imaginary later state.
+
+## Windows development environment at recovery
+
+- Windows 10 Enterprise LTSC, 64-bit, version 10.0.19044.
+- Bundled Git 2.53.0.windows.3 found outside PATH:
+  `C:\Users\Joaco\.cache\codex-runtimes\codex-primary-runtime\dependencies\native\git\cmd\git.exe`.
+- No Visual Studio Installer/vswhere, VS MSBuild, Windows Kits SDK, managed UWP
+  workload, .NET Native tooling, .NET SDK or NuGet CLI found initially.
+- .NET Framework runtime 4.8.04084 and legacy framework MSBuild file version
+  4.8.4084.0 are present. They do not replace VS2022 UWP tooling or net45 references.
+- No separate MonoGame tooling/package cache found. The proof needs no MGCB;
+  it generates geometry/audio and restores the pinned framework package.
+- Microsoft-signed VS2022 Build Tools installation was started with managed desktop,
+  UniversalBuildTools, NetFX.Native and Windows10SDK.19041 components.
+  Installation completion and exact resulting versions must be checked afterward.
+- Git author identity and GitHub credential account were not configured on this
+  new machine at recovery. Prior-machine push success is not current authorization
+  state; verify a real push after the recovery commit.
+
+## Initial build attempts (before implementation changes)
+
+From the repository root, with bundled Git added to the process PATH:
+
+| Command | Result | Classification |
+| --- | --- | --- |
+| `./scripts/Build-DesktopBaseline.ps1` | FAIL before compilation: vswhere.exe not found | WINDOWS TOOLCHAIN ERROR |
+| `./scripts/Build-XboxProof.ps1` | FAIL before compilation: Visual Studio Installer / vswhere is required | WINDOWS TOOLCHAIN ERROR |
+| Framework MSBuild `SimsVille/SimsVille.csproj /p:Configuration=Release /p:Platform=x86 /verbosity:minimal /nologo` | Exit 1: MSB3644 net45 reference assemblies missing; OutputPath undefined for sims.common and sims.files at Release/x86 | MISSING DEPENDENCY + RECOVERED PORT ERROR in baseline invocation |
+| Framework MSBuild `experiments/XboxUwpProof/XboxUwpProof.csproj /p:Configuration=Release /p:Platform=x64 /p:GenerateAppxPackageOnBuild=true /verbosity:minimal /nologo` | Exit 1: MSB4066 PackageReference Version unrecognized by old MSBuild | WINDOWS TOOLCHAIN ERROR |
+
+Framework MSBuild path:
+`C:\Windows\Microsoft.NET\Framework64\v4.0.30319\MSBuild.exe`.
+Desktop runtime: NOT TESTED. Engine UWP target: absent / NOT TESTED.
+UWP Release/x64 proof and packaging: FAIL before compatible compilation.
+No package generated; Xbox test is not yet actionable.
+
+## BLOCKER
+
+The recovered targets cannot be validated with the initially installed toolchain.
+The desktop script also propagates an invalid platform to library dependencies.
+
+## EVIDENCE
+
+Missing vswhere/SDK, MSB3644, MSB4066 and Release/x86 OutputPath errors above.
+`SimsVille/SimsVille.sln` already maps the Release/x86 solution configuration to
+Release/Any CPU libraries.
+
+## CAUSE
+
+Fresh Windows installation lacks development components. Building the client
+project directly bypasses solution configuration mappings.
+
+## OPTIONS
+
+Install the matching VS2022/UWP tools and build locally, or restore access to
+GitHub Actions. Use the existing solution's SimsVille target for the desktop
+baseline rather than inventing library x86 configurations.
+
+## RECOMMENDATION
+
+Finish local toolchain setup, checkpoint/push this recovery, correct the baseline
+invocation, then compile/package the existing proof with minimal evidence-driven
+fixes. Do not change the engine or upgrade MonoGame to compensate for missing
+tooling. Keep the historical failed CI experiment for context.
