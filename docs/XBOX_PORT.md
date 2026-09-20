@@ -456,3 +456,51 @@ staged or committed. No application assets were downloaded.
 Local logs: `artifacts/desktop-baseline/build.log`, `desktop.binlog`, and the
 initial diagnostic `solution.log`/`solution.binlog`; proof diagnostics under
 `artifacts/proof`. These are ignored machine-specific artifacts, not release files.
+
+## UWP packaging validation and manifest correction
+
+The VS2022 Build Tools installer finished with exit **0** on 2026-09-20.
+Windows SDK 10.0.19041.0 is installed; MakeAppx reports 10.0.19041.5609.
+The earlier missing `.NETCore,v5.0` references were resolved by completing the
+installation, without retargeting the project.
+
+With the completed toolchain, `./scripts/Build-XboxProof.ps1 -Sign` compiled C#
+and .NET Native Release/x64, then hit **RECOVERED PORT ERROR** `APPX1673:
+App manifest is missing required element 'PhoneIdentity'`.
+
+The recovered manifest had omitted the phone namespace/identity present in
+[MonoGame v3.8.1's CoreApp template](https://github.com/MonoGame/MonoGame/blob/v3.8.1/Templates/MonoGame.Templates.CSharp/content/MonoGame.Application.UWP.CoreApp.CSharp/Package.appxmanifest).
+Restored that metadata using the proof project's stable GUID and the template's
+zero PhonePublisherId. Kept Windows.Universal targeting, x64 and all package pins.
+This satisfies the UWP packaging tooling; it does not add a phone build target.
+
+Validation after this two-line metadata addition: **PASS** for C#, .NET Native and
+unsigned AppX creation (MSBuild exit 0). Command:
+
+```powershell
+MSBuild.exe experiments/XboxUwpProof/XboxUwpProof.csproj /m /verbosity:minimal /p:Configuration=Release /p:Platform=x64 /p:TargetPlatformVersion=10.0.19041.0 /p:UseDotNetNativeToolchain=true /p:AppxBundle=Never /p:UapAppxPackageBuildMode=SideloadOnly /p:GenerateAppxPackageOnBuild=true /p:AppxPackageSigningEnabled=false /p:AppxPackageDir=artifacts/proof-validation/AppPackages/ /bl:artifacts/proof-validation/validation.binlog
+```
+
+MSBuild is the full VS2022 MSBuild path reported in the recovery section.
+The provisional unsigned validation output is not the hardware handoff: its
+generated BuildInfo still identifies the preceding commit. After committing this
+fix, rebuild through Build-XboxProof.ps1 to stamp the actual source commit and sign.
+
+### Known compiler warnings
+
+.NET Native emits five **MCG0007** warnings from SharpDX.MediaFoundation for
+`Mfplat.dll!MFCreateMuxStreamAttributes`, `MFCreateMuxStreamMediaType`,
+`MFCreateMuxStreamSample`, `MFCreateSensorGroup`, and `MFCreateSensorStream`.
+The compiler says invoking these unresolved imports would throw at runtime.
+The proof contains no direct calls to these methods (its tone uses SoundEffect
+with generated PCM), but Xbox runtime behavior remains unverified. Preserve these
+warnings in the record; do not suppress them or patch third-party binaries without
+a demonstrated runtime failure.
+
+### Current GitHub Actions evidence
+
+Run https://github.com/Dushe22/FreeSimsUWP/actions/runs/35531409009 tested
+`bdc373c0d49a7ba669b3d21f211fd0a6ab5b6ccd`. Both jobs again had zero executed steps;
+the API annotations report the account locked due to a billing issue.
+Local compiler results above are independent of that failed workflow. No account
+billing settings were changed.

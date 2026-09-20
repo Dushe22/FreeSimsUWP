@@ -1,7 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
 <Package xmlns="http://schemas.microsoft.com/appx/manifest/foundation/windows10"
-         xmlns:uap="http://schemas.microsoft.com/appx/manifest/uap/windows10" IgnorableNamespaces="uap">
+         xmlns:uap="http://schemas.microsoft.com/appx/manifest/uap/windows10"
+         xmlns:mp="http://schemas.microsoft.com/appx/2014/phone/manifest" IgnorableNamespaces="uap mp">
   <Identity Name="Dushe22.FreeSimsXboxProof" Publisher="CN=FreeSimsXboxDevelopment" Version="0.1.0.0" />
+  <mp:PhoneIdentity PhoneProductId="53b58c1b-85db-4783-952f-d783a329fb5f" PhonePublisherId="00000000-0000-0000-0000-000000000000" />
   <Properties>
     <DisplayName>FreeSims Xbox Proof</DisplayName>
     <PublisherDisplayName>Dushe22</PublisherDisplayName>
