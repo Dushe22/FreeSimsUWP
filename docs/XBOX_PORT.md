@@ -6,11 +6,12 @@ Recovered on Windows. Desktop Release/x86 compilation, the MonoGame 3.8.1.303
 UWP Release/x64 proof, .NET Native, and signed AppX generation all PASS locally.
 The signed package from source commit 3aaafa134f31b7fdb4216e8a1b12c44447323a22
 is ready for the user hardware procedure at the end of this document.
-Xbox behavior is NOT TESTED. Stop at this boundary and await console results.
+The user reports the complete proof hardware procedure passed with no errors.
+The next milestone is shared engine file parsers and UWP image decoding.
 GitHub Actions remains blocked by an account billing restriction.
 Work is on xbox-uwp-port in Dushe22/FreeSimsUWP; never push to original upstream.
 The FreeSims engine source remains unchanged from recovery baseline
- a7e9dba6cd4067b4efec54ae8e0443787da22992. No hardware milestones are tagged.
+ a7e9dba6cd4067b4efec54ae8e0443787da22992. The tested source is tagged xbox-poc-uwp.
 
 ## Architecture and scope
 
@@ -216,12 +217,11 @@ The proof does not load Sims data and must not request it.
 
 ## Current blockers / next milestones
 
-1. Await the user's Xbox Series X/S test of the signed proof specified below.
-2. Investigate any deployment/runtime error from that exact package and its logs.
-3. Only after hardware confirmation introduce the shared-source FreeSims UWP
-   target and platform services. Do not claim engine or save functionality yet.
-4. GitHub Actions is still blocked by account billing, independently of successful
-   local builds. The user controls billing; no account settings were changed.
+1. Proof hardware procedure passed according to the user. Preserve xbox-poc-uwp.
+2. Build the existing sims.files parsers for UWP and replace GDI+ image decoding.
+3. Validate synthetic image/IFF fixtures under .NET Native before real-data loading.
+4. Integrate the remaining engine incrementally; saves and simulation are unverified.
+5. GitHub Actions billing remains a separate account blocker; use local builds.
 
 ## Xbox-specific modifications
 
@@ -233,8 +233,9 @@ unchanged.
 
 ## Hardware test results
 
-None. Neither Xbox Series X nor Series S has been tested. Never infer hardware
-success from compilation or a GitHub Actions green check.
+User-reported PASS received 2026-09-21 for proof commit
+3aaafa134f31b7fdb4216e8a1b12c44447323a22. See the dated hardware result
+at the end of this document for scope and limitations.
 
 ## Rejected approaches
 
@@ -672,3 +673,33 @@ exception must be returned, not treated as a successful test.
 
 Stop here and return the hardware results. No Xbox-success tag or engine
 integration milestone is claimed by this package.
+
+## Hardware result received 2026-09-21: proof PASS
+
+The user completed the supplied hardware test procedure and reported:
+> Test procedure completed, exited with no errors, every functionality works as intended
+
+This confirms the procedure for source
+`3aaafa134f31b7fdb4216e8a1b12c44447323a22` and the previously supplied signed
+`XboxUwpProof_0.1.0.0_x64.appx`, SHA256
+`F53942D037A329986A8229484E26345374DAE3A6D466FBAA6CD89F37C5E5B08C`.
+
+User-reported PASS: deployment/launch, visible animated DirectX scene, controller
+pointer and A/B/Menu controls, audible X tone, controller reconnect, and leaving/
+returning to the app as covered by that procedure. The user also reports no errors
+on exit. This is user hardware confirmation, not a test run performed by the agent.
+Console Series X versus Series S and OS version were requested but are not yet
+recorded. No diagnostic logs were supplied; do not invent log contents or claim
+both console models were tested.
+
+The annotated tag `xbox-poc-uwp` identifies the exact tested source commit.
+The earlier NOT TESTED entries and immutable BUILD.txt describe the state at build/
+handoff time and are superseded by this result for this specific proof package.
+
+The five native SharpDX MCG0007 warnings did not prevent the reported proof test.
+This does not verify unused Media Foundation APIs, the FreeSims engine, real game
+data, neighborhood/lot loading, simulation, game saves/reload, or engine suspend safety.
+
+Next implementation: share the existing sims.files source with a UWP library,
+isolate desktop image APIs, and verify a UWP decoder plus IFF parsing using
+original synthetic fixtures. Preserve the tested standalone proof.
