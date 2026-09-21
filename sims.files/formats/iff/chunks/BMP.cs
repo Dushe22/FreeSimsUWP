@@ -1,4 +1,4 @@
-﻿/*
+/*
  * This Source Code Form is subject to the terms of the Mozilla Public License, v. 2.0.
  * If a copy of the MPL was not distributed with this file, You can obtain one at
  * http://mozilla.org/MPL/2.0/. 
@@ -9,7 +9,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using System.IO;
-using System.Drawing;
+
 using FSO.Files.Utils;
 using Microsoft.Xna.Framework.Graphics;
 
@@ -19,7 +19,7 @@ namespace FSO.Files.Formats.IFF.Chunks
     /// <summary>
     /// This chunk type holds an image in BMP format.
     /// </summary>
-    public class BMP : IffChunk
+    public partial class BMP : IffChunk
     {
         private byte[] data;
 
@@ -36,10 +36,7 @@ namespace FSO.Files.Formats.IFF.Chunks
             
         }
 
-        public Image GetBitmap()
-        {
-            return Bitmap.FromStream(new MemoryStream(data));
-        }
+
 
 
 

@@ -688,8 +688,7 @@ User-reported PASS: deployment/launch, visible animated DirectX scene, controlle
 pointer and A/B/Menu controls, audible X tone, controller reconnect, and leaving/
 returning to the app as covered by that procedure. The user also reports no errors
 on exit. This is user hardware confirmation, not a test run performed by the agent.
-Console Series X versus Series S and OS version were requested but are not yet
-recorded. No diagnostic logs were supplied; do not invent log contents or claim
+Console confirmed by the user: Xbox Series S. OS described as "latest"; exact build number not supplied. No diagnostic logs were supplied; do not invent log contents or claim
 both console models were tested.
 
 The annotated tag `xbox-poc-uwp` identifies the exact tested source commit.
@@ -703,3 +702,38 @@ data, neighborhood/lot loading, simulation, game saves/reload, or engine suspend
 Next implementation: share the existing sims.files source with a UWP library,
 isolate desktop image APIs, and verify a UWP decoder plus IFF parsing using
 original synthetic fixtures. Preserve the tested standalone proof.
+
+## Shared files library milestone (2026-09-21)
+
+- Added sims.files.uwp, compiling the existing parser source against UWP 6.2.14
+  and MonoGame.Framework.WindowsUniversal 3.8.1.303. No engine parser rewrite.
+- ImageLoader delegates decoding through IImageDecoder. The desktop GDI+ decoder
+  retains its existing behavior. UWP uses Windows.Graphics.Imaging.BitmapDecoder
+  with explicit RGBA8, straight alpha, no EXIF rotation and no color management.
+  Color keys and premultiplication remain in the shared ImageLoader.
+  [Microsoft API contract](https://learn.microsoft.com/en-us/uwp/api/windows.graphics.imaging.bitmapdecoder.getpixeldataasync).
+- BMP.GetBitmap remains available to the desktop debugger through a desktop-only
+  partial class. Removed unused System.Drawing and System.Media imports.
+- Original synthetic fixtures cover 2x2 BMP row padding/orientation/channels,
+  PNG alpha/dimensions, caller stream lifetime, invalid image rejection, IFF
+  reflective chunk creation/lazy BCON parsing/endianness and invalid IFF rejection.
+- Desktop Release/x86 client compilation: PASS (existing upstream warnings).
+  Desktop CPU compatibility tests: **6/6 PASS**. Desktop game runtime not tested.
+- UWP Release/x64 files library compilation: PASS. This alone is not a native
+  application build or a hardware result.
+- The Xbox probe will additionally run GPU readback checks for all three BMP
+  color keys and PNG alpha modes 0, 1 and -1. These checks are not yet run.
+- No original game assets or signing keys added.
+
+Commands (from repository root, Visual Studio MSBuild and NuGet installed):
+
+~~~powershell
+./scripts/Build-DesktopBaseline.ps1 -NuGetPath <path-to-nuget.exe>
+./scripts/Test-FilesCompatibility.ps1
+& '<VS2022>/MSBuild/Current/Bin/MSBuild.exe' sims.files.uwp/sims.files.uwp.csproj /restore /p:Configuration=Release /p:Platform=x64
+~~~
+
+Build failure resolved: CS0234 System.Media in XAFile.cs was an unused import,
+classified UWP INCOMPATIBILITY. Removing the import preserved the XA parser.
+Next: native Xbox probe linking this library, then user hardware verification
+before integrating sims.common and the SimsVille runtime.
