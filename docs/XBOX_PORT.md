@@ -2,12 +2,15 @@
 
 ## Current status
 
-Recovered on Windows; desktop Release/x86 compilation passes. UWP proof
-validation is in progress. Historical CI was blocked by an account restriction.
-Not tested on Xbox. Work is confined to
-`xbox-uwp-port` in `Dushe22/FreeSimsUWP`; never push to original upstream.
-Source baseline: `a7e9dba6cd4067b4efec54ae8e0443787da22992`.
-No game engine implementation has been changed. No hardware milestones are tagged.
+Recovered on Windows. Desktop Release/x86 compilation, the MonoGame 3.8.1.303
+UWP Release/x64 proof, .NET Native, and signed AppX generation all PASS locally.
+The signed package from source commit 3aaafa134f31b7fdb4216e8a1b12c44447323a22
+is ready for the user hardware procedure at the end of this document.
+Xbox behavior is NOT TESTED. Stop at this boundary and await console results.
+GitHub Actions remains blocked by an account billing restriction.
+Work is on xbox-uwp-port in Dushe22/FreeSimsUWP; never push to original upstream.
+The FreeSims engine source remains unchanged from recovery baseline
+ a7e9dba6cd4067b4efec54ae8e0443787da22992. No hardware milestones are tagged.
 
 ## Architecture and scope
 
@@ -161,9 +164,10 @@ Release/x64 test package and its x64 framework dependencies, then test on hardwa
 Record source commit, Actions run, package identity, expected scene, controls and
 log retrieval instructions when a package actually exists.
 
-### Proof hardware procedure (use only after a successful package build)
+### General proof hardware procedure (see exact signed handoff below)
 
-1. Download the package artifact for the specified source commit in GitHub Actions.
+1. Use the signed local ZIP specified in the final hardware handoff below. GitHub
+   Actions artifacts are unavailable while account billing blocks the runners.
    Extract it on the deployment computer. Read BUILD.txt and verify the SHA256.
 2. On the console enable Developer Mode and Xbox Device Portal/remote access.
    Open the console's displayed Device Portal URL on the same local network.
@@ -212,12 +216,12 @@ The proof does not load Sims data and must not request it.
 
 ## Current blockers / next milestones
 
-1. Desktop Release/x86 now compiles locally. Complete local UWP toolchain
-   validation; GitHub Actions billing remains a separate historical blocker.
-2. Compile/package asset-free MonoGame 3.8.1 UWP proof with rendering, input,
-   diagnostic logging and generated tone audio.
-3. Stop for user Xbox test results; no hardware success tags before confirmation.
-4. Only then introduce the shared-source FreeSims UWP target and platform services.
+1. Await the user's Xbox Series X/S test of the signed proof specified below.
+2. Investigate any deployment/runtime error from that exact package and its logs.
+3. Only after hardware confirmation introduce the shared-source FreeSims UWP
+   target and platform services. Do not claim engine or save functionality yet.
+4. GitHub Actions is still blocked by account billing, independently of successful
+   local builds. The user controls billing; no account settings were changed.
 
 ## Xbox-specific modifications
 
@@ -504,3 +508,167 @@ Run https://github.com/Dushe22/FreeSimsUWP/actions/runs/35531409009 tested
 the API annotations report the account locked due to a billing issue.
 Local compiler results above are independent of that failed workflow. No account
 billing settings were changed.
+
+## Signed hardware handoff verified on 2026-09-21
+
+The signed build from clean source commit
+`3aaafa134f31b7fdb4216e8a1b12c44447323a22` completed through the unchanged
+`scripts/Build-XboxProof.ps1 -Sign` workflow. Its BUILD.txt was written after
+successful build/signing and records `Signed test package: True`.
+
+| Target | Result | Scope |
+| --- | --- | --- |
+| Desktop Release/x86 | PASS | Untouched engine compilation through the corrected baseline script; runtime NOT TESTED |
+| UWP proof Release/x64 | PASS | C# and .NET Native compilation with MonoGame 3.8.1.303 |
+| AppX packaging/signing | PASS | Generated signed x64 application and framework dependency packages |
+| Integrated FreeSims UWP runtime | NOT TESTED / not implemented | Proof remains isolated from the engine |
+| Xbox Series X/S | NOT TESTED | User hardware test required; stop here |
+
+Validation of the final main AppX:
+- Manifest identity `Dushe22.FreeSimsXboxProof`, version `0.1.0.0`, architecture x64.
+- SHA256 matches BUILD.txt:
+  `F53942D037A329986A8229484E26345374DAE3A6D466FBAA6CD89F37C5E5B08C`.
+- All **171** blocks in AppxBlockMap.xml match their payload SHA256 hashes.
+- Embedded CMS signature passes cryptographic verification; its signer matches
+  FreeSimsXboxDevelopment.cer. This is self-signed development identity verification,
+  not an assertion of Microsoft Store or operating-system trust.
+- Certificate thumbprint: `95DD0B7D658FFC77B7A33B3A1E8363EA57FB4125`.
+  Public .cer has no private key; no matching private-key certificate remains
+  in CurrentUser/My after the signing script's cleanup.
+- Payload inventory contains the native proof executable/library, clrcompression,
+  MonoGame build metadata, four original generated PNG logos, resource/manifest
+  and package-signing metadata. No inherited SimsVille Content tree, game data,
+  credentials or private keys are included.
+- The three bundled dependency manifests identify x64 and satisfy the application's
+  .NET Native Framework/Runtime 2.2 and VCLibs 140 requirements.
+- No console deployment/launch has been performed, and no Xbox-success tag exists.
+
+### Exact local artifacts
+
+Paths below are relative to the repository root:
+
+- Signed main package:
+  `artifacts/proof/AppPackages/XboxUwpProof_0.1.0.0_x64_Test/XboxUwpProof_0.1.0.0_x64.appx`
+- Public certificate: `artifacts/proof/FreeSimsXboxDevelopment.cer`
+- Build identity/hash: `artifacts/proof/BUILD.txt`
+- Compiler diagnostics: `artifacts/proof/build.log` and `proof.binlog`
+- Convenient handoff directory: `artifacts/xbox-test-3aaafa134f31/`
+- Handoff archive: `artifacts/xbox-test-3aaafa134f31.zip` (9,979,876 bytes)
+- Archive SHA256:
+  `4EBC0B4DC4EE6F407C2946E214B84634ADE945CF469F49F7FEA8FD92CC418017`
+
+The handoff ZIP contains exactly seven files: main AppX, three x64 dependencies,
+public .cer, BUILD.txt and TESTING.md. It excludes ARM/x86 dependencies, symbols,
+private keys and original game assets. Build artifacts remain ignored; all source,
+build scripts and the complete handoff procedure are preserved in Git.
+To regenerate after losing local output, check out the source commit above,
+install the documented toolchain and run Build-XboxProof.ps1 -Sign. A regenerated
+development certificate/package has a new signature/hash; record its new BUILD.txt.
+
+### Upstream refresh
+
+A fresh fetch on 2026-09-21 found two newer upstream/master commits:
+`c2db3bc21b69c570d461ae0b4b86cbb77e74b117` and
+`2a7d9da9817b88773e56a81da6c674df25636c2a`. Their complete diff was reviewed:
+IniConfig error logging, default avatar handgroup preparation, TS1HandSet metadata
+and unused imports. Neither is required by the isolated proof. They were not merged.
+The recovery baseline remains `a7e9dba6cd4067b4efec54ae8e0443787da22992`;
+the earlier statement about matching master tips describes the original recovery time.
+
+The next action is the hardware procedure below. Await real console results before
+engine integration or any hardware success claim.
+
+# Xbox hardware test: FreeSims UWP proof
+
+Source commit: 3aaafa134f31b7fdb4216e8a1b12c44447323a22
+Branch: xbox-uwp-port
+Repository: https://github.com/Dushe22/FreeSimsUWP
+Built: 2026-09-20. Package independently verified: 2026-09-21.
+Configuration: Release / x64 / UWP / .NET Native / MonoGame 3.8.1.303.
+Hardware status: NOT TESTED.
+
+## Package
+
+Install XboxUwpProof_0.1.0.0_x64.appx from this directory.
+SHA256: F53942D037A329986A8229484E26345374DAE3A6D466FBAA6CD89F37C5E5B08C
+Size: 3,690,891 bytes.
+App identity: Dushe22.FreeSimsXboxProof, version 0.1.0.0, x64.
+Publisher: CN=FreeSimsXboxDevelopment.
+
+The three Dependencies/x64 packages are:
+- Microsoft.NET.Native.Framework.2.2.appx (2.2.29512.0)
+- Microsoft.NET.Native.Runtime.2.2.appx (2.2.28604.0)
+- Microsoft.VCLibs.x64.14.00.appx (14.0.33519.0)
+
+FreeSimsXboxDevelopment.cer is the PUBLIC development certificate only.
+The private signing key was deleted after signing. The certificate expires
+2027-03-20. This is a self-signed Developer Mode test package, not a Store package.
+No original Sims game data is needed or included.
+
+## Installation
+
+1. Extract this ZIP on the Windows computer. Verify the main AppX hash:
+   Get-FileHash .\XboxUwpProof_0.1.0.0_x64.appx -Algorithm SHA256
+2. Boot the Xbox Series X/S into Developer Mode and open Dev Home.
+3. In Dev Home, open Remote Access Settings, enable Xbox Device Portal, set
+   a local username/password, and return to Home. Do not send those credentials.
+4. Open the exact Remote Access URL displayed by the console in a browser on the
+   same local network; sign in with the console's local credentials.
+5. In Device Portal's Home / My games & apps area, choose Add/Deploy (the label
+   depends on console OS). Choose XboxUwpProof_0.1.0.0_x64.appx as the application.
+6. On the dependency step, add all THREE files from Dependencies/x64.
+   Submit deployment and wait for success. Record any HRESULT verbatim.
+   Do not select .cer as an app or dependency; use it only if explicitly asked
+   for a certificate. Do not use an x86/ARM package.
+7. Launch FreeSims Xbox Proof from Dev Home or Device Portal. If App/Game type is
+   offered in Dev Home's app details, use Game and report the selected type.
+
+Microsoft Device Portal reference:
+https://learn.microsoft.com/en-us/previous-versions/windows/uwp/xbox-apps/device-portal-xbox
+
+## Expected result and test procedure
+
+Expect a dark screen with FREESIMS XBOX UWP PROOF, commit prefix 3AAAFA134F31,
+a moving blue rectangle, controller/audio status and a white crosshair.
+This proof does not contain the FreeSims main menu or simulation.
+
+1. Leave it running for at least 60 seconds; confirm the rectangle keeps moving.
+2. Use controller 1's left stick: crosshair moves and stays within the display.
+3. Press A: rectangle alternates blue/orange and SELECT COUNT increments once.
+4. Press B: crosshair returns to its initial position near the middle.
+5. Press X: hear a short generated 440 Hz tone (about a quarter second).
+   TONE SUBMITTED on screen alone is not an audio pass.
+6. Press Menu: animation pauses; press it again to resume.
+7. Disconnect/reconnect controller 1 and repeat movement/A/X.
+8. Leave to the Xbox home screen, return and report whether graphics, input and
+   audio still work. This observes lifecycle behavior; it does not verify game saves.
+
+Other requested engine mappings (right stick, D-pad, bumpers, triggers and View)
+are not implemented in this isolated proof and are not part of this test.
+
+## Logs and results to return
+
+In Device Portal File Explorer, select this app's local data and retrieve:
+- LocalState/proof.log
+- LocalState/proof.log.previous, if present
+
+Return BUILD.txt, console model, console OS version, App/Game classification,
+visible rendering result, each control result, whether sound was audible, and
+resume behavior. Include any deployment/launch HRESULT or crash dump.
+If the app never writes a log, return the Device Portal error instead.
+
+## Success criteria
+
+Deployment and launch succeed on the actual Series console; the expected scene
+animates; the pointer and button actions work; the generated tone is audible;
+and the app remains usable through the requested controller checks.
+Report resume separately. Logs should identify the exact source commit and include
+GRAPHICS READY / FIRST DRAW SUBMITTED / input and audio events. Those log events
+do not replace visual/audible confirmation.
+
+Five SharpDX Media Foundation MCG0007 warnings were emitted during native
+compilation. They are documented in docs/XBOX_PORT.md. Any related runtime
+exception must be returned, not treated as a successful test.
+
+Stop here and return the hardware results. No Xbox-success tag or engine
+integration milestone is claimed by this package.
