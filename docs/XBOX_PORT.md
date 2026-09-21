@@ -10,7 +10,7 @@ Desktop Release/x86 still compiles; six CPU parser/decoder fixtures pass.
 The new sims.files UWP library and separate XboxFilesProbe application compile
 in Release/x64 with .NET Native and generate an AppX. The files probe must be
 tested on Xbox before claiming its new image decoding and GPU tests work there.
-Its signed handoff identity/hash will be recorded below after the clean build.
+Its verified signed handoff identity/hash and exact test procedure are recorded below.
 
 Work is on xbox-uwp-port in Dushe22/FreeSimsUWP. GitHub Actions remains blocked by
 account billing; local builds provide validation. The engine changes so far are
@@ -760,3 +760,80 @@ before integrating sims.common and the SimsVille runtime.
 - Next after successful hardware results: port the sims.common platform boundary
   and storage paths, then integrate SimsVille's runtime incrementally. Real game
   data, UI/neighborhood/lot loading, simulation and saves are still unverified.
+## Signed files probe handoff (2026-09-21)
+
+**Xbox test required: YES. Stop at this hardware boundary.**
+
+- Exact package source: 173ddaa0855939406413d4acea15c6798e03528a.
+- Source commit message: uwp: add native files compatibility probe for Xbox.
+- Branch: xbox-uwp-port; source pushed to Dushe22/FreeSimsUWP.
+- Clean committed build command:
+  ./scripts/Build-XboxProof.ps1 -Target FilesProbe -Sign.
+- AppX:
+  artifacts/files-probe/AppPackages/XboxFilesProbe_0.1.0.0_x64_Test/XboxFilesProbe_0.1.0.0_x64.appx.
+- AppX size: 4,117,837 bytes.
+- AppX SHA256: BF4B487B31A331A16219197DE619C1BC9D085B2508236CE6291F80C57D33CCE1.
+- Convenience handoff: artifacts/xbox-files-test-173ddaa08559.zip.
+- ZIP SHA256: 5C216264B7DA14015D423CD568AB7F98C76A7FCDD3A2413A077626A037A4615F.
+- Contents: application AppX, three x64 framework dependencies, public .cer,
+  BUILD.txt, TESTING.md. Exactly seven files; no private key or Sims assets.
+- Public certificate thumbprint: C629DE5C4EF57D5C1F6D730F44596773374A5AEC.
+  Expires 2027-03-21. Signing key removed from CurrentUser/My after signing.
+- Verified manifest identity Dushe22.FreeSimsXboxFilesProbe 0.1.0.0 x64,
+  native x64 executable, all 191 block-map SHA256 hashes, CMS signature and
+  matching public certificate. This validates package structure/integrity;
+  it is not a claim of a trusted public certificate chain or hardware execution.
+- Dependency versions provided: .NET Native Framework 2.2.29512.0,
+  .NET Native Runtime 2.2.28604.0, VCLibs 14.0.33519.0.
+- Original tested proof package SHA256 remains
+  F53942D037A329986A8229484E26345374DAE3A6D466FBAA6CD89F37C5E5B08C;
+  its source files are unchanged in this cycle.
+
+Deploy the main AppX and three x64 dependencies through Xbox Device Portal.
+Launch **FreeSims Files Probe**. Require **10/10 PASS** on first launch and
+after A reruns, home/return and controller reconnect. Wait 60 seconds with the
+blue bar moving; B exits, then relaunch and require 10/10 again.
+[Full installation, controls, log path and success criteria](../experiments/XboxFilesProbe/TESTING.md).
+
+Return this app's LocalState/proof.log (and proof.log.previous if present),
+displayed commit, console model/OS and any failure. Original proof hardware
+PASS remains scoped to the user's Series S; this new package is NOT TESTED.
+
+Completed: shared UWP parser library, platform image decoder, six passing
+desktop CPU cases, ten-case native probe, signed package, integrity audit.
+Desktop Release/x86: PASS compilation; game runtime NOT TESTED.
+UWP files probe Release/x64/.NET Native: PASS compilation.
+Packaging/signing: PASS. New Xbox runtime: NOT TESTED.
+GitHub Actions: still blocked by previously observed account billing restriction;
+the existing workflow covers the standalone proof/desktop baseline, not this
+new probe. Local commands above are the authoritative validation for this cycle.
+
+Current blocker: user hardware verification of the new decoder, reflective
+parser and GPU readback cases. After PASS, proceed to sims.common platform
+services/storage and incremental SimsVille integration.
+
+Files changed/created in this cycle (relative to daf573d):
+- .gitignore
+- docs/XBOX_PORT.md
+- experiments/XboxFilesProbe/FilesProbeGame.cs
+- experiments/XboxFilesProbe/Package.appxmanifest
+- experiments/XboxFilesProbe/Program.cs
+- experiments/XboxFilesProbe/Properties/AssemblyInfo.cs
+- experiments/XboxFilesProbe/Properties/Default.rd.xml
+- experiments/XboxFilesProbe/TESTING.md
+- experiments/XboxFilesProbe/XboxFilesProbe.csproj
+- scripts/Build-XboxProof.ps1
+- scripts/Test-FilesCompatibility.ps1
+- sims.files.uwp/Platform/PlatformImageDecoder.cs
+- sims.files.uwp/sims.files.uwp.csproj
+- sims.files/ImageLoader.cs
+- sims.files/Platform/Desktop/BMP.Desktop.cs
+- sims.files/Platform/Desktop/PlatformImageDecoder.cs
+- sims.files/Platform/IImageDecoder.cs
+- sims.files/XA/XAFile.cs
+- sims.files/formats/iff/chunks/BMP.cs
+- sims.files/formats/iff/chunks/SPR2FrameEncoder.cs
+- sims.files/sims.files.csproj
+- tests/FilesCompatibility/FilesCompatibility.csproj
+- tests/FilesCompatibility/FilesCompatibilityTests.cs
+- tests/FilesCompatibility/Program.cs
