@@ -18,17 +18,23 @@ namespace FreeSims.Xbox.Proof
         private int runs;
         private double elapsed;
         private bool firstFrame;
+        private bool layoutLogPending = true;
+        private Rectangle lastViewportBounds;
+        private Rectangle lastClientBounds;
+        private int lastBackBufferWidth;
+        private int lastBackBufferHeight;
 
         public FilesProbeGame()
         {
             graphics = new GraphicsDeviceManager(this) {
-                PreferredBackBufferWidth = 1280, PreferredBackBufferHeight = 720,
+                PreferredBackBufferWidth = ProbeLayout.Width, PreferredBackBufferHeight = ProbeLayout.Height,
                 GraphicsProfile = GraphicsProfile.HiDef, SynchronizeWithVerticalRetrace = true
             };
             IsFixedTimeStep = true;
-            Activated += (sender, args) => ProofLog.Write("ACTIVATED");
+            Activated += (sender, args) => { layoutLogPending = true; ProofLog.Write("ACTIVATED"); };
             Deactivated += (sender, args) => ProofLog.Write("DEACTIVATED");
-            graphics.DeviceReset += (sender, args) => ProofLog.Write("GRAPHICS DEVICE RESET");
+            graphics.DeviceReset += (sender, args) => { layoutLogPending = true; ProofLog.Write("GRAPHICS DEVICE RESET"); };
+            Window.ClientSizeChanged += (sender, args) => { layoutLogPending = true; ProofLog.Write("CLIENT SIZE CHANGED"); };
             Exiting += (sender, args) => ProofLog.Write("EXIT REQUESTED");
         }
 
@@ -63,8 +69,14 @@ namespace FreeSims.Xbox.Proof
 
         protected override void Draw(GameTime gameTime)
         {
+            var viewport = GraphicsDevice.Viewport;
+            Matrix transform;
+            if (!ProbeLayout.TryCreateTransform(viewport.Width, viewport.Height, out transform)) return;
+            ObserveDisplay(viewport, transform);
             GraphicsDevice.Clear(new Color(16, 24, 39));
-            batch.Begin(samplerState: SamplerState.PointClamp);
+            // Recompute from the live viewport every frame: activation/resize events
+            // can precede the framework's final back-buffer update.
+            batch.Begin(samplerState: SamplerState.PointClamp, transformMatrix: transform);
             PixelText.Draw(batch, pixel, "FREESIMS FILES PROBE", 48, 36, 4, Color.White);
             PixelText.Draw(batch, pixel, "COMMIT " + BuildInfo.Commit.Substring(0, 12), 48, 80, 2, Color.LightGray);
             bool passed = results.Count == 10 && results.All(x => x.StartsWith("PASS "));
@@ -76,9 +88,33 @@ namespace FreeSims.Xbox.Proof
             PixelText.Draw(batch, pixel, "A RERUN - B EXIT - RUN " + runs, 48, 534, 2, Color.White);
             PixelText.Draw(batch, pixel, "SYNTHETIC DATA - NO GAME DATA NEEDED", 48, 574, 2, Color.LightGray);
             batch.Draw(pixel, new Rectangle(48 + (int)(elapsed * 80 % 1120), 630, 32, 8), Color.CornflowerBlue);
+            PixelText.Draw(batch, pixel, "VIEWPORT " + viewport.Width + "X" + viewport.Height +
+                " - UI 1280X720", 48, 660, 2, Color.LightGray);
             batch.End();
             if (!firstFrame) { firstFrame = true; ProofLog.Write("FIRST FRAME"); }
             base.Draw(gameTime);
+        }
+
+        private void ObserveDisplay(Viewport viewport, Matrix transform)
+        {
+            var presentation = GraphicsDevice.PresentationParameters;
+            var bounds = viewport.Bounds;
+            var client = Window.ClientBounds;
+            if (!layoutLogPending && bounds == lastViewportBounds && client == lastClientBounds &&
+                presentation.BackBufferWidth == lastBackBufferWidth &&
+                presentation.BackBufferHeight == lastBackBufferHeight) return;
+
+            layoutLogPending = false;
+            lastViewportBounds = bounds;
+            lastClientBounds = client;
+            lastBackBufferWidth = presentation.BackBufferWidth;
+            lastBackBufferHeight = presentation.BackBufferHeight;
+            ProofLog.Write("DISPLAY viewport=" + bounds +
+                " backbuffer=" + lastBackBufferWidth + "x" + lastBackBufferHeight +
+                " client=" + client + " ui=1280x720 scale=" +
+                transform.M11.ToString(System.Globalization.CultureInfo.InvariantCulture) +
+                " offset=" + transform.M41.ToString(System.Globalization.CultureInfo.InvariantCulture) +
+                "," + transform.M42.ToString(System.Globalization.CultureInfo.InvariantCulture));
         }
 
         protected override void UnloadContent()

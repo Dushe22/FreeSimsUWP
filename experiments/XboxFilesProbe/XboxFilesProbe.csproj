@@ -37,6 +37,7 @@
   <ItemGroup>
     <Compile Include="Program.cs" />
     <Compile Include="FilesProbeGame.cs" />
+    <Compile Include="ProbeLayout.cs" />
     <Compile Include="..\XboxUwpProof\PixelText.cs"><Link>PixelText.cs</Link></Compile>
     <Compile Include="..\XboxUwpProof\ProofLog.cs"><Link>ProofLog.cs</Link></Compile>
     <Compile Include="..\..\tests\FilesCompatibility\FilesCompatibilityTests.cs"><Link>FilesCompatibilityTests.cs</Link></Compile>

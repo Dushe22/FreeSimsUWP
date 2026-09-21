@@ -2,7 +2,7 @@
 <Package xmlns="http://schemas.microsoft.com/appx/manifest/foundation/windows10"
          xmlns:uap="http://schemas.microsoft.com/appx/manifest/uap/windows10"
          xmlns:mp="http://schemas.microsoft.com/appx/2014/phone/manifest" IgnorableNamespaces="uap mp">
-  <Identity Name="Dushe22.FreeSimsXboxFilesProbe" Publisher="CN=FreeSimsXboxDevelopment" Version="0.1.0.0" />
+  <Identity Name="Dushe22.FreeSimsXboxFilesProbe" Publisher="CN=FreeSimsXboxDevelopment" Version="0.1.1.0" />
   <mp:PhoneIdentity PhoneProductId="b1701493-34a6-4d6b-8835-af12ed57b2a2" PhonePublisherId="00000000-0000-0000-0000-000000000000" />
   <Properties>
     <DisplayName>FreeSims Files Probe</DisplayName>

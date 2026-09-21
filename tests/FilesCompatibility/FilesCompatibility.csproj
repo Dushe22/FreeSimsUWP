@@ -21,6 +21,8 @@
     </ProjectReference>
     <Compile Include="FilesCompatibilityTests.cs" />
     <Compile Include="Program.cs" />
+    <Compile Include="ProbeLayoutTests.cs" />
+    <Compile Include="..\..\experiments\XboxFilesProbe\ProbeLayout.cs"><Link>ProbeLayout.cs</Link></Compile>
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
 </Project>

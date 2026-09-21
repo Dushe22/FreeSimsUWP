@@ -8,17 +8,17 @@ The earlier FreeSims Xbox Proof remains a separate installed app.
 
 Use the source commit and SHA256 recorded in BUILD.txt beside the handoff package.
 The app displays the first 12 characters of that source commit.
-Package: XboxFilesProbe_0.1.0.0_x64.appx.
-Identity: Dushe22.FreeSimsXboxFilesProbe, x64, version 0.1.0.0.
+Package: XboxFilesProbe_0.1.1.0_x64.appx.
+Identity: Dushe22.FreeSimsXboxFilesProbe, x64, version 0.1.1.0.
 Display name: FreeSims Files Probe.
 
 Rebuild from a clean checkout of that commit, with Git on PATH:
 
 ~~~powershell
-./scripts/Build-XboxProof.ps1 -Target FilesProbe -Sign
+./scripts/Build-XboxProof.ps1 -Target FilesProbe -OutputDirectory artifacts/files-probe-0.1.1.0 -Sign
 ~~~
 
-Default output: artifacts/files-probe. Signing refuses uncommitted source changes.
+This procedure uses artifacts/files-probe-0.1.1.0 to preserve the older package. Signing refuses uncommitted source changes.
 No private signing key is exported; it is removed after signing.
 
 ## Install on Xbox Series S/X Dev Mode
@@ -26,7 +26,7 @@ No private signing key is exported; it is removed after signing.
 1. Start Developer Mode and open Xbox Device Portal using the address shown in
    Dev Home. Sign in locally; do not share its credentials.
 2. In My games & apps / Apps manager, choose Add, select
-   XboxFilesProbe_0.1.0.0_x64.appx, then Next.
+   XboxFilesProbe_0.1.1.0_x64.appx, then Next.
 3. Supply the three x64 dependency packages from Dependencies/x64:
    Microsoft.NET.Native.Framework.2.2.appx,
    Microsoft.NET.Native.Runtime.2.2.appx, Microsoft.VCLibs.x64.14.00.appx.
@@ -34,23 +34,28 @@ No private signing key is exported; it is removed after signing.
 4. Complete deployment. The .cer is the public test-signing certificate only;
    it is not an application/dependency package. Follow Device Portal's developer
    package prompt if it requests certificate approval.
-5. Launch **FreeSims Files Probe**, not the earlier proof.
+5. This is an update to Files Probe 0.1.0.0. Launch **FreeSims Files Probe**, not the earlier standalone proof. Verify the new commit on screen.
 
 Reference: [Microsoft Xbox Device Portal deployment](https://learn.microsoft.com/en-us/previous-versions/windows/uwp/xbox-apps/device-portal-xbox).
 
-## Test
+## Focused resize retest
 
-1. Within 30 seconds, expect **10/10 PASS**, ten green PASS rows, RUN 1, and a
-   moving blue bar. Check the displayed commit against BUILD.txt.
-2. Wait 60 seconds. The blue bar should keep moving without errors.
-3. Press A three times, releasing between presses. Each press reruns all ten
-   tests. Expect 10/10 PASS and RUN 4.
-4. Go to Xbox Home, return to the app, then press A once. Expect 10/10 PASS again.
-   Record whether the app resumed or restarted; either must remain usable.
-5. Disconnect/reconnect the controller and press A. The tests should rerun.
-6. Press B to exit, relaunch, and confirm 10/10 PASS again.
-7. Return the console model, exact OS build if available, displayed commit,
-   result, any failed row, and the log below. A photo of the results is helpful.
+1. Launch from a stopped app. Within 30 seconds expect **10/10 PASS**, all ten
+   green rows, RUN 1, a moving blue bar and a VIEWPORT line at the bottom.
+   Check the displayed commit against BUILD.txt. Photograph this initial layout
+   and note the viewport dimensions.
+2. Go to Xbox Home, then return to the app. Its title, results, margins, controls,
+   moving bar and viewport line must retain the same apparent size and position.
+   The viewport numbers may change; that must not shrink or enlarge the layout.
+3. Repeat Home/return five times, including one stay at Home for 30 seconds.
+   After every return press A once and require 10/10 PASS. Record whether the
+   run count continues or resets; either state must have consistent layout.
+4. Leave the app visible for 60 seconds, then disconnect/reconnect the controller
+   and press A. Require 10/10 PASS and a moving blue bar.
+5. Press B to exit, relaunch, and confirm the same layout and 10/10 PASS.
+6. Return initial/after-Home photos, the viewport numbers, displayed commit and
+   LocalState/proof.log (plus .previous if present). If anything resizes or clips,
+   specify which transition caused it.
 
 A = rerun. B = exit. Other buttons/sticks have no function in this probe.
 
@@ -73,10 +78,10 @@ The package family may be displayed as FreeSims Files Probe. Select this app,
 not Dushe22.FreeSimsXboxProof. Include proof.log.previous if present.
 
 Expect START FILES PROBE with the full commit, TEST RUN n BEGIN,
-ten PASS lines, RESULT 10/10 PASS, TEST RUN n END and FIRST FRAME.
+ten PASS lines, RESULT 10/10 PASS, TEST RUN n END, FIRST FRAME and DISPLAY lines recording viewport, back-buffer, client bounds, scale and offsets.
 Lifecycle/controller events appear as exercised; their presence does not prove
 game save safety. If startup fails, also return Device Portal's exact error.
 
 PASS requires 10/10 on every run, a moving bar, working rerun/exit/relaunch and
-no runtime exceptions. A red FAIL row, stalled launch/bar, crash, or wrong commit
+no runtime exceptions, resizing discrepancy or clipping after Home/return. A red FAIL row, stalled launch/bar, crash, or wrong commit
 is not a pass. Return the log and stop; do not provision game data yet.

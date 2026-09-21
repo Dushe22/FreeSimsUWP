@@ -6,11 +6,11 @@ The original MonoGame proof passed the user's complete hardware procedure on
 **Xbox Series S** (OS reported as "latest", exact OS build not supplied).
 Tested source: 3aaafa134f31b7fdb4216e8a1b12c44447323a22, tag xbox-poc-uwp.
 
-Desktop Release/x86 still compiles; six CPU parser/decoder fixtures pass.
-The new sims.files UWP library and separate XboxFilesProbe application compile
-in Release/x64 with .NET Native and generate an AppX. The files probe must be
-tested on Xbox before claiming its new image decoding and GPU tests work there.
-Its verified signed handoff identity/hash and exact test procedure are recorded below.
+The user confirmed all ten files-probe checks passed on Series S for source
+173ddaa0855939406413d4acea15c6798e03528a, with photos showing 10/10 PASS.
+A visible UI shrink after Xbox Home/return remains a separate presentation bug.
+The 0.1.1.0 retest adapts the logical layout to the live viewport and adds display
+diagnostics. Its hardware fix is not yet verified. See the latest handoff below.
 
 Work is on xbox-uwp-port in Dushe22/FreeSimsUWP. GitHub Actions remains blocked by
 account billing; local builds provide validation. The engine changes so far are
@@ -223,7 +223,7 @@ The proof does not load Sims data and must not request it.
 
 1. Proof hardware procedure passed according to the user. Preserve xbox-poc-uwp.
 2. Shared sims.files and UWP decoder compile; desktop CPU fixtures pass.
-3. Await XboxFilesProbe synthetic image/IFF and GPU test results under .NET Native.
+3. Files-probe checks passed on Series S; verify the Home/return layout fix next.
 4. Integrate the remaining engine incrementally; saves and simulation are unverified.
 5. GitHub Actions billing remains a separate account blocker; use local builds.
 
@@ -837,3 +837,54 @@ Files changed/created in this cycle (relative to daf573d):
 - tests/FilesCompatibility/FilesCompatibility.csproj
 - tests/FilesCompatibility/FilesCompatibilityTests.cs
 - tests/FilesCompatibility/Program.cs
+
+## Files-probe hardware result and resize defect (2026-09-21)
+
+The user reports all checks passed except a resizing discrepancy after going to
+Xbox Home and reopening the app. Both provided photos show source 173DDAA08559,
+10/10 PASS and RUN 1. The second shows smaller text/layout occupying less of the
+display. User hardware: Xbox Series S; OS previously described as "latest",
+without an exact build number.
+
+Evidence: IMG_20260921_200912.jpg (initial) and
+rn_image_picker_lib_temp_fee7cc6d-d357-414f-9038-e8e01fe8cf45.jpg (after Home).
+Photos were inspected in the conversation, not added to GitHub. No log was
+provided. RUN 1 in both photos does not establish whether the process resumed or
+restarted; the exact viewport/back-buffer dimensions were not visible.
+
+Result: the ten synthetic parser/decoder/GPU checks are hardware PASS on this
+console. Overall presentation has a known Home/return defect. Earlier NOT TESTED
+entries are historical handoff records, superseded within this limited scope.
+This is not proof of real game data loading or a complete engine port.
+
+Source finding: FilesProbeGame used hard-coded 1280x720 layout coordinates with
+an identity SpriteBatch transform. PreferredBackBufferWidth/Height are not a
+guarantee that every later viewport retains those dimensions. A larger viewport
+would make the same pixel coordinates occupy less of the screen, consistent with
+the photos. The exact platform resolution transition remains an inference until
+the new DISPLAY logs are returned.
+
+Fix for version 0.1.1.0:
+- Keep the logical 1280x720 layout and uniformly fit/center it in the current
+  viewport every draw, preserving aspect ratio. Skip zero-sized viewports.
+- Do not force a back-buffer reset inside activation/resize callbacks; derive
+  scale at draw time even if framework resize happens after those callbacks.
+- Log viewport, back-buffer and client bounds plus scale/offset when dimensions
+  change or the app activates/device resets. Add an on-screen viewport readout.
+- Increment package/assembly version to 0.1.1.0 under the existing app identity.
+- Preserve all ten existing hardware cases and the original standalone proof.
+
+Regression checks: original six desktop CPU cases PASS; resize sequence
+720p -> 1080p -> 4K -> 720p, 4:3/ultrawide aspect fitting and zero-size recovery
+PASS. These validate transform math, not Xbox lifecycle behavior.
+Reference: [MonoGame viewport-based sprite scaling](https://docs.monogame.net/articles/getting_to_know/howto/graphics/HowTo_Scale_Sprites_Matrix.html).
+
+Current boundary: build/package the focused correction, then request five
+Home/return cycles and photos/logs. Do not claim the resize fix works on Xbox or
+advance to sims.common integration until this retest is complete.
+
+Local validation for the resize correction: UWP Release/x64 C# compilation,
+.NET Native and unsigned AppX generation PASS. The same five existing SharpDX
+Media Foundation MCG0007 warnings remain. No shared engine/decoder source was
+changed; desktop client build remains the previously verified baseline, while
+the desktop fixture executable was rebuilt and passed this cycle.
