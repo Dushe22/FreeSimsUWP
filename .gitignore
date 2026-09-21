@@ -41,3 +41,4 @@ TestResults/
 # Reproducibly generated proof resources and build identity
 /experiments/XboxUwpProof/Assets/
 **/BuildInfo.g.cs
+/experiments/XboxFilesProbe/Assets/

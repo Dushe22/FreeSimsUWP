@@ -1,5 +1,7 @@
 [CmdletBinding()]
 param(
+    [ValidateSet('Proof', 'FilesProbe')]
+    [string]$Target = 'Proof',
     [string]$SourceCommit,
     [string]$OutputDirectory,
     [string]$WindowsSdkVersion = '10.0.19041.0',
@@ -8,11 +10,18 @@ param(
 
 $ErrorActionPreference = 'Stop'
 $repoRoot = Split-Path $PSScriptRoot -Parent
-$projectDir = Join-Path $repoRoot 'experiments/XboxUwpProof'
-if (-not $OutputDirectory) { $OutputDirectory = Join-Path $repoRoot 'artifacts/proof' }
+$projectName = if ($Target -eq 'Proof') { 'XboxUwpProof' } else { 'XboxFilesProbe' }
+$artifactName = if ($Target -eq 'Proof') { 'proof' } else { 'files-probe' }
+$projectDir = Join-Path $repoRoot ('experiments/' + $projectName)
+if (-not $OutputDirectory) { $OutputDirectory = Join-Path $repoRoot ('artifacts/' + $artifactName) }
 $OutputDirectory = [IO.Path]::GetFullPath($OutputDirectory)
 if (-not $SourceCommit) { $SourceCommit = (git -C $repoRoot rev-parse HEAD).Trim() }
 if ($SourceCommit -notmatch '^[0-9a-f]{40}$') { throw 'SourceCommit must be a full Git commit hash.' }
+$headCommit = (git -C $repoRoot rev-parse HEAD).Trim()
+$dirty = @(git -C $repoRoot status --porcelain).Count -gt 0
+if ($Sign -and ($dirty -or $SourceCommit -ne $headCommit)) {
+    throw 'Signed handoffs require a clean checkout and SourceCommit equal to HEAD.'
+}
 
 $vswhere = Join-Path ${env:ProgramFiles(x86)} 'Microsoft Visual Studio/Installer/vswhere.exe'
 if (-not (Test-Path $vswhere)) { throw 'Visual Studio Installer / vswhere is required.' }
@@ -48,12 +57,12 @@ Set-Content -Path (Join-Path $projectDir 'Properties/BuildInfo.g.cs') -Value $id
 
 $packageDir = Join-Path $OutputDirectory 'AppPackages'
 $arguments = @(
-    (Join-Path $projectDir 'XboxUwpProof.csproj'), '/restore', '/m', '/verbosity:minimal',
+    (Join-Path $projectDir ($projectName + '.csproj')), '/restore', '/m', '/verbosity:minimal',
     '/p:Configuration=Release', '/p:Platform=x64',
     "/p:TargetPlatformVersion=$WindowsSdkVersion", '/p:UseDotNetNativeToolchain=true',
     '/p:AppxBundle=Never', '/p:UapAppxPackageBuildMode=SideloadOnly',
     '/p:GenerateAppxPackageOnBuild=true', '/p:AppxPackageSigningEnabled=false',
-    "/p:AppxPackageDir=$packageDir\", "/bl:$OutputDirectory/proof.binlog"
+    "/p:AppxPackageDir=$packageDir\", "/bl:$OutputDirectory/$artifactName.binlog"
 )
 & $msbuild @arguments 2>&1 | Tee-Object -FilePath (Join-Path $OutputDirectory 'build.log')
 if ($LASTEXITCODE -ne 0) { throw "Release/x64 UWP build failed with exit $LASTEXITCODE." }
@@ -80,7 +89,9 @@ if ($Sign) {
 
 $hash = (Get-FileHash $packages[0].FullName -Algorithm SHA256).Hash
 @"
+Target: $Target
 Source commit: $SourceCommit
+Uncommitted source changes: $dirty
 Configuration: Release / x64 / UWP / .NET Native
 MonoGame.Framework.WindowsUniversal: 3.8.1.303
 Windows SDK: $WindowsSdkVersion

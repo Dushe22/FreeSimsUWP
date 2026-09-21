@@ -2,16 +2,20 @@
 
 ## Current status
 
-Recovered on Windows. Desktop Release/x86 compilation, the MonoGame 3.8.1.303
-UWP Release/x64 proof, .NET Native, and signed AppX generation all PASS locally.
-The signed package from source commit 3aaafa134f31b7fdb4216e8a1b12c44447323a22
-is ready for the user hardware procedure at the end of this document.
-The user reports the complete proof hardware procedure passed with no errors.
-The next milestone is shared engine file parsers and UWP image decoding.
-GitHub Actions remains blocked by an account billing restriction.
-Work is on xbox-uwp-port in Dushe22/FreeSimsUWP; never push to original upstream.
-The FreeSims engine source remains unchanged from recovery baseline
- a7e9dba6cd4067b4efec54ae8e0443787da22992. The tested source is tagged xbox-poc-uwp.
+The original MonoGame proof passed the user's complete hardware procedure on
+**Xbox Series S** (OS reported as "latest", exact OS build not supplied).
+Tested source: 3aaafa134f31b7fdb4216e8a1b12c44447323a22, tag xbox-poc-uwp.
+
+Desktop Release/x86 still compiles; six CPU parser/decoder fixtures pass.
+The new sims.files UWP library and separate XboxFilesProbe application compile
+in Release/x64 with .NET Native and generate an AppX. The files probe must be
+tested on Xbox before claiming its new image decoding and GPU tests work there.
+Its signed handoff identity/hash will be recorded below after the clean build.
+
+Work is on xbox-uwp-port in Dushe22/FreeSimsUWP. GitHub Actions remains blocked by
+account billing; local builds provide validation. The engine changes so far are
+limited to sharing sims.files and isolating desktop image APIs. sims.common and
+SimsVille have not yet been integrated into UWP.
 
 ## Architecture and scope
 
@@ -218,8 +222,8 @@ The proof does not load Sims data and must not request it.
 ## Current blockers / next milestones
 
 1. Proof hardware procedure passed according to the user. Preserve xbox-poc-uwp.
-2. Build the existing sims.files parsers for UWP and replace GDI+ image decoding.
-3. Validate synthetic image/IFF fixtures under .NET Native before real-data loading.
+2. Shared sims.files and UWP decoder compile; desktop CPU fixtures pass.
+3. Await XboxFilesProbe synthetic image/IFF and GPU test results under .NET Native.
 4. Integrate the remaining engine incrementally; saves and simulation are unverified.
 5. GitHub Actions billing remains a separate account blocker; use local builds.
 
@@ -228,8 +232,8 @@ The proof does not load Sims data and must not request it.
 The proof is isolated in experiments/XboxUwpProof and shares no engine source yet.
 It exercises DirectX rendering, GamePad input, generated PCM audio, local log
 storage and lifecycle event logging. Lifecycle events are diagnostic only; full
-engine save safety/device recovery remains later work. All desktop sources remain
-unchanged.
+engine save safety/device recovery remains later work. The new XboxFilesProbe
+shares sims.files and keeps its desktop decoder/API in desktop-only files.
 
 ## Hardware test results
 
@@ -737,3 +741,22 @@ Build failure resolved: CS0234 System.Media in XAFile.cs was an unused import,
 classified UWP INCOMPATIBILITY. Removing the import preserved the XA parser.
 Next: native Xbox probe linking this library, then user hardware verification
 before integrating sims.common and the SimsVille runtime.
+## Native files probe build and hardware boundary (2026-09-21)
+
+- Added experiments/XboxFilesProbe, a distinct UWP package linking sims.files.uwp.
+  The original proof sources/package identity are preserved.
+- Reuses the proof's pixel font/logging and the desktop fixture source. Displays
+  ten independent test outcomes, an animated bar, run count and source commit.
+  A reruns; B exits. Reflection activation metadata preserves IFF constructors.
+- Build-XboxProof.ps1 now accepts -Target FilesProbe (default remains Proof).
+  Outputs are isolated under artifacts/files-probe. Signed handoffs require a
+  clean tree and the actual HEAD commit; BUILD.txt records target/source state.
+- Release/x64 C# + .NET Native + unsigned AppX build: PASS. The same five
+  SharpDX Media Foundation MCG0007 warnings remain, with no new build errors.
+- Xbox files-probe runtime: NOT TESTED. Do not infer success from the earlier
+  hardware proof or the desktop decoder tests.
+- [Exact hardware test procedure](../experiments/XboxFilesProbe/TESTING.md).
+  The signed package's BUILD.txt will identify the exact source commit/hash.
+- Next after successful hardware results: port the sims.common platform boundary
+  and storage paths, then integrate SimsVille's runtime incrementally. Real game
+  data, UI/neighborhood/lot loading, simulation and saves are still unverified.
