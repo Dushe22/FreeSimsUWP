@@ -11,6 +11,7 @@ The user confirmed all ten files-probe checks passed on Series S for source
 The subsequent 0.1.1.0 resize retest passed according to the user.
 The 0.1.1.0 retest adapts the logical layout to the live viewport and adds display
 diagnostics. The user confirmed all requested tests passed; see the dated result below.
+The next hardware test is the [Common/storage probe](../experiments/XboxCommonProbe/TESTING.md); its signed package is recorded at the end of this document.
 
 Work is on xbox-uwp-port in Dushe22/FreeSimsUWP. GitHub Actions remains blocked by
 account billing; local builds provide validation. The engine changes so far are
@@ -1055,3 +1056,107 @@ unsigned AppX generation PASS. The only native interop warnings are the same
 five SharpDX Media Foundation MCG0007 warnings seen in prior probes.
 Final desktop client Release/x86 rebuild after the INI fix also PASS.
 Common probe hardware execution, retained counter and provisioning: NOT TESTED.
+
+## Signed common/storage handoff (2026-09-22)
+
+**Hardware test required: YES. Stop here for the user's results.**
+
+- Exact package source: 27f318c55deb2dadff92ba827f63ba9b572fd1d5.
+- Source commit: uwp: add common library and persistent storage hardware probe.
+- Branch: xbox-uwp-port in Dushe22/FreeSimsUWP; pushed.
+- Package identity/version/architecture: Dushe22.FreeSimsXboxCommonProbe /
+  0.1.0.0 / x64. Display name: FreeSims Common Probe.
+- Main AppX:
+  artifacts/common-probe/AppPackages/XboxCommonProbe_0.1.0.0_x64_Test/XboxCommonProbe_0.1.0.0_x64.appx.
+- AppX size: 4,193,122 bytes.
+- AppX SHA256: 0D9EF31685B137C1C2840E810EE4AA6B79AC5B6A6AA26D3DF843F534C8B2C077.
+- ZIP: artifacts/xbox-common-test-27f318c55deb.zip.
+- ZIP SHA256: 8AA1F2FE15E620FE5C478325F2DC93CEC66ADCDDA126BD7454DB790BB7D1EA4F.
+- Exactly eight files: main AppX, three x64 dependencies, public certificate,
+  BUILD.txt, TESTING.md and the separate original game-data-probe.txt.
+- Certificate thumbprint: E30ABFF90EE3A14DAD4AD3D151BEA8CA8448F1AC,
+  expires 2027-03-22. Private key removed from CurrentUser/My after signing.
+- Verified identity/version, x64 executable and native DLL, all 194 block-map
+  hashes, CMS signature and matching public certificate. No public-chain trust
+  claim. Packaged content contains only the original package fixture and generated
+  logos; the external marker/GameData/UserData are absent from the AppX.
+- BUILD.txt confirms the actual source commit, no uncommitted changes, Release/
+  x64/.NET Native, pinned MonoGame 3.8.1.303 and signed package/hash.
+
+Build from the exact clean source:
+
+~~~powershell
+./scripts/Build-XboxProof.ps1 -Target CommonProbe -Sign
+~~~
+
+Install main AppX plus Dependencies/x64 through Xbox Device Portal. Launch
+FreeSims Common Probe; require 12/12 PASS and an increasing layer frame counter.
+Use X to increment synthetic persistent state three times, then verify the same
+value after B exit/relaunch and Home/return. A reruns without incrementing it.
+
+Upload the separate game-data-probe.txt into this app's LocalState/GameData
+through File explorer, then press A and require GAME DATA MARKER PASS.
+Before upload, WAITING FOR GAME DATA MARKER is expected. Require marker PASS and
+retained counter after relaunch. No Sims installation files are needed.
+[Exact install/controls/procedure/logs/success criteria](../experiments/XboxCommonProbe/TESTING.md).
+
+Logs: this app's LocalState/proof.log (+ previous if present),
+UserData/Logs/events.log for logger failures, UserData/common-probe.ini for
+persistence failures. Return final screen, displayed commit and counter values.
+
+Completed this cycle: user-confirmed Series S resize PASS recorded; shared
+sims.common UWP library; separate content/game/user paths; platform log adapters;
+blank-line settings fix; CPU regression cases; native common/storage probe;
+signed package and integrity audit. Earlier proof/files/resize work preserved.
+
+Build status:
+- Desktop Release/x86 client: PASS compilation after final shared-source changes.
+- Common CPU checks: 8/8 PASS. Files CPU checks: 6/6 PASS. Resize checks: PASS.
+- Common probe Release/x64/.NET Native: PASS compilation.
+- Packaging/signing: PASS.
+- New common/storage probe hardware: NOT TESTED.
+
+Five prior SharpDX MCG0007 warnings remain. Previously observed GitHub Actions
+billing failures are not used as build evidence; this cycle's verification is
+local. The existing workflow does not build the common probe.
+
+Current blocker: user hardware verification of the twelve native checks,
+persistent counter and external marker. Next after PASS: integrate SimsVille's
+runtime/startup and audit content and filesystem assumptions. In particular,
+IniConfig still serializes DefaultValues and does not populate property defaults
+on first-file creation; the probe explicitly stores/reloads settings. Game
+settings integration needs that behavior reviewed. No game saves or real Sims
+data loading are claimed by this milestone.
+
+Files changed/created in this cycle (relative to 0548071):
+- .gitignore
+- docs/XBOX_PORT.md
+- experiments/XboxCommonProbe/CommonNativeTests.cs
+- experiments/XboxCommonProbe/CommonProbeGame.cs
+- experiments/XboxCommonProbe/Content/package-probe.txt
+- experiments/XboxCommonProbe/Fixtures/game-data-probe.txt
+- experiments/XboxCommonProbe/Package.appxmanifest
+- experiments/XboxCommonProbe/ProbeLayer.cs
+- experiments/XboxCommonProbe/Program.cs
+- experiments/XboxCommonProbe/Properties/AssemblyInfo.cs
+- experiments/XboxCommonProbe/Properties/Default.rd.xml
+- experiments/XboxCommonProbe/TESTING.md
+- experiments/XboxCommonProbe/XboxCommonProbe.csproj
+- scripts/Build-XboxProof.ps1
+- scripts/Test-CommonCompatibility.ps1
+- sims.common.uwp/Platform/PlatformLog.cs
+- sims.common.uwp/Platform/UwpGameStorage.cs
+- sims.common.uwp/sims.common.uwp.csproj
+- sims.common/IniConfig.cs
+- sims.common/Log.cs
+- sims.common/Platform/Desktop/PlatformLog.cs
+- sims.common/Platform/GamePaths.cs
+- sims.common/Platform/IGamePaths.cs
+- sims.common/SharedSources.projitems
+- sims.common/rendering/framework/io/InputManager.cs
+- sims.common/sims.common.csproj
+- sims.common/utils/PPXDepthEngine.cs
+- tests/CommonCompatibility/CommonCompatibility.csproj
+- tests/CommonCompatibility/CommonCompatibilityTests.cs
+- tests/CommonCompatibility/ProbeSettings.cs
+- tests/CommonCompatibility/Program.cs
