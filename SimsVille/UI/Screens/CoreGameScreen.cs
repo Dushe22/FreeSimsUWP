@@ -1,4 +1,4 @@
-﻿/*
+/*
 This Source Code Form is subject to the terms of the Mozilla Public License, v. 2.0.
 If a copy of the MPL was not distributed with this file, You can obtain one at
 http://mozilla.org/MPL/2.0/.
@@ -39,7 +39,7 @@ using FSO.Vitaboy;
 using FSO.SimAntics.Model.TSOPlatform;
 using Microsoft.Xna.Framework.Graphics;
 using FSO.Files.Formats.IFF;
-using FSO.Debug;
+using FSO.Client.Platform;
 
 namespace FSO.Client.UI.Screens
 {
@@ -219,6 +219,7 @@ namespace FSO.Client.UI.Screens
                 X = GlobalSettings.Default.GraphicsWidth - 110
             };
             VMDebug.OnButtonClick += new ButtonClickDelegate(VMDebug_OnButtonClick);
+            VMDebug.Visible = ClientPlatform.ShowVmDebugger != null;
             this.Add(VMDebug);
             //InitializeMouse();
 
@@ -684,12 +685,8 @@ namespace FSO.Client.UI.Screens
             
             if (vm != null) 
             {
-                var debugTools = new Simantics(vm);
-
-                var window = GameFacade.Game.Window;
-                debugTools.Show();
-                debugTools.Location = new System.Drawing.Point(window.ClientBounds.X + window.ClientBounds.Width, window.ClientBounds.Y);
-                debugTools.UpdateAQLocation();
+                var show = ClientPlatform.ShowVmDebugger;
+                if (show != null) show(vm, GameFacade.Game.Window);
             }
 
         }

@@ -1289,3 +1289,34 @@ native execution of these settings changes alongside the next client milestone.
 Next concrete work: build and isolate the offline SimsVille runtime dependency
 closure, with desktop behavior retained and a content provenance audit before
 packaging any existing content. Full client UWP startup/UI remains unimplemented.
+
+## SimsVille UWP runtime library (2026-09-22)
+
+Added SimsVille.uwp/SimsVille.uwp.csproj, Release/x64 UAP 10.0.19041.0 with
+minimum 10.0.16299.0, UWP package 6.2.14 and MonoGame 3.8.1.303. Assembly:
+SimsVille.Uwp. Imports 450 explicit source inputs from SimsVille/SharedRuntime.projitems;
+the desktop project now imports the same list. Desktop Program/GameStartProxy,
+registry locators, assembly swapping, assembly metadata and WinForms debug sources
+remain solely in the desktop project. No Content tree is imported or packaged.
+
+The first compilation identified exactly two source compatibility errors:
+1. FSO.Debug missing after excluding WinForms sources. Extracted the original
+   debugger action into Platform/Desktop/ClientPlatform.cs; the shared optional
+   action is absent on UWP, and CoreGameScreen hides that debugger button.
+2. Color.TransparentBlack removed in the pinned MonoGame. UIHouseMode now uses
+   the equivalent Color.Transparent, as already done for shared PPXDepthEngine.
+Removed an unused System.Drawing import from the compiled legacy ContentManager.
+
+Validation: SimsVille.uwp Release/x64 C# compilation PASS; desktop client
+Release/x86 compilation PASS after the shared-source import change. Local logs:
+artifacts/runtime-first-build.log, runtime-second-build.log, runtime-library-build.log,
+runtime-desktop-build.log. Native linking and execution are the next checks.
+
+Existing GOLDEngine and GonzoNet managed binaries are referenced because current
+UI parsing and VM packet signatures require them. GonzoNet references legacy
+System.ServiceModel, so C# compilation alone does not prove native compatibility.
+No standalone SimsNet/debug/parser project is added. Networking, original content
+initialization and TSOGame are not yet started by a UWP host. This checkpoint is a
+runtime library, not a playable app or verified offline simulation. Next: a native
+host exercising actual client UI/settings without loading Sims/TSO assets or
+starting the legacy login/server paths; report any native dependency failures.

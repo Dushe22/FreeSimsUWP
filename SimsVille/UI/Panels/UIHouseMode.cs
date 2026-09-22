@@ -1,4 +1,4 @@
-﻿using FSO.Client.UI.Controls;
+using FSO.Client.UI.Controls;
 using FSO.Client.UI.Framework;
 using FSO.Client.UI.Framework.Parser;
 using FSO.Client.UI.Model;
@@ -876,7 +876,7 @@ namespace FSO.Client.UI.Panels
         {
             var gd = GameFacade.GraphicsDevice;
             gd.SetRenderTarget(PreviewTarget);
-            gd.Clear(Color.TransparentBlack);
+            gd.Clear(Color.Transparent);
             Batch.Begin();
 
             //64x32 base lot with a 4px border from bottom, left and right edges.
