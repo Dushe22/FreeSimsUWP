@@ -14,8 +14,8 @@ diagnostics. The user confirmed all requested tests passed; see the dated result
 
 Work is on xbox-uwp-port in Dushe22/FreeSimsUWP. GitHub Actions remains blocked by
 account billing; local builds provide validation. The engine changes so far are
-limited to sharing sims.files and isolating desktop image APIs. sims.common and
-SimsVille have not yet been integrated into UWP.
+shared sims.files and sims.common libraries, image/logging adapters and separate
+storage roots. SimsVille has not yet been integrated into UWP.
 
 ## Architecture and scope
 
@@ -1016,3 +1016,42 @@ Next: a distinct common/storage probe using the shared GameScreen layer loop,
 native INI reflection, render-target clearing, package content reads, UWP logging,
 persistent synthetic state and an externally provisioned text marker. This is not
 a game save implementation and does not require original Sims assets.
+
+## Common/storage probe implementation (2026-09-22)
+
+Added experiments/XboxCommonProbe, identity Dushe22.FreeSimsXboxCommonProbe
+0.1.0.0, preserving both hardware-tested earlier probe apps. It links the shared
+common/files libraries and uses the existing GameScreen/IGraphicsLayer update
+and draw loop. The proven viewport-fit helper and display diagnostics are reused.
+
+Eight shared CPU cases run under .NET Native, plus four UWP/GPU cases:
+packaged text read, app-local event sink, PPX transparent render-target clear and
+GameScreen callback ordering/counts. X persists a synthetic counter via the
+existing IniConfig contract and verifies readback; relaunch tests durable state.
+A also reads a user-uploaded original text marker from LocalState/GameData.
+The external marker is not included in the AppX and is never generated there
+by the app. The packaged content fixture is a different, original text file.
+
+Paths: InstalledLocation/Content (packaged), LocalState/GameData (provisioned),
+LocalState/UserData (writable). Real Sims data and saves are not used. The app
+logs exact resolved roots and persistent state identity/value. No package writes
+or process-current-directory changes are attempted.
+
+Build selector: Build-XboxProof.ps1 -Target CommonProbe; outputs are isolated
+under artifacts/common-probe. Existing selectors still target their prior apps.
+[Complete hardware procedure](../experiments/XboxCommonProbe/TESTING.md).
+
+Microsoft references:
+[App file access](https://learn.microsoft.com/en-us/windows/apps/develop/files/file-access-permissions),
+[Device Portal uploads](https://blogs.windows.com/windowsdeveloper/2016/06/08/using-the-app-file-explorer-to-see-your-app-data/).
+
+Next boundary: verify the signed common/storage probe on the user's Series S.
+After PASS, begin integrating the SimsVille runtime and audit its real content
+provenance, filesystem writes and platform startup. The synthetic persistence
+test must not be described as game save/reload support.
+
+Common probe local validation: Release/x64 C# compilation, .NET Native and
+unsigned AppX generation PASS. The only native interop warnings are the same
+five SharpDX Media Foundation MCG0007 warnings seen in prior probes.
+Final desktop client Release/x86 rebuild after the INI fix also PASS.
+Common probe hardware execution, retained counter and provisioning: NOT TESTED.

@@ -1,6 +1,6 @@
 [CmdletBinding()]
 param(
-    [ValidateSet('Proof', 'FilesProbe')]
+    [ValidateSet('Proof', 'FilesProbe', 'CommonProbe')]
     [string]$Target = 'Proof',
     [string]$SourceCommit,
     [string]$OutputDirectory,
@@ -10,8 +10,8 @@ param(
 
 $ErrorActionPreference = 'Stop'
 $repoRoot = Split-Path $PSScriptRoot -Parent
-$projectName = if ($Target -eq 'Proof') { 'XboxUwpProof' } else { 'XboxFilesProbe' }
-$artifactName = if ($Target -eq 'Proof') { 'proof' } else { 'files-probe' }
+$projectName = switch ($Target) { 'Proof' { 'XboxUwpProof' } 'FilesProbe' { 'XboxFilesProbe' } 'CommonProbe' { 'XboxCommonProbe' } }
+$artifactName = switch ($Target) { 'Proof' { 'proof' } 'FilesProbe' { 'files-probe' } 'CommonProbe' { 'common-probe' } }
 $projectDir = Join-Path $repoRoot ('experiments/' + $projectName)
 if (-not $OutputDirectory) { $OutputDirectory = Join-Path $repoRoot ('artifacts/' + $artifactName) }
 $OutputDirectory = [IO.Path]::GetFullPath($OutputDirectory)

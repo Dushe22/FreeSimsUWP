@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Directives xmlns="http://schemas.microsoft.com/netfx/2013/01/metadata">
+  <Application>
+    <Assembly Name="*Application*" Dynamic="Required All" />
+    <!-- IffFile constructs chunk classes through Activator.CreateInstance(Type). -->
+    <Assembly Name="Simslib.Uwp">
+      <Namespace Name="FSO.Files.Formats.IFF.Chunks" Activate="Required Public" />
+    </Assembly>
+    <!-- IniConfig reflects over the probe's persisted settings properties. -->
+    <Assembly Name="FreeSims.Xbox.CommonProbe">
+      <Type Name="FreeSims.Tests.ProbeSettings" Dynamic="Required All" />
+    </Assembly>
+  </Application>
+</Directives>
