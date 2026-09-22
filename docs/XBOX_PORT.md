@@ -8,9 +8,9 @@ Tested source: 3aaafa134f31b7fdb4216e8a1b12c44447323a22, tag xbox-poc-uwp.
 
 The user confirmed all ten files-probe checks passed on Series S for source
 173ddaa0855939406413d4acea15c6798e03528a, with photos showing 10/10 PASS.
-A visible UI shrink after Xbox Home/return remains a separate presentation bug.
+The subsequent 0.1.1.0 resize retest passed according to the user.
 The 0.1.1.0 retest adapts the logical layout to the live viewport and adds display
-diagnostics. Its hardware fix is not yet verified. See the latest handoff below.
+diagnostics. The user confirmed all requested tests passed; see the dated result below.
 
 Work is on xbox-uwp-port in Dushe22/FreeSimsUWP. GitHub Actions remains blocked by
 account billing; local builds provide validation. The engine changes so far are
@@ -953,3 +953,22 @@ Files changed in this correction:
 - tests/FilesCompatibility/FilesCompatibility.csproj
 - tests/FilesCompatibility/ProbeLayoutTests.cs
 - tests/FilesCompatibility/Program.cs
+
+## Resize retest hardware PASS received 2026-09-22
+
+User: "All tests passed as intended, you can proceed".
+This confirms the supplied 0.1.1.0 procedure for source
+080a1332078ad1604aa88db881bd8932de4e1d2f and package SHA256
+7C3C1B580D48803C835B842DA182306797DC9760034653906D2BBA3971F138B0.
+
+The reported pass covers five Home/return cycles with stable apparent layout,
+10/10 fixture checks, controller reconnect and exit/relaunch on the previously
+identified Xbox Series S. No new logs or exact OS build supplied. We do not
+infer specific viewport dimensions or process-resume behavior.
+The known presentation defect is resolved according to the user's retest.
+Earlier NOT TESTED entries remain historical build/handoff records.
+
+Next authorized work: share sims.common's actual compile inputs with UWP,
+isolate desktop-only APIs as needed, and establish distinct packaged-content,
+provisioned-game-data and writable-user-data paths. Do not claim engine/gameplay
+or save compatibility merely from the probe pass.
