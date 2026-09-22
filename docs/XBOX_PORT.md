@@ -11,7 +11,7 @@ The user confirmed all ten files-probe checks passed on Series S for source
 The subsequent 0.1.1.0 resize retest passed according to the user.
 The 0.1.1.0 retest adapts the logical layout to the live viewport and adds display
 diagnostics. The user confirmed all requested tests passed; see the dated result below.
-The next hardware test is the [Common/storage probe](../experiments/XboxCommonProbe/TESTING.md); its signed package is recorded at the end of this document.
+The Common/storage probe passed on Series S for source 27f318c55deb2dadff92ba827f63ba9b572fd1d5. The supplied log confirms 20 successful runs, persistence across three launches and external marker reads. SimsVille integration is next; see the dated hardware result below.
 
 Work is on xbox-uwp-port in Dushe22/FreeSimsUWP. GitHub Actions remains blocked by
 account billing; local builds provide validation. The engine changes so far are
@@ -1160,3 +1160,36 @@ Files changed/created in this cycle (relative to 0548071):
 - tests/CommonCompatibility/CommonCompatibilityTests.cs
 - tests/CommonCompatibility/ProbeSettings.cs
 - tests/CommonCompatibility/Program.cs
+
+## Common/storage Series S hardware result (2026-09-22)
+
+User supplied proof.log and IMG_20260922_141554.jpg from the previously identified
+Xbox Series S (OS described as latest; exact OS build remains unspecified).
+Tested source: 27f318c55deb2dadff92ba827f63ba9b572fd1d5, Release/x64,
+Common Probe 0.1.0.0. This result supersedes the preceding pending-hardware status.
+
+Evidence:
+- Log SHA256: 1BD6B5D5C228F4D5F12FE5B87A921B8CBB298044D166FE4E3F4C6A5B5E38D744.
+- Three START COMMON PROBE records at 17:11:55, 17:15:31 and 17:16:20 UTC.
+- Twenty RESULT 12/12 PASS records (8 + 4 + 8); no recorded failures.
+- First launch creates counter 0 and stores values 1 through 5. Both later
+  launches load value 5 with the same generated state marker.
+- External marker initially absent, then GAME DATA MARKER PASS on every test
+  from the second launch onward (12 successful reads).
+- Packaged content, app-local event logging, shared screen layer callbacks,
+  native reflection/INI and GPU render-target readback all report PASS.
+- Five DISPLAY records consistently show viewport/backbuffer 1280x720, client
+  1728x972, UI 1280x720, scale 1, offset 0,0, including after reactivation at
+  19:48:37 UTC. A suspension is logged at 17:12:44; a later fresh start follows.
+  No same-process RESUMING event or explicit B-exit event is present, so those
+  exact lifecycle paths are not inferred from the log.
+- Photo shows 12/12 PASS, persisted value 5, GAME DATA MARKER PASS, engine layer
+  frames 1363 and viewport/UI 1280x720.
+
+The common/storage milestone is hardware verified for the evidenced paths.
+This is synthetic settings persistence, not Sims game saves or neighborhood
+loading. Raw user files remain outside Git; only this result/hash is published.
+Earlier files/resize/proof implementations are retained. No build changes in
+this checkpoint; previous desktop/native/package build results remain valid.
+Next: audit and integrate SimsVille runtime sources, platform startup, settings,
+content provenance and read/write paths into a dedicated UWP target.
