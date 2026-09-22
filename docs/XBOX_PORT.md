@@ -888,3 +888,68 @@ Local validation for the resize correction: UWP Release/x64 C# compilation,
 Media Foundation MCG0007 warnings remain. No shared engine/decoder source was
 changed; desktop client build remains the previously verified baseline, while
 the desktop fixture executable was rebuilt and passed this cycle.
+
+## Signed resize retest handoff (2026-09-22)
+
+Build completed successfully before the session interruption. Resumed work
+verified the existing signed output; no rebuild or source change was needed.
+
+- Exact package source: 080a1332078ad1604aa88db881bd8932de4e1d2f.
+- Commit: fix: keep Xbox files probe layout stable across viewport changes.
+- Identity: Dushe22.FreeSimsXboxFilesProbe, version 0.1.1.0, x64.
+- Package:
+  artifacts/files-probe-0.1.1.0/AppPackages/XboxFilesProbe_0.1.1.0_x64_Test/XboxFilesProbe_0.1.1.0_x64.appx.
+- AppX size: 4,121,197 bytes.
+- AppX SHA256: 7C3C1B580D48803C835B842DA182306797DC9760034653906D2BBA3971F138B0.
+- Test ZIP: artifacts/xbox-files-resize-080a1332078a.zip.
+- ZIP SHA256: 3BF7F012337B17A7F16EC4DC958E391DBBC665731B79615931CB29BFC209E1D1.
+- ZIP contains exactly seven files: AppX, three x64 framework dependencies,
+  public certificate, BUILD.txt and TESTING.md. No Sims assets or private key.
+- Public certificate: 70FDB65AF2231B79203A8821B75FBEC0B61617DC,
+  expires 2027-03-21. Private signing key removed from CurrentUser/My.
+- Verified x64 PE/manifest identity/version, all 191 block-map hashes, CMS
+  signature and matching public certificate. No public-chain trust claim.
+
+Build from the exact clean source commit (Git on PATH):
+
+~~~powershell
+./scripts/Build-XboxProof.ps1 -Target FilesProbe -OutputDirectory artifacts/files-probe-0.1.1.0 -Sign
+~~~
+
+Install/update the main AppX through Xbox Device Portal and supply the three
+dependencies from Dependencies/x64 as needed. Launch FreeSims Files Probe.
+[Full installation and focused resize test](../experiments/XboxFilesProbe/TESTING.md).
+
+Require the same apparent UI size/position on initial launch and after five
+Home/return cycles (including 30 seconds at Home), with 10/10 PASS after each
+A rerun. Viewport numbers may change; layout scale must remain visually stable.
+Also test B exit/relaunch and controller reconnect. Return before/after photos
+and this app's LocalState/proof.log (plus .previous when present), particularly
+the DISPLAY records with viewport/back-buffer dimensions, scale and offsets.
+
+Completed: recorded ten-case Series S hardware PASS with the observed resize
+defect; implemented dynamic viewport layout and diagnostics; added CPU resize
+regression checks; produced and audited the signed update.
+Desktop client: unchanged, previous Release/x86 build PASS; not rerun this cycle.
+Desktop CPU fixtures: 6/6 PASS plus resize/aspect/zero-size checks PASS.
+UWP Release/x64/.NET Native and packaging/signing: PASS.
+New resize correction on Xbox: NOT TESTED. This is the current blocker.
+Five existing SharpDX MCG0007 warnings remain. GitHub Actions remains previously
+billing-blocked; this handoff uses local build evidence.
+
+Source and this report are pushed on xbox-uwp-port in Dushe22/FreeSimsUWP.
+Recovered proof and shared parser/decoder work are retained. After a successful
+resize retest, proceed to sims.common platform/storage integration. Stop here
+for the user's hardware result.
+
+Files changed in this correction:
+- docs/XBOX_PORT.md
+- experiments/XboxFilesProbe/FilesProbeGame.cs
+- experiments/XboxFilesProbe/Package.appxmanifest
+- experiments/XboxFilesProbe/ProbeLayout.cs
+- experiments/XboxFilesProbe/Properties/AssemblyInfo.cs
+- experiments/XboxFilesProbe/TESTING.md
+- experiments/XboxFilesProbe/XboxFilesProbe.csproj
+- tests/FilesCompatibility/FilesCompatibility.csproj
+- tests/FilesCompatibility/ProbeLayoutTests.cs
+- tests/FilesCompatibility/Program.cs
