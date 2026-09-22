@@ -1193,3 +1193,99 @@ Earlier files/resize/proof implementations are retained. No build changes in
 this checkpoint; previous desktop/native/package build results remain valid.
 Next: audit and integrate SimsVille runtime sources, platform startup, settings,
 content provenance and read/write paths into a dedicated UWP target.
+## SimsVille startup audit and settings repair (2026-09-22)
+
+After the common/storage hardware pass, began auditing the actual client startup.
+Found and reproduced an EXISTING UPSTREAM ERROR in IniConfig, used by SimsVille's
+GlobalSettings. Four new cases link the actual GlobalSettings.cs into the desktop
+compatibility runner. Before the fix all four fail while the eight common tests
+pass; artifacts/common-settings-before.log preserves the local reproduction.
+
+Implemented in the shared IniConfig source:
+- Apply declared defaults before file overrides, including first-file creation.
+  A new GlobalSettings now has 1024x768, windowed=true, language=1, FX volume=10,
+  and skip-intro=true immediately. Partial/invalid files keep valid defaults.
+- Retain the declared fallback dictionary across loads instead of replacing it
+  with loaded values. Reloading a missing/invalid key cannot reuse a stale value.
+- Save the current properties named in the settings schema, using invariant
+  conversions; preserve the existing INI format. Changes to graphics size,
+  windowed mode, language, paths and UInt64 values survive a new instance.
+- Resolve serialized values before opening the destination; report I/O failures
+  instead of silently claiming success. Hosts must handle save errors. This is
+  not an atomic-write or crash-recovery implementation, and does not add range
+  validation for otherwise parseable values.
+- The synthetic probe now stores its properties normally; removed its dictionary
+  synchronization workaround. No controller/layout/provisioning behavior changed.
+
+The four new client settings cases run only in the desktop compatibility runner;
+the existing Common Probe's twelve native cases and manifest remain unchanged.
+The user's tested 27f318c package remains the verified hardware checkpoint. These
+new settings changes are not claimed to have executed on Xbox.
+
+### BLOCKER: existing SimsVille startup is not an offline TS1 host
+
+EVIDENCE (source-level audit; no full SimsVille UWP build claimed):
+- Program.InitWithArguments requires FindTheSimsOnline before starting, dynamically
+  selects desktop MonoGame and uses registry/assembly loading paths.
+- Game.cs initializes FSO.Content.Content with GlobalSettings.StartupPath and
+  processes NetworkFacade.Client packets each frame.
+- ContentManager/Content.cs constructs Tuning from basePath/tuning.dat and eagerly
+  initializes the inherited TSO avatar/UI/audio providers. UIGraphicsProvider
+  expects FAR3 uigraphics/*.dat; GameContent/ContentManager.cs separately reads
+  relative Content/animtable.xml and Content/uigraphics.xml.
+- Network/NetworkFacade.cs constructs the GonzoNet client and registers login/city
+  handlers in its static initializer. UI/GameController still contains TSO flow.
+- UI/Framework/Parser/UIScriptParser.cs references the existing GOLDEngine binary
+  and reads relative Content/UIScript.egt.
+- ContentManager/other/TS1NeighbourProvider.cs reads original UserData/Neighborhood.iff
+  directly under SimsCompleteDir. Writable neighborhood separation is unfinished.
+- Game.LoadContent needs Fonts/SimsFont, Fonts/SimsFontBig and Effects/Vitaboy.
+  Existing content provenance/native compatibility has not been cleared.
+- CoreGameScreen directly creates a WinForms Simantics debug window. UWP cannot
+  include the desktop debug UI or use desktop Registry/Assembly.LoadFrom startup.
+
+CAUSE: the surviving client combines TSO startup/content/network assumptions with
+TS1 simulation and neighborhood code. Pointing both roots at a Sims 1 installation
+would not satisfy those concrete dependencies. The external marker test proves
+file access only; it does not validate a real game installation or remove them.
+
+OPTIONS: port the entire legacy online dependency closure, or introduce a small
+explicit offline UWP host while retaining shared rendering/UI/simulation sources.
+RECOMMENDATION: the latter, preserving desktop startup. Next implementation should
+build the explicit runtime source closure, isolate debug/network entry points,
+resolve content ownership and map each actual read/write before starting TSOGame.
+Do not distribute legacy content or request/upload game assets to GitHub as a shortcut.
+
+Files changed this implementation checkpoint:
+- sims.common/IniConfig.cs
+- tests/CommonCompatibility/ClientSettingsTests.cs (new)
+- tests/CommonCompatibility/CommonCompatibility.csproj
+- tests/CommonCompatibility/Program.cs
+- tests/CommonCompatibility/ProbeSettings.cs
+- docs/XBOX_PORT.md
+
+Validation of settings implementation:
+- scripts/Test-CommonCompatibility.ps1: 12/12 PASS (8 existing common + 4 actual
+  client settings cases), after reproducing 8/12 before the fix.
+- scripts/Build-DesktopBaseline.ps1 -NuGetPath <local nuget.exe>: desktop client
+  Release/x86 compilation PASS; libraries AnyCPU. Desktop game runtime not tested.
+- scripts/Build-XboxProof.ps1 -Target CommonProbe -OutputDirectory
+  artifacts/common-settings-validation: Release/x64/.NET Native compilation and
+  unsigned AppX generation PASS. Only the five existing SharpDX Media Foundation
+  MCG0007 warnings; no new native compatibility warning category.
+- New package BUILD.txt reports uncommitted changes and unsigned validation only.
+  This artifact is not a hardware handoff. No new console execution claimed.
+- Original signed 27f318c Common Probe AppX hash was rechecked unchanged:
+  0D9EF31685B137C1C2840E810EE4AA6B79AC5B6A6AA26D3DF843F534C8B2C077.
+- Existing files CPU 6/6 and viewport checks were not rerun for this settings-only
+  change; previous successful results remain the baseline.
+- Reviewed source diff and explicit file list; no assets, raw user logs, private
+  keys or credentials added. Earlier hardware-tested work remains recoverable.
+
+Current checkpoint: settings fix and startup audit on xbox-uwp-port, committed
+and pushed as "fix: initialize and persist actual client settings". No new Xbox
+procedure is requested in this cycle. The next hardware handoff must include
+native execution of these settings changes alongside the next client milestone.
+Next concrete work: build and isolate the offline SimsVille runtime dependency
+closure, with desktop behavior retained and a content provenance audit before
+packaging any existing content. Full client UWP startup/UI remains unimplemented.

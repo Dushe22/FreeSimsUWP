@@ -21,6 +21,8 @@
     </ProjectReference>
     <Compile Include="CommonCompatibilityTests.cs" />
     <Compile Include="Program.cs" />
+    <Compile Include="ClientSettingsTests.cs" />
+    <Compile Include="..\..\SimsVille\GlobalSettings.cs"><Link>GlobalSettings.cs</Link></Compile>
     <Compile Include="ProbeSettings.cs" />
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />

@@ -1,36 +1,32 @@
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.IO;
 using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
 
 namespace FSO.Common
 {
     public abstract class IniConfig
     {
-        private string ActivePath;
+        private readonly string ActivePath;
 
-        public abstract Dictionary<string, string> DefaultValues
-        {
-            get; set;
-        }
+        // The declared schema and fallback values; loading must not replace defaults.
+        public abstract Dictionary<string, string> DefaultValues { get; set; }
 
         private void SetValue(string key, string value)
         {
-            var prop = this.GetType().GetProperty(key);
-            if (prop != null)
+            if (!DefaultValues.ContainsKey(key)) return;
+            var prop = GetType().GetProperty(key);
+            if (prop == null || !prop.CanWrite || prop.GetIndexParameters().Length != 0) return;
+            try
             {
-                try
-                {
-                    if (prop.PropertyType != typeof(string))
-                        prop.SetValue(this, Convert.ChangeType(value, prop.PropertyType), null);
-                    else prop.SetValue(this,value,null);
-                    DefaultValues[key] = value;
-
-                }
-                catch (Exception) { }
+                var converted = prop.PropertyType == typeof(string) ? value :
+                    Convert.ChangeType(value, prop.PropertyType, CultureInfo.InvariantCulture);
+                prop.SetValue(this, converted, null);
             }
+            catch (FormatException) { }
+            catch (OverflowException) { }
+            catch (InvalidCastException) { }
         }
 
         public IniConfig(string path)
@@ -41,50 +37,46 @@ namespace FSO.Common
 
         public void Load()
         {
-            //assume default values for all unset properties
-            //foreach (var pair in DefaultValues)
-           // {
-              //  SetValue(pair.Key, pair.Value);
-           // }
+            // Initialize properties on the first run and reset missing/invalid values
+            // on subsequent loads, before applying the file's valid overrides.
+            foreach (var pair in DefaultValues) SetValue(pair.Key, pair.Value);
 
             if (!File.Exists(ActivePath))
             {
                 Save();
-            } else
-            {
-                var lines = File.ReadAllLines(ActivePath);
-                foreach (var line in lines)
-                {
-                    var clean = line.Trim();
-                    if (clean.Length == 0 || clean[0] == '#' || clean[0] == '[') continue;
-                    var split = clean.IndexOf('=');
-                    if (split == -1) continue; //?
-                    var prop = clean.Substring(0, split).Trim();
-                    var value = clean.Substring(split+1).Trim();
+                return;
+            }
 
-                    SetValue(prop, value);
-                }
+            foreach (var line in File.ReadAllLines(ActivePath))
+            {
+                var clean = line.Trim();
+                if (clean.Length == 0 || clean[0] == '#' || clean[0] == '[') continue;
+                var split = clean.IndexOf('=');
+                if (split == -1) continue;
+                SetValue(clean.Substring(0, split).Trim(), clean.Substring(split + 1).Trim());
             }
         }
 
+        /// <summary>
+        /// Writes current properties from the declared schema. I/O failures propagate
+        /// so a host can report that settings were not saved.
+        /// </summary>
         public void Save()
         {
-            try
+            // Resolve values before opening/truncating the file. Do not serialize
+            // static singleton or schema properties, or mutate the declared defaults.
+            var values = DefaultValues.Select(pair => {
+                var prop = GetType().GetProperty(pair.Key);
+                var value = prop != null && prop.CanRead && prop.GetIndexParameters().Length == 0
+                    ? Convert.ToString(prop.GetValue(this, null), CultureInfo.InvariantCulture)
+                    : pair.Value;
+                return pair.Key + "=" + value;
+            }).ToArray();
+            using (var stream = new StreamWriter(File.Open(ActivePath, FileMode.Create, FileAccess.Write)))
             {
-                using (var stream = new StreamWriter(File.Open(ActivePath, FileMode.Create, FileAccess.Write)))
-                {
-                    stream.WriteLine("# FreeSO Settings File. Properties are self explanatory.");
-                    var props = this.GetType().GetProperties();
-                    //foreach (var prop in props)
-                    //{
-                        //if (prop.Name == "Default" || prop.Name == "DefaultValues") continue;
-                       // stream.WriteLine(prop.Name + "=" + prop.GetValue(((this).ToString()),null));
-                    //}
-                    foreach (var value in DefaultValues)
-                        stream.WriteLine(value.Key + "=" + value.Value);
-                }
+                stream.WriteLine("# FreeSO Settings File. Properties are self explanatory.");
+                foreach (var value in values) stream.WriteLine(value);
             }
-            catch (Exception) { }
         }
     }
 }

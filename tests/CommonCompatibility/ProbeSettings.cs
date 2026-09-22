@@ -1,6 +1,5 @@
 using System;
 using System.Collections.Generic;
-using System.Globalization;
 using FSO.Common;
 
 namespace FreeSims.Tests
@@ -20,10 +19,7 @@ namespace FreeSims.Tests
         {
             Counter = counter;
             Marker = marker;
-            // IniConfig.Save's existing contract serializes DefaultValues.
-            defaults["Counter"] = counter.ToString(CultureInfo.InvariantCulture);
-            defaults["Marker"] = marker;
-            defaults["Enabled"] = "true";
+            Enabled = true;
             Save();
         }
     }
