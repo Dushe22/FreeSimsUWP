@@ -1,4 +1,4 @@
-﻿/*
+/*
  * This Source Code Form is subject to the terms of the Mozilla Public License, v. 2.0.
  * If a copy of the MPL was not distributed with this file, You can obtain one at
  * http://mozilla.org/MPL/2.0/. 
@@ -9,7 +9,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using Microsoft.Xna.Framework.Input;
-using System.Runtime.InteropServices;
+
 using FSO.Common.Rendering.Framework.Model;
 using System.Threading;
 
@@ -44,8 +44,6 @@ namespace FSO.Common.Rendering.Framework.IO
             return LastFocus;
         }
 
-        [DllImport("user32.dll")]
-        static extern int MapVirtualKey(uint uCode, uint uMapType);
 
         /// <summary>
         /// Utility to apply the result of pressing keys against a buffer

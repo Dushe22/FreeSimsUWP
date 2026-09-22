@@ -1,4 +1,4 @@
-#region Copyright © 2003 Dave Lewis [logthis@tpsd.com]
+#region Copyright ï¿½ 2003 Dave Lewis [logthis@tpsd.com]
 /*
  * 6/15/2003
  * This software is provided 'as-is', without any express or implied warranty.
@@ -242,7 +242,7 @@ namespace LogThis
 		}
 		private static string[] DefaultLogFileAndLocation()
 		{
-			return GetBasename((string) System.Reflection.Assembly.GetExecutingAssembly().Location);
+			return PlatformLog.DefaultFile();
 		}
 		public static string[] GetBasename(string filePath)
 		{
@@ -845,30 +845,11 @@ namespace LogThis
                 
             }
 		}
-		private void LogEvent(string sText, eloglevel loglevel)
-		{
-			EventLogEntryType EventType;
-			switch(loglevel)
-			{
-				case eloglevel.error:
-					EventType = EventLogEntryType.Error;
-					break;
-				case eloglevel.warn:
-					EventType = EventLogEntryType.Warning;
-					break;
-				case eloglevel.info:
-					EventType = EventLogEntryType.Information;
-					break;
-				default:
-					EventType = EventLogEntryType.Information;
-					break;
-			}
-			//open and write to event log.
-			System.Diagnostics.EventLog oEV = new System.Diagnostics.EventLog();
-			oEV.Source = m_ProcessName;
-			oEV.WriteEntry (sText, EventType);
-			oEV.Close();
-		}
+        // UWP port: platform sink preserves EventLog on desktop and uses app-local logging on UWP.
+        private void LogEvent(string sText, eloglevel loglevel)
+        {
+            PlatformLog.WriteEvent(m_ProcessName, sText, loglevel);
+        }
 		public void TruncateLogFile()
 		{
 			TruncateLogFile(LogPath);
@@ -1022,7 +1003,7 @@ namespace LogThis
 			}
 			string sFilePath;
 			if (m_logbasepath == string.Empty)
-				sFilePath = System.Environment.CurrentDirectory.TrimEnd('\\') + "\\" + LogName + "_" + sPeriod + m_logfiletype;
+				sFilePath = PlatformLog.FallbackDirectory.TrimEnd('\\') + "\\" + LogName + "_" + sPeriod + m_logfiletype;
 			else
 				sFilePath = m_logbasepath.TrimEnd('\\') + @"\" + LogName + "_" + sPeriod + m_logfiletype;
 

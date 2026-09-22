@@ -972,3 +972,47 @@ Next authorized work: share sims.common's actual compile inputs with UWP,
 isolate desktop-only APIs as needed, and establish distinct packaged-content,
 provisioned-game-data and writable-user-data paths. Do not claim engine/gameplay
 or save compatibility merely from the probe pass.
+## sims.common UWP and storage foundation (2026-09-22)
+
+The actual desktop compile list now lives in sims.common/SharedSources.projitems
+and is imported by both desktop and sims.common.uwp. This excludes existing
+uncompiled WinForms utilities and AssemblyUtils rather than accidentally adding
+them via a recursive source glob. The UWP library references sims.files.uwp,
+pins UWP 6.2.14 and MonoGame WindowsUniversal 3.8.1.303, and does not reference
+OpenTK, WinForms or System.Drawing.
+
+Small source compatibility fixes:
+- Log.cs delegates event output and default/fallback directories to a platform
+  adapter. Desktop retains Windows EventLog and its original paths. UWP stores
+  logs under LocalState/UserData/Logs; its event sink rotates at 1 MiB.
+- Removed the unused InputManager.MapVirtualKey user32 import (no callers).
+- Replaced removed MonoGame Color.TransparentBlack with Color.Transparent
+  (transparent zero RGBA) in PPXDepthEngine.
+- Reproduced IndexOutOfRangeException in IniConfig.Load with a blank-line fixture,
+  then added an empty-line guard. IniConfig.Save continues to serialize
+  DefaultValues; the probe explicitly synchronizes that dictionary when saving.
+
+Storage foundation:
+- IGamePaths/GamePaths define disjoint absolute ContentRoot, GameDataRoot and
+  UserDataRoot, resolve relative paths and reject lexical root escapes/drive or
+  stream names. These checks do not constitute a filesystem sandbox.
+- UwpGameStorage maps those to InstalledLocation/Content, LocalState/GameData,
+  and LocalState/UserData. Only the two local roots are created.
+- ApplyToEnvironment maps the existing FSOEnvironment fields, selecting DX
+  packaged content. It does not change process cwd or desktop defaults.
+- This is a host boundary, not a completed audit/migration of all SimsVille
+  relative paths and writes. Real game data is still not loaded.
+
+Validation:
+- Desktop Release/x86 client compilation PASS (existing warnings).
+- Test-CommonCompatibility.ps1: 8/8 PASS covering content ID, curve interpolation,
+  shared text input, path/environment mapping and rejection, settings creation/
+  write/reload/blank lines, and file logging.
+- Existing files CPU fixtures: 6/6 PASS; viewport regression checks PASS.
+- sims.common.uwp Release/x64 library compilation PASS. Full native application
+  execution still needs the next hardware probe.
+
+Next: a distinct common/storage probe using the shared GameScreen layer loop,
+native INI reflection, render-target clearing, package content reads, UWP logging,
+persistent synthetic state and an externally provisioned text marker. This is not
+a game save implementation and does not require original Sims assets.
