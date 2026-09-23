@@ -1483,3 +1483,10 @@ Files changed/created this cycle (since 2463a3e):
 - tests/CommonCompatibility/CommonCompatibility.csproj
 - tests/CommonCompatibility/ControllerPointerTests.cs
 - tests/CommonCompatibility/Program.cs
+
+## 2026-09-23 - Runtime Probe hardware PASS
+
+Series S: user reports all Runtime Probe tests and manual procedures passed.
+Photo IMG_20260922_235953.jpg confirms source 0dc91451b81b, 10/10 PASS, HINTS ON - SAVED, and 16 clicks. No new proof.log supplied.
+This clears the runtime UI/settings/controller hardware gate above. Next: offline VM isolation and legally supplied TS1 content loading; full game startup remains unverified.
+Documentation and updates will stay brief per user request to conserve quota.
