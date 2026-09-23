@@ -1391,3 +1391,95 @@ Checkpoint validation: desktop Release/x86 PASS, shared/runtime UWP x64 PASS,
 14/14 desktop CPU checks PASS, native Runtime Probe unsigned packaging PASS.
 The existing signed Common Probe remains unchanged. Next action: sign the clean
 committed Runtime Probe source, audit the package, and stop for the hardware test.
+
+## Signed Runtime Probe handoff (2026-09-22)
+
+**Hardware test required: YES. Stop at this checkpoint for the user's results.**
+
+- Package source: 0dc91451b81bcaa1c81116acb87d3f7fd037b349.
+- Source commit: uwp: exercise shared client UI and controller input in native host.
+- Branch xbox-uwp-port in Dushe22/FreeSimsUWP; source pushed before signing.
+- Identity Dushe22.FreeSimsXboxRuntimeProbe, 0.1.0.0, x64.
+- Display name: FreeSims Runtime Probe. Separate from all earlier probe apps.
+- Main AppX: artifacts/runtime-probe/AppPackages/XboxRuntimeProbe_0.1.0.0_x64_Test/XboxRuntimeProbe_0.1.0.0_x64.appx.
+- AppX size: 5,273,592 bytes.
+- AppX SHA256: ED336718F27554F654C53743A73D256275DFC2626500CD4A743C79FD97752504.
+- Test ZIP: artifacts/xbox-runtime-test-0dc91451b81b.zip, 11,568,049 bytes.
+- ZIP SHA256: EC2201D8634FB24747B202D55C2DCFA7071C171730980C59A557443CFFB1CFE5.
+- Exactly seven files: AppX, three Dependencies/x64 AppXs, public .cer, BUILD.txt,
+  TESTING.md. No copyrighted game assets, private keys, credentials or user logs.
+- Certificate thumbprint C47B01CE729B2AEBBB0BD068D6C36C252E5EFE1B,
+  expires 2027-03-22. No private key in .cer; temporary signer removed from My store.
+- Verified manifest name/version/architecture, native EXE/DLL machine 0x8664,
+  all 221 block-map hashes, CMS signature-only validation and matching signer/
+  publisher. This is not a public trust-chain certification claim.
+- AppX has 14 entries: native runtime binaries, framework support, generated logos,
+  PRI and package metadata. No legacy Content/GameData/UserData tree is packaged.
+- BUILD.txt records clean source, exact commit, Release/x64/UWP/.NET Native,
+  MonoGame 3.8.1.303, SDK 10.0.19041.0, signed=true, hardware verified=NO.
+- Clean signed build PASS; zero ILT/MCG warnings confirmed in runtime-signed-build.log.
+
+Build from clean source:
+
+~~~powershell
+./scripts/Build-XboxProof.ps1 -Target RuntimeProbe -Sign
+~~~
+
+Install the AppX and three x64 dependencies through Xbox Device Portal and launch
+FreeSims Runtime Probe. Expect 10/10 PASS and a shared client UIButton captioned
+TOGGLE HINTS. Left stick moves the cursor, A clicks once per release, B cancels a
+held press, Y reruns tests, Menu exits. Require retained HINTS state after relaunch,
+consistent size after Home/return, no unintended clicks on resume/reconnection,
+and responsive UI. No game-data upload is required for this test.
+
+[Complete installation, controls, procedure and success criteria](../experiments/XboxRuntimeProbe/TESTING.md).
+Return this app's LocalState/proof.log (+ previous if present), a photo, console
+model and exact OS build if available. For persistence failures, also provide
+LocalState/UserData/config.ini. Do not use the earlier Common Probe's log folder.
+
+Completed this cycle: shared SimsVille UWP runtime compilation, desktop debugger
+boundary, pinned MonoGame color fix, pre-content client UI support, controller
+pointer/cancellation foundation, generated font/button graphics, native UI and
+settings test host, CPU regressions, signed package and integrity checks. Earlier
+hardware-verified proof/files/common packages and code history are retained.
+
+Build status: desktop Release/x86 PASS; SimsVille.Uwp Release/x64 C# PASS;
+14/14 CPU checks PASS; scoped native host compile/package/sign PASS. The ten
+runtime host tests and manual controls on Series S are NOT TESTED yet. Previous
+common/settings hardware results do not automatically verify this new code.
+
+Current blocker: actual Series S execution of the shared client UI/settings/input
+host. Next after PASS: isolate an offline VM driver from the GonzoNet signatures,
+audit/load legally supplied TS1 data with explicit missing-content diagnostics,
+and complete the content provenance/read-write audit before neighborhood startup.
+The native success here does not clear legacy networking, all runtime reflection,
+TSO-dependent startup, main-menu assets, neighborhood/lot loading or game saves.
+
+Files changed/created this cycle (since 2463a3e):
+- .gitignore
+- SimsVille.uwp/SimsVille.uwp.csproj
+- SimsVille/GameContent/ContentManager.cs
+- SimsVille/Platform/ClientPlatform.cs
+- SimsVille/Platform/ControllerPointer.cs
+- SimsVille/Platform/Desktop/ClientPlatform.cs
+- SimsVille/SharedRuntime.projitems
+- SimsVille/SimsVille.csproj
+- SimsVille/UI/Controls/UIButton.cs
+- SimsVille/UI/Panels/UIHouseMode.cs
+- SimsVille/UI/Screens/CoreGameScreen.cs
+- SimsVille/UI/UILayer.cs
+- docs/XBOX_PORT.md
+- experiments/XboxRuntimeProbe/Package.appxmanifest
+- experiments/XboxRuntimeProbe/ProbeFont.cs
+- experiments/XboxRuntimeProbe/Program.cs
+- experiments/XboxRuntimeProbe/Properties/AssemblyInfo.cs
+- experiments/XboxRuntimeProbe/Properties/Default.rd.xml
+- experiments/XboxRuntimeProbe/RuntimeProbeGame.cs
+- experiments/XboxRuntimeProbe/TESTING.md
+- experiments/XboxRuntimeProbe/XboxRuntimeProbe.csproj
+- scripts/Build-XboxProof.ps1
+- sims.common/rendering/framework/io/InputManager.cs
+- sims.common/rendering/framework/io/MouseEvent.cs
+- tests/CommonCompatibility/CommonCompatibility.csproj
+- tests/CommonCompatibility/ControllerPointerTests.cs
+- tests/CommonCompatibility/Program.cs
