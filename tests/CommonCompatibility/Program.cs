@@ -13,6 +13,7 @@ namespace FreeSims.Tests
             var paths = new GamePaths(Path.Combine(root,"Content"),Path.Combine(root,"GameData"),Path.Combine(root,"UserData"));
             var results = CommonCompatibilityTests.Run(paths,Console.WriteLine);
             results.AddRange(ClientSettingsTests.Run(paths.GetUserDataPath("ClientSettings"), Console.WriteLine));
+            results.AddRange(ControllerPointerTests.Run(Console.WriteLine));
             Console.WriteLine("RESULT " + results.Count(x => x.StartsWith("PASS ")) + "/" + results.Count + " PASS");
             return results.All(x => x.StartsWith("PASS ")) ? 0 : 1;
         }

@@ -451,5 +451,6 @@
     <Compile Include="$(MSBuildThisFileDirectory)World\WorldContent.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)World\WorldState.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Platform\ClientPlatform.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Platform\ControllerPointer.cs" />
   </ItemGroup>
 </Project>

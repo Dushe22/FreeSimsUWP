@@ -1,4 +1,4 @@
-﻿/*
+/*
 This Source Code Form is subject to the terms of the Mozilla Public License, v. 2.0.
 If a copy of the MPL was not distributed with this file, You can obtain one at
 http://mozilla.org/MPL/2.0/.
@@ -323,7 +323,8 @@ namespace FSO.Client.UI
             state.MouseEvents.Clear();
 
             state.InputManager = inputManager;
-            Content.Content.Get().Changes.RunResModifications();
+            var content = Content.Content.Get();
+            if (content != null) content.Changes.RunResModifications();
             mainUI.Update(state);
 
             lock (m_ExtContainers)

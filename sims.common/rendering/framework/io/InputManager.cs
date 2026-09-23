@@ -490,6 +490,15 @@ namespace FSO.Common.Rendering.Framework.IO
         private UIMouseEventRef LastMouseDown;
         private bool LastMouseDownState = false;
 
+        /// <summary>Cancel a captured press without synthesizing a click on focus loss.</summary>
+        public void CancelMouseCapture(UpdateState state)
+        {
+            if (LastMouseDown != null) LastMouseDown.Callback(UIMouseEventType.MouseCancel, state);
+            if (LastMouseOver != null) LastMouseOver.Callback(UIMouseEventType.MouseOut, state);
+            LastMouseDown = LastMouseOver = null;
+            LastMouseDownState = false;
+            state.MouseEvents.Clear();
+        }
         public void HandleMouseEvents(UpdateState state)
         {
             var mouseBtnDown = state.MouseState.LeftButton == Microsoft.Xna.Framework.Input.ButtonState.Pressed;

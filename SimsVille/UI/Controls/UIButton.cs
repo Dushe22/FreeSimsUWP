@@ -1,4 +1,4 @@
-﻿/*
+/*
 This Source Code Form is subject to the terms of the Mozilla Public License, v. 2.0.
 If a copy of the MPL was not distributed with this file, You can obtain one at
 http://mozilla.org/MPL/2.0/.
@@ -31,9 +31,11 @@ namespace FSO.Client.UI.Controls
     {
         public static Texture2D StandardButton;
 
-        static UIButton()
+        private static Texture2D GetStandardButton()
         {
-            StandardButton = UIElement.GetTexture((ulong)FileIDs.UIFileIDs.buttontiledialog);
+            if (StandardButton == null)
+                StandardButton = UIElement.GetTexture((ulong)FileIDs.UIFileIDs.buttontiledialog);
+            return StandardButton;
         }
 
         private int m_CurrentFrame;
@@ -82,7 +84,7 @@ namespace FSO.Client.UI.Controls
         public bool Selected { get; set; }
 
         public UIButton()
-            : this(StandardButton)
+            : this(GetStandardButton())
         {
             UIUtils.GiveTooltip(this);
         }
@@ -308,6 +310,10 @@ namespace FSO.Client.UI.Controls
 
             switch (type)
             {
+                case UIMouseEventType.MouseCancel:
+                    m_isDown = m_isOver = false;
+                    m_CurrentFrame = 0;
+                    break;
                 case UIMouseEventType.MouseOver:
                     m_isOver = true;
                     if (!m_isDown)
@@ -339,7 +345,8 @@ namespace FSO.Client.UI.Controls
                         if (OnButtonClick != null)
                         {
                             OnButtonClick(this);
-                            HITVM.Get().PlaySoundEvent(UISounds.Click);
+                            var audio = HITVM.Get();
+                            if (audio != null) audio.PlaySoundEvent(UISounds.Click);
                         }
                     }
                     m_isDown = false;

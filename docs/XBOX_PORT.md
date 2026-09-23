@@ -16,7 +16,7 @@ The Common/storage probe passed on Series S for source 27f318c55deb2dadff92ba827
 Work is on xbox-uwp-port in Dushe22/FreeSimsUWP. GitHub Actions remains blocked by
 account billing; local builds provide validation. The engine changes so far are
 shared sims.files and sims.common libraries, image/logging adapters and separate
-storage roots. SimsVille has not yet been integrated into UWP.
+storage roots. SimsVille now compiles as a shared UWP runtime library. The native client UI probe awaits hardware validation; full game startup and content loading remain unfinished.
 
 ## Architecture and scope
 
@@ -1320,3 +1320,74 @@ initialization and TSOGame are not yet started by a UWP host. This checkpoint is
 runtime library, not a playable app or verified offline simulation. Next: a native
 host exercising actual client UI/settings without loading Sims/TSO assets or
 starting the legacy login/server paths; report any native dependency failures.
+
+## Offline client UI host and controller foundation (2026-09-22)
+
+Added XboxRuntimeProbe as a separate app referencing SimsVille.Uwp, Common.Uwp and
+Simslib.Uwp. It does not construct TSOGame, start NetworkFacade/VMServerDriver,
+initialize legacy content/audio, or package existing SimsVille Content. This is
+an initial offline client host, not a claim that the full simulator is offline.
+
+Small shared UI adaptations discovered while constructing the host:
+- UIButton's standard game texture is now loaded only for its default constructor.
+  Supplying an explicit texture no longer triggers an unrelated game-data lookup.
+  Default desktop buttons retain their existing asset path.
+- UILayer can update before Content is initialized. Pending resource modifications
+  still run when a content instance exists.
+- UIButton click sound is conditional on an initialized HITVM; clicks can work in
+  the startup UI before game audio exists.
+- Added MouseCancel at the end of the existing event enum, leaving previous values
+  unchanged, and InputManager.CancelMouseCapture. UIButton clears its pressed state
+  without calling OnButtonClick. The host cancels on focus loss/disconnection/B.
+  Other existing widgets have not been audited for all cancellation behaviors.
+
+ControllerPointer lives in the shared runtime list (now 451 files), preserving
+mouse-style UI. Left stick uses radial dead zone 0.2, speed 600 logical px/s,
+clamped UI bounds and elapsed time capped at 0.1 seconds. Both settings are API
+adjustable. A held across focus loss/reconnection is suppressed until released.
+B cancels, Menu exits, Y reruns. Full camera/secondary-button mappings remain later.
+
+The host creates a fixed 1280x720 UI render target and presents it with the tested
+aspect-fit layout transform. The real UILayer/UIScreen/UIButton perform drawing,
+caption layout and click routing. A generated SpriteFont rasterizes the prior
+probe's original pixel glyphs; a four-state button texture is generated in memory.
+No original game font, UI image or content pipeline output is included.
+
+Four actual GlobalSettings regression cases and two ControllerPointer cases are
+shared between desktop CPU and native host tests. Four native checks exercise a
+scripted shared button click, cancellation, GPU UI pixel readback and absence of
+legacy content/audio/debugger initialization. Total expected on Xbox: 10/10.
+Human button clicks toggle GlobalSettings.ShowHints, save and read it back from
+LocalState/UserData/config.ini; menu/relaunch tests real client setting persistence.
+Synthetic automated fixtures have a separate directory and never replace config.ini.
+
+Desktop checks: 14/14 PASS; desktop client Release/x86 rebuild PASS after UI/input
+changes. First full native build succeeded but with 10 additional GonzoNet warnings:
+ILT0005 missing System.Configuration types, ILT0012 configuration attributes and
+ILT0003 methods that would always throw. These identify GonzoNet.GlobalSettings,
+not FSO.Client.GlobalSettings. GonzoNet networking is still not UWP-compatible.
+Five earlier SharpDX MCG0007 warnings also appeared. No warnings were suppressed.
+
+The initial host template retained every application assembly for reflection.
+The host's directives are being scoped to its own types and the actual reflected
+FSO.Client.GlobalSettings properties, without forcing unused legacy network types.
+This is not a fix for GonzoNet; any future host that invokes its unsupported paths
+must isolate or replace them. Full-world/UI script reflection needs its own audit.
+Microsoft reference: [runtime directives](https://learn.microsoft.com/en-us/windows/uwp/dotnet-native/runtime-directives-rd-xml-configuration-file-reference).
+
+Build selector: scripts/Build-XboxProof.ps1 -Target RuntimeProbe [-Sign].
+[Runtime Probe test procedure](../experiments/XboxRuntimeProbe/TESTING.md).
+Next boundary is a clean signed native package and the user's Series S results.
+
+Scoped native validation completed successfully: Release/x64/.NET Native AppX
+build PASS, with zero ILT or MCG warning records in artifacts/runtime-native-scoped.log.
+The prior 15 warning records are retained in runtime-native-second.log as evidence
+of the broad-reflection experiment, not hidden or suppressed. The final host
+retains reflection for its own assembly and FSO.Client.GlobalSettings only.
+This proves compilation of the exercised host closure, not native viability of
+all 451 shared runtime files. No live Xbox checks have run for this new app.
+
+Checkpoint validation: desktop Release/x86 PASS, shared/runtime UWP x64 PASS,
+14/14 desktop CPU checks PASS, native Runtime Probe unsigned packaging PASS.
+The existing signed Common Probe remains unchanged. Next action: sign the clean
+committed Runtime Probe source, audit the package, and stop for the hardware test.

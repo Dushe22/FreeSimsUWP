@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Directives xmlns="http://schemas.microsoft.com/netfx/2013/01/metadata">
+  <Application>
+    <Assembly Name="SimsVille.Uwp">
+      <Type Name="FSO.Client.GlobalSettings" Dynamic="Required All" />
+    </Assembly>
+    <Assembly Name="FreeSims.Xbox.RuntimeProbe" Dynamic="Required All">
+      <Type Name="FreeSims.Tests.ProbeSettings" Dynamic="Required All" />
+    </Assembly>
+  </Application>
+</Directives>
