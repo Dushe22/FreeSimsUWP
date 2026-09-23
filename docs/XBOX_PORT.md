@@ -16,7 +16,7 @@ The Common/storage probe passed on Series S for source 27f318c55deb2dadff92ba827
 Work is on xbox-uwp-port in Dushe22/FreeSimsUWP. GitHub Actions remains blocked by
 account billing; local builds provide validation. The engine changes so far are
 shared sims.files and sims.common libraries, image/logging adapters and separate
-storage roots. SimsVille now compiles as a shared UWP runtime library. The native client UI probe awaits hardware validation; full game startup and content loading remain unfinished.
+storage roots. SimsVille now compiles as a shared UWP runtime library. The native client UI probe passed all user-reported Series S tests at 0dc91451b81b; full game startup and content loading remain unfinished.
 
 ## Architecture and scope
 
@@ -1490,3 +1490,9 @@ Series S: user reports all Runtime Probe tests and manual procedures passed.
 Photo IMG_20260922_235953.jpg confirms source 0dc91451b81b, 10/10 PASS, HINTS ON - SAVED, and 16 clicks. No new proof.log supplied.
 This clears the runtime UI/settings/controller hardware gate above. Next: offline VM isolation and legally supplied TS1 content loading; full game startup remains unverified.
 Documentation and updates will stay brief per user request to conserve quota.
+## 2026-09-23 - TS1 installation intake
+
+Added scripts/Test-TS1Installation.ps1: read-only inventory, required layout and FAR1/IFF header checks, no archive extraction or content initialization. scripts/Test-TS1Preflight.ps1: 6/6 synthetic checks PASS, including malformed input and unchanged input hashes. This is not full archive/resource validation or a gameplay test; no runtime/package changes.
+Copy the installed game contents to C:\Users\Joaco\Documents\Sims UWP Xbox\GameData\TheSims (outside the repository). Keep GameData, ExpansionPack*, UserData and other installed folders in their original layout; copy rather than move. Expected examples: GameData/Objects/Objects.far and UserData/Neighborhood.iff. Folder created; currently empty.
+Blocker: actual installation needed to inspect resources before selecting the offline content path. Existing Content.Init mixes TSO providers with TS1; WorldObjectProvider also expects objectdata/objects/objiff.far and relative Content XML. TS1NeighborhoodProvider reads UserData/Neighborhood.iff but writes Neighborhood.iff and Houses under the source root; ChangeManager can write runtime source paths. Do not initialize these against the user's copy yet. Next: inspect supplied files read-only, isolate writable neighborhood data, then connect offline startup.
+Offline VM audit: VMNetDriver.OnPacket, VM.OnPacket and VMNetSimJoinCmd.Client expose GonzoNet types; VMServerDriver constructor opens a listener, and VM initializes EODHost only for that concrete driver. A no-network driver must address those dependencies and authority semantics; it has not been implemented or validated this cycle.
