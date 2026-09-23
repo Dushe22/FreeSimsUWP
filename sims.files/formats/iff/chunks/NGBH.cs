@@ -1,4 +1,4 @@
-﻿/*
+/*
  * This Source Code Form is subject to the terms of the Mozilla Public License, v. 2.0.
  * If a copy of the MPL was not distributed with this file, You can obtain one at
  * http://mozilla.org/MPL/2.0/. 
@@ -45,6 +45,8 @@ namespace FSO.Files.Formats.IFF.Chunks
                     NeighborhoodData[i] = io.ReadInt16();
                 }
 
+                // Fresh neighborhoods can omit the optional inventory section.
+                if (stream.Position == stream.Length) return;
                 var count = io.ReadInt32();
                 for (int i = 0; i < count; i++)
                 {
@@ -75,7 +77,7 @@ namespace FSO.Files.Formats.IFF.Chunks
                     io.WriteInt16(NeighborhoodData[i]);
                 }
 
-                io.WriteInt32(NeighborhoodData.Length);
+                io.WriteInt32(InventoryByID.Count);
                 foreach (var item in InventoryByID)
                 {
                     io.WriteInt32(1);

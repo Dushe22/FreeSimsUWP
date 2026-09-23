@@ -61,5 +61,6 @@
     <Compile Include="$(MSBuildThisFileDirectory)utils\TS1Curve.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Platform\IGamePaths.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Platform\GamePaths.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Platform\NeighborhoodStore.cs" />
   </ItemGroup>
 </Project>

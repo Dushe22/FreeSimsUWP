@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Package xmlns="http://schemas.microsoft.com/appx/manifest/foundation/windows10"
+         xmlns:uap="http://schemas.microsoft.com/appx/manifest/uap/windows10"
+         xmlns:mp="http://schemas.microsoft.com/appx/2014/phone/manifest" IgnorableNamespaces="uap mp">
+  <Identity Name="Dushe22.FreeSimsXboxContentProbe" Publisher="CN=FreeSimsXboxDevelopment" Version="0.1.0.0" />
+  <mp:PhoneIdentity PhoneProductId="7e35cba3-d9fd-44b1-914b-255f178e59c2" PhonePublisherId="00000000-0000-0000-0000-000000000000" />
+  <Properties>
+    <DisplayName>FreeSims Content Probe</DisplayName>
+    <PublisherDisplayName>Dushe22</PublisherDisplayName>
+    <Logo>Assets\StoreLogo.png</Logo>
+  </Properties>
+  <Dependencies>
+    <TargetDeviceFamily Name="Windows.Universal" MinVersion="10.0.16299.0" MaxVersionTested="10.0.19041.0" />
+  </Dependencies>
+  <Resources><Resource Language="en-US" /></Resources>
+  <Applications>
+    <Application Id="App" Executable="FreeSims.Xbox.ContentProbe.exe" EntryPoint="FreeSims.Xbox.Proof.App">
+      <uap:VisualElements DisplayName="FreeSims Content Probe" Description="External TS1 parser and isolated storage checks"
+          Square150x150Logo="Assets\Square150x150Logo.png" Square44x44Logo="Assets\Square44x44Logo.png" BackgroundColor="#101827">
+        <uap:SplashScreen Image="Assets\SplashScreen.png" BackgroundColor="#101827" />
+      </uap:VisualElements>
+    </Application>
+  </Applications>
+</Package>

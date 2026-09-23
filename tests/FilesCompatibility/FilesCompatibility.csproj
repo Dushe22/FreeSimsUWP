@@ -21,6 +21,9 @@
     </ProjectReference>
     <Compile Include="FilesCompatibilityTests.cs" />
     <Compile Include="Program.cs" />
+    <Compile Include="TS1ContentTests.cs" />
+    <Compile Include="TS1ParserTests.cs" />
+    <ProjectReference Include="..\..\sims.common\sims.common.csproj"><Project>{C42962A1-8796-4F47-9DCD-79ED5904D8CA}</Project><Name>sims.common</Name></ProjectReference>
     <Compile Include="ProbeLayoutTests.cs" />
     <Compile Include="..\..\experiments\XboxFilesProbe\ProbeLayout.cs"><Link>ProbeLayout.cs</Link></Compile>
   </ItemGroup>
