@@ -64,6 +64,7 @@ namespace FreeSims.Xbox.Proof
                 foreach (var texture in thumbnails.Values) texture.Dispose();
                 thumbnails.Clear(); objectCounts.Clear();
                 try {
+                    ThumbnailColorKeyTests.Validate();
                     var neighborhood = new FSO.Content.TS1.TS1NeighborhoodProvider(paths, 0);
                     foreach (int house in new[] { 2, 28 }) {
                         objectCounts[house] = LotPlacementTests.Load(paths, house).ObjectData.Count;
@@ -73,6 +74,8 @@ namespace FreeSims.Xbox.Proof
                         thumbnails.Add(house, texture);
                         var data = new Color[texture.Width * texture.Height];
                         texture.GetData(data);
+                        ProofLog.Write("THUMBNAIL PIXELS house=" + house + " transparent=" + data.Count(x => x.A == 0) +
+                            " opaque=" + data.Count(x => x.A == 255) + " keys=" + data.Count(x => FSO.Files.ImageLoader.MASK_COLORS.Contains(x.PackedValue)));
                         if (texture.Width < 2 || texture.Height < 2 || !data.Any(x => x.A == 0) ||
                             !data.Any(x => x.A == 255) || data.Any(x => FSO.Files.ImageLoader.MASK_COLORS.Contains(x.PackedValue)))
                             throw new InvalidOperationException("Thumbnail transparency is missing for house " + house);

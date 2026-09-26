@@ -37,6 +37,7 @@
   <ItemGroup>
     <Compile Include="..\..\tests\OfflineCompatibility\OBJMPlacementTests.cs"><Link>OBJMPlacementTests.cs</Link></Compile>
     <Compile Include="..\..\tests\OfflineCompatibility\LotPlacementTests.cs"><Link>LotPlacementTests.cs</Link></Compile>
+    <Compile Include="..\..\tests\OfflineCompatibility\ThumbnailColorKeyTests.cs"><Link>ThumbnailColorKeyTests.cs</Link></Compile>
     <Compile Include="Program.cs" />
     <Compile Include="OfflineProbeGame.cs" />
     <Compile Include="..\XboxFilesProbe\ProbeLayout.cs"><Link>ProbeLayout.cs</Link></Compile>

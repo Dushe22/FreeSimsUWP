@@ -5,6 +5,6 @@ using System.Runtime.InteropServices;
 [assembly: AssemblyDescription("Offline VM and populated lot placement checks")]
 [assembly: AssemblyCompany("Dushe22")]
 [assembly: AssemblyProduct("FreeSims Offline Probe")]
-[assembly: AssemblyVersion("0.2.0.0")]
-[assembly: AssemblyFileVersion("0.2.0.0")]
+[assembly: AssemblyVersion("0.2.1.0")]
+[assembly: AssemblyFileVersion("0.2.1.0")]
 [assembly: ComVisible(false)]

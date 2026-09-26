@@ -1,6 +1,7 @@
-# Offline Probe 0.2.0.0 - lot placement check
+# Offline Probe 0.2.1.0 - lot placement check
 
 Update the existing **FreeSims Offline Probe** through Xbox Device Portal with the new x64 AppX.
+For the 0.2.1.0 transparency retest, keep all previously uploaded game files; no new files are needed.
 If it was removed, install the included x64 dependencies too.
 
 Keep these files under this app's LocalState (the first two were used by 0.1.0.0):

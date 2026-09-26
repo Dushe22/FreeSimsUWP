@@ -27,7 +27,9 @@ namespace FSO.Files
         public static HashSet<uint> MASK_COLORS = new HashSet<uint>{
             new Microsoft.Xna.Framework.Color(0xFF, 0x00, 0xFF, 0xFF).PackedValue,
             new Microsoft.Xna.Framework.Color(0xFE, 0x02, 0xFE, 0xFF).PackedValue,
-            new Microsoft.Xna.Framework.Color(0xFF, 0x01, 0xFF, 0xFF).PackedValue
+            new Microsoft.Xna.Framework.Color(0xFF, 0x01, 0xFF, 0xFF).PackedValue,
+            // TS1 house thumbnails store quantized magenta, observed as F8 00 F8.
+            new Microsoft.Xna.Framework.Color(0xF8, 0x00, 0xF8, 0xFF).PackedValue
         };
 
         public Texture2D GetTexture(GraphicsDevice gd, int width, int height)
@@ -57,6 +59,22 @@ namespace FSO.Files
             return Decoder.Decode(str);
         }
 
+        /// <summary>Clear exact opaque BMP color keys in a straight RGBA8 buffer before upload.</summary>
+        public static int ApplyBitmapColorKey(byte[] rgba)
+        {
+            if (rgba == null) throw new ArgumentNullException(nameof(rgba));
+            if (rgba.Length % 4 != 0) throw new ArgumentException("Expected complete RGBA pixels.", nameof(rgba));
+            int changed = 0;
+            for (int i = 0; i < rgba.Length; i += 4)
+            {
+                uint packed = (uint)rgba[i] | ((uint)rgba[i + 1] << 8) |
+                    ((uint)rgba[i + 2] << 16) | ((uint)rgba[i + 3] << 24);
+                if (!MASK_COLORS.Contains(packed)) continue;
+                rgba[i] = rgba[i + 1] = rgba[i + 2] = rgba[i + 3] = 0;
+                changed++;
+            }
+            return changed;
+        }
         public static Texture2D FromStream(GraphicsDevice gd, Stream str)
         {
             //if (!UseSoftLoad)
@@ -72,20 +90,11 @@ namespace FSO.Files
             {
                 try
                 {
-                    //it's a bitmap. 
-                    Texture2D tex;
-                    if (str != null)
-                    {
-                        var bmp = BitmapReader(str);
-                        if (bmp == null) return null;
-                        tex = new Texture2D(gd, bmp.Item2, bmp.Item3);
-                        tex.SetData(bmp.Item1);
-                    }
-                    else
-                    {
-                        tex = Texture2D.FromStream(gd, str);
-                    }
-                    ManualTextureMaskSingleThreaded(ref tex, MASK_COLORS.ToArray());
+                    var bmp = BitmapReader(str);
+                    if (bmp == null) return null;
+                    ApplyBitmapColorKey(bmp.Item1);
+                    var tex = new Texture2D(gd, bmp.Item2, bmp.Item3);
+                    tex.SetData(bmp.Item1);
                     return tex;
                 }
                 catch (Exception)
