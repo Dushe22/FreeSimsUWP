@@ -1520,3 +1520,4 @@ Signed offline handoff: source afd89cb154d00b62ada414c85fc5368ef6381f19; AppX SH
 
 ## 2026-09-26 - Offline Probe hardware result
 Photo IMG_20260926_131452.jpg confirms source afd89cb154d0, 9/9 PASS, run 1, visible House 1 thumbnail and viewport/UI 1280x720 on the user's Series S. No new log or explicit repeat/Home/relaunch confirmation supplied. Thumbnail background is visibly magenta: BMP.GetTexture uses Texture2D.FromStream directly, bypassing the existing ImageLoader BMP color-key path; address in the next rendering change. Full populated-lot gameplay remains unverified.
+User subsequently confirmed A rerun, Home/return and exit/relaunch all passed. Offline Probe hardware procedure is complete; the cosmetic thumbnail color-key issue remains noted above.
