@@ -107,6 +107,10 @@ public class VMWorldActivator
 
 	public Blueprint LoadFromIff(IffFile iff)
 	{
+		// Reject incomplete object recovery before replacing any VM state.
+		OBJM objm = iff.Get<OBJM>(1);
+		if (objm == null) throw new System.IO.InvalidDataException("Missing lot OBJM chunk.");
+		objm.ResolveTypes(iff.Get<OBJT>(0));
 		SIMI simi = iff.Get<SIMI>(1);
 		HOUS hous = iff.Get<HOUS>(0);
 		short size = simi.GlobalData[23];
@@ -175,28 +179,6 @@ public class VMWorldActivator
 		arch.RegenWallsAt();
 		arch.RegenRoomMap();
 		VM.Context.RegeneratePortalInfo();
-		OBJM objm = iff.Get<OBJM>(1);
-		OBJT objt = iff.Get<OBJT>(0);
-
-        var entr = objt.Entries[objt.OriginalID - 1]; 
-		OBJMResource objmres = new OBJMResource()
-		{
-    		OBJD = Content.Get().WorldObjects.Get(entr.GUID, false)?.OBJ,
-    		OBJT = entr
-		};
-
-        var target = objm.ObjectData[0];
-        int l = 0;
-		for (ushort k = 0; k < objm.IDToOBJT.Count(); k += 2)
-		{
-			if (objm.IDToOBJT[(ushort)k] != 0 && objm.ObjectData.TryGetValue(objm.IDToOBJT[(ushort)k], out target))
-			{
-                
-                OBJTEntry entry = objt.Entries[objm.IDToOBJT[k] - 1];
-				target.Name = entry.Name;
-				target.GUID = entry.GUID;
-			}
-		}
 		ushort[][] objFlrs = new ushort[2][]
 		{
 			DecodeObjID(iff.Get<ARRY>(3)?.TransposeData),

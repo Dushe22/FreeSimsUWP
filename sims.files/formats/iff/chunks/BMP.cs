@@ -42,7 +42,12 @@ namespace FSO.Files.Formats.IFF.Chunks
 
         public Texture2D GetTexture(GraphicsDevice device)
         {
-            return Texture2D.FromStream(device, new MemoryStream(data));
+            using (var stream = new MemoryStream(data, false))
+            {
+                var texture = ImageLoader.FromStream(device, stream);
+                if (texture == null) throw new InvalidDataException("Could not decode BMP chunk.");
+                return texture;
+            }
         }
 
     }

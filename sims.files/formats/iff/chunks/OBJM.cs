@@ -100,6 +100,44 @@ namespace FSO.Files.Formats.IFF.Chunks
             }
         }
 
+        /// <summary>Resolve the OBJM object-ID/type-ID pairs using OBJT's explicit type IDs.</summary>
+        public void ResolveTypes(OBJT types)
+        {
+            if (types == null || types.Entries == null || IDToOBJT == null || ObjectData == null)
+                throw new InvalidDataException("Missing lot object/type table.");
+            if (IDToOBJT.Length % 2 != 0)
+                throw new InvalidDataException("Incomplete OBJM object/type pair.");
+
+            var byType = new Dictionary<ushort, OBJTEntry>();
+            foreach (var entry in types.Entries.Where(x => x.GUID != 0))
+            {
+                if (byType.ContainsKey(entry.TypeID))
+                    throw new InvalidDataException("Duplicate OBJT type ID: " + entry.TypeID);
+                byType.Add(entry.TypeID, entry);
+            }
+            var resolved = new Dictionary<int, OBJTEntry>();
+            for (int i = 0; i < IDToOBJT.Length; i += 2)
+            {
+                int objectID = IDToOBJT[i];
+                ushort typeID = IDToOBJT[i + 1];
+                OBJTEntry entry;
+                if (!ObjectData.ContainsKey(objectID))
+                    throw new InvalidDataException("OBJM parser did not recover object ID: " + objectID);
+                if (!byType.TryGetValue(typeID, out entry))
+                    throw new InvalidDataException("Missing OBJT type ID: " + typeID + " for object " + objectID);
+                if (resolved.ContainsKey(objectID))
+                    throw new InvalidDataException("Duplicate OBJM object ID: " + objectID);
+                resolved.Add(objectID, entry);
+            }
+            if (resolved.Count != ObjectData.Count)
+                throw new InvalidDataException("OBJM contains unmapped object data.");
+            // Validate the whole table before updating any object.
+            foreach (var pair in resolved)
+            {
+                ObjectData[pair.Key].GUID = pair.Value.GUID;
+                ObjectData[pair.Key].Name = pair.Value.Name;
+            }
+        }
         public class MappedObject {
             public string Name;
             public uint GUID;

@@ -12,9 +12,11 @@ namespace FreeSims.Tests
     {
         private static int Main(string[] args)
         {
+            if (args.Length == 2 && args[0] == "--inspect-lots") return LotInspection.Run(args[1]);
             if (args.Length != 2) { Console.Error.WriteLine("Expected game root and scratch root."); return 2; }
             var paths = new GamePaths(Path.Combine(args[1],"Content"),args[0],Path.Combine(args[1],"UserData"));
-            bool passed = OfflineTests.Run(paths,Console.WriteLine).All(x => x.StartsWith("PASS "));
+            bool passed = ObjectTypeMappingTests.Run();
+            passed &= OfflineTests.Run(paths,Console.WriteLine).All(x => x.StartsWith("PASS "));
             try
             {
                 var house = new IffFile(paths.GetGameDataPath("UserData/Houses/House01.iff"));

@@ -65,6 +65,9 @@ namespace FreeSims.Xbox.Proof
                     thumbnail.GetData(data);
                     if (thumbnail.Width < 2 || thumbnail.Height < 2 || data.Distinct().Take(2).Count() < 2)
                         throw new InvalidOperationException("Thumbnail is empty or uniform.");
+                    if (!data.Any(x => x.A == 0) || !data.Any(x => x.A == 255) ||
+                        data.Any(x => FSO.Files.ImageLoader.MASK_COLORS.Contains(x.PackedValue)))
+                        throw new InvalidOperationException("Thumbnail color-key transparency is missing.");
                     results.Add("PASS HOUSE THUMBNAIL GPU READBACK");
                     ProofLog.Write("PASS HOUSE THUMBNAIL GPU READBACK " + thumbnail.Width + "x" + thumbnail.Height);
                 } catch (Exception ex) { results.Add("FAIL HOUSE THUMBNAIL GPU READBACK"); ProofLog.Write(ex.ToString()); }

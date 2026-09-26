@@ -72,6 +72,14 @@ namespace FreeSims.Tests
                     byte[] keyed = { 255,0,255,255, 254,2,254,255, 255,1,255,255, 17,34,51,255 };
                     byte[] expected = { 0,0,0,0, 0,0,0,0, 0,0,0,0, 17,34,51,255 };
                     Texture(device, Bmp(keyed), expected, 0);
+                    var chunk = new BMP();
+                    using (var stream = new MemoryStream(Bmp(keyed))) chunk.Read(new IffFile(), stream);
+                    using (var texture = chunk.GetTexture(device))
+                    {
+                        var actual = new byte[expected.Length];
+                        texture.GetData(actual);
+                        Bytes(actual, expected);
+                    }
                 });
                 Check(results, log, "PNG TEXTURE STRAIGHT", () =>
                     Texture(device, Convert.FromBase64String(Png), PngRgba, 0));
