@@ -1,26 +1,25 @@
-# FreeSims Offline Probe — Series S
-Install XboxOfflineProbe_0.1.0.0_x64.appx plus the three supplied x64 dependencies.
-Launch once, then B to exit. Initial missing-file failures are expected.
+# Offline Probe 0.2.0.0 - lot placement check
 
-In Device Portal, select **Dushe22.FreeSimsXboxOfflineProbe**, then LocalState.
-Upload these two files from your PC's installed The Sims folder:
+Update the existing **FreeSims Offline Probe** through Xbox Device Portal with the new x64 AppX.
+If it was removed, install the included x64 dependencies too.
 
-| PC relative path | Destination under this app's LocalState |
+Keep these files under this app's LocalState (the first two were used by 0.1.0.0):
+
+| File from the PC installation | Destination under LocalState |
 | --- | --- |
 | UserData/Neighborhood.iff | GameData/UserData/Neighborhood.iff |
 | UserData/Houses/House01.iff | GameData/UserData/Houses/House01.iff |
+| UserData/Houses/House02.iff | GameData/UserData/Houses/House02.iff |
+| UserData/Houses/House28.iff | GameData/UserData/Houses/House28.iff |
 
-No Objects.far is needed for this probe. Previous probes use separate storage; either upload
-from the PC again or copy these files from the Content Probe's matching locations.
+PC installation: C:\Users\Joaco\Documents\Sims UWP Xbox\GameData\TheSims.
+Upload House02.iff and House28.iff; no Objects.far is needed. Re-upload all four only if the app's data was removed.
 
-Launch: expect **9/9 PASS** and a visible House 1 thumbnail.
-A reruns. B exits. Repeat twice, Home/return and exit/relaunch; verify 9/9 and consistent sizing.
-Send a photo and this app's LocalState/proof.log (proof.previous.log too if present).
+Expect **15/15 PASS**. **X** switches between House 2 (388 objects) and House 28 (755 objects)
+for this installation. Both thumbnails should have transparent surroundings, without the old magenta rectangle.
+**A** reruns; **B** exits. Test rerun, both previews, Home/return and exit/relaunch.
+Send a photo and this app's LocalState/proof.log; include proof.previous.log if present.
 
-Coverage: local command verification/order/deferral/shutdown, rejection of network-origin
-commands, 150 real VM ticks on a synthetic EMPTY 8x8 headless lot, actual neighborhood/house
-provider reads, saved-overlay selection, blocked incomplete serializers, and GPU thumbnail readback.
-The clock test is not a populated Sims lot. This does not validate full gameplay or neighborhood
-save serialization. The provider's new preview constructor explicitly blocks those saves.
-Existing save overlays are read; tests write only a unique scratch copy under UserData/OfflineProbe.
-No game data is packaged or redistributed.
+This validates object placement parsing and thumbnail rendering, not running Sims or restoring saved execution state.
+The VM clock check still uses an empty synthetic lot. Full gameplay saves remain blocked.
+Original game files are read only; test writes use isolated scratch storage. No Sims assets are in this package.

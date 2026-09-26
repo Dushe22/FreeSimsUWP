@@ -13,93 +13,112 @@ namespace FSO.Files.Formats.IFF.Chunks
         public OBJD OBJD;
         public OBJTEntry OBJT;
     }
-    //work in progress
+    // Placement metadata only; saved execution state is not restored.
 
     public class OBJM : IffChunk
     {
-        //work in progress
-
-        //data body starts with 0x01, but what is after that is unknown.
-        
-        //empty body from house 0:
-        // 01 00 00 00 | 00 00 00ñ
-        // 
+        // Placement metadata only; saved execution state is not restored.
 
         public ushort[] IDToOBJT;
 
         public Dictionary<int, MappedObject> ObjectData;
 
+        // Read the placement prefix only. Stack, relationships, slots and person state
+        // remain unparsed; this is not a complete simulation/save-state decoder.
+        // Format reference: FreeSO tso.files/Formats/IFF/Chunks/OBJM.cs.
         public override void Read(IffFile iff, Stream stream)
         {
-            using (var io = IoBuffer.FromStream(stream, ByteOrder.LITTLE_ENDIAN))
+            byte[] bytes;
+            using (var copy = new MemoryStream()) { stream.CopyTo(copy); bytes = copy.ToArray(); }
+            if (bytes.Length < 14) throw new InvalidDataException("Truncated OBJM header.");
+            using (var input = new MemoryStream(bytes, false))
+            using (var reader = new BinaryReader(input))
             {
-                io.ReadUInt32(); //pad
-                var version = io.ReadUInt32();
-
-                //house 00: 33 00 00 00
-                //house 03: 3E 00 00 00
-                //house 79: 45 00 00 00
-                //completec:49 00 00 00
-                //corresponds to house version?
-
-                var MjbO = io.ReadUInt32();
-
-                var compressionCode = io.ReadByte();
-                if (compressionCode != 1) throw new Exception("hey what!!");
-
-                var iop = new IffFieldEncode(io);
-
-                /*
-                var test1 = iop.ReadInt16();
-                var testas = new ushort[test1*2];
-                for (int i=0; i<test1*2; i++)
-                {
-                    testas[i] = iop.ReadUInt16();
-                }*/
-
+                reader.ReadUInt32();
+                reader.ReadUInt32(); // save version; placement prefix is shared by supported TS1 versions
+                if (reader.ReadUInt32() != 0x4f626a4d) throw new InvalidDataException("Invalid OBJM signature.");
+                const int offsetBase = 12;
+                if (reader.ReadByte() != 1) throw new InvalidDataException("Unsupported OBJM compression.");
+                var fields = new PlacementFields(bytes, 13, bytes.Length);
                 var table = new List<ushort>();
-                while (io.HasMore)
+                var ids = new HashSet<int>();
+                while (true)
                 {
-                    var value = iop.ReadUInt16();
-                    if (value == 0) break;
-                    table.Add(value);
+                    ushort id = unchecked((ushort)fields.Short());
+                    if (id == 0) break;
+                    ushort type = unchecked((ushort)fields.Short());
+                    if (type == 0 || !ids.Add(id)) throw new InvalidDataException("Invalid or duplicate OBJM mapping.");
+                    table.Add(id); table.Add(type);
+                }
+                input.Position = fields.AlignedPosition;
+                var objects = new Dictionary<int, MappedObject>();
+                for (int record = 0; record < ids.Count; record++)
+                {
+                    if (input.Length - input.Position < 4) throw new InvalidDataException("Missing OBJM record boundary.");
+                    long end = offsetBase + (long)reader.ReadInt32();
+                    int start = (int)input.Position;
+                    if (end <= start || end > bytes.Length) throw new InvalidDataException("Invalid OBJM record boundary.");
+                    fields = new PlacementFields(bytes, start, (int)end);
+                    for (int i = 0; i < 4; i++) fields.Int(); // footprint
+                    int x = fields.Int(), y = fields.Int(), level = fields.Int();
+                    if (level != 1 && level != 2) throw new InvalidDataException("Invalid OBJM object level.");
+                    fields.Short(); // unknown prefix field
+                    int attributes = fields.Short();
+                    if (attributes < 0) throw new InvalidDataException("Negative OBJM attribute count.");
+                    for (int i = 0; i < attributes + 8; i++) fields.Short(); // attributes and temporary registers
+                    var data = new short[73]; // 68 object variables plus 5 extra variables
+                    for (int i = 0; i < data.Length; i++) data[i] = fields.Short();
+                    int id = data[11];
+                    if (!ids.Contains(id) || objects.ContainsKey(id)) throw new InvalidDataException("Unknown or duplicate OBJM record ID: " + id);
+                    objects.Add(id, new MappedObject {
+                        ObjectID = id, Direction = data[1], ContainerID = data[2],
+                        ContainerSlot = data[3], ParentID = data[26], Data = data,
+                        SavedX = x, SavedY = y, SavedLevel = level
+                    });
+                    input.Position = end; // skip the unsupported simulation-state suffix
                 }
                 IDToOBJT = table.ToArray();
-
-                var list = new List<short>();
-                while (io.HasMore)
-                {
-                    list.Add(iop.ReadInt16());
-                }
-
-                var offsets = SearchForObjectData(list);
-                for (int i=1; i<offsets.Count; i++)
-                {
-                    Console.WriteLine(offsets[i] - offsets[i-1]);
-                }
-
-                ObjectData = new Dictionary<int, MappedObject>();
-                int lastOff = 0;
-                foreach (var off in offsets)
-                {
-                    var endOff = off + 72;
-                    var size = endOff - lastOff;
-                    var data = list.Skip(lastOff).Take(size).ToArray();
-
-                    var bas = size - 72;
-                    var objID = data[bas+11]; //object id
-                    var dir = data[bas + 1];
-                    var parent = data[bas + 26];
-                    var containerid = data[bas + 2];
-                    var containerslot = data[bas + 2];
-
-                    ObjectData[objID] = new MappedObject() { ObjectID = objID, Direction = dir, Data = data, ParentID = parent, ContainerID = containerid, ContainerSlot = containerslot };
-
-                    lastOff = endOff;
-                }
+                ObjectData = objects;
             }
         }
 
+        // Bit fields are MSB-first, signed, and have separate short/int widths.
+        // Unlike the legacy decoder, an exhausted record throws instead of returning zeros.
+        private sealed class PlacementFields
+        {
+            private static readonly int[] ShortWidths = { 5, 8, 13, 16 };
+            private static readonly int[] IntWidths = { 6, 11, 21, 32 };
+            private readonly byte[] bytes;
+            private readonly int end;
+            private int position, bit;
+            public int AlignedPosition { get { return position + (bit == 0 ? 0 : 1); } }
+            public PlacementFields(byte[] bytes, int start, int end)
+            {
+                this.bytes = bytes; position = start; this.end = end;
+            }
+            private uint Bits(int count)
+            {
+                uint value = 0;
+                for (int i = 0; i < count; i++)
+                {
+                    if (position >= end) throw new InvalidDataException("Truncated OBJM field.");
+                    value = (value << 1) | (uint)((bytes[position] >> (7 - bit)) & 1);
+                    if (++bit == 8) { bit = 0; position++; }
+                }
+                return value;
+            }
+            private int Value(bool wide)
+            {
+                if (Bits(1) == 0) return 0;
+                int code = (int)Bits(2);
+                int width = wide ? IntWidths[code] : ShortWidths[code];
+                uint value = Bits(width);
+                if (width < 32 && (value & (1u << (width - 1))) != 0) value |= uint.MaxValue << width;
+                return unchecked((int)value);
+            }
+            public short Short() { return (short)Value(false); }
+            public int Int() { return Value(true); }
+        }
         /// <summary>Resolve the OBJM object-ID/type-ID pairs using OBJT's explicit type IDs.</summary>
         public void ResolveTypes(OBJT types)
         {
@@ -150,6 +169,7 @@ namespace FSO.Files.Formats.IFF.Chunks
 
             public short[] Data;
 
+            public int SavedX, SavedY, SavedLevel;
             public int ArryX;
             public int ArryY;
             public int ArryLevel;
@@ -160,21 +180,5 @@ namespace FSO.Files.Formats.IFF.Chunks
             }
         }
 
-        public List<int> SearchForObjectData(List<short> data)
-        {
-            //we don't know exactly where the object data is in the format...
-            //but we know objects should have a birth date, basically always 1997 or (1997-36) for npcs.
-            //this should let us extract some important attributes like the structure of the data and object directions.
-
-            var offsets = new List<int>();
-            for (int i=0; i<data.Count-3; i++)
-            {
-                if ((data[i] == 1997 || data[i] == (1997-36)) && (data[i + 1] > 0 && data[i+1] < 13) && (data[i + 2] > 0 && data[i + 2] < 32)) {
-                    offsets.Add(i - 45);
-                }
-            }
-
-            return offsets;
-        }
     }
 }

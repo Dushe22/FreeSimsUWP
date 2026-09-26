@@ -21,11 +21,7 @@ namespace FreeSims.Tests
                     var iff = new IffFile(path);
                     var simi = iff.Get<SIMI>(1);
                     var objt = iff.Get<OBJT>(0);
-                    OBJM objm;
-                    // The legacy OBJM parser prints raw offsets; keep this report compact.
-                    var output = Console.Out;
-                    try { Console.SetOut(TextWriter.Null); objm = iff.Get<OBJM>(1); }
-                    finally { Console.SetOut(output); }
+                    var objm = iff.Get<OBJM>(1);
                     if (simi == null || objt == null || objm == null)
                         throw new InvalidDataException("Missing SIMI 1, OBJT 0 or OBJM 1.");
                     objm.ResolveTypes(objt);

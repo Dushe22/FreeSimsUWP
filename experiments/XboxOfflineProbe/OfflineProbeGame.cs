@@ -13,7 +13,11 @@ namespace FreeSims.Xbox.Proof
     {
         private readonly GraphicsDeviceManager graphics;
         private SpriteBatch batch;
-        private Texture2D pixel, thumbnail;
+        private Texture2D pixel;
+        private readonly Dictionary<int, Texture2D> thumbnails = new Dictionary<int, Texture2D>();
+        private readonly Dictionary<int, int> objectCounts = new Dictionary<int, int>();
+        private int selectedHouse = 2;
+        private const int TestCount = 15;
         private List<string> results = new List<string>();
         private GamePadState previous;
         private int runs;
@@ -55,23 +59,29 @@ namespace FreeSims.Xbox.Proof
             try {
                 var paths = UwpGameStorage.CreatePaths();
                 results = OfflineTests.Run(paths, ProofLog.Write);
-                if (thumbnail != null) { thumbnail.Dispose(); thumbnail = null; }
+                results.AddRange(OBJMPlacementTests.Run(ProofLog.Write));
+                results.AddRange(LotPlacementTests.Run(paths, ProofLog.Write));
+                foreach (var texture in thumbnails.Values) texture.Dispose();
+                thumbnails.Clear(); objectCounts.Clear();
                 try {
-                    var neighborhood = new FSO.Content.TS1.TS1NeighborhoodProvider(paths,0);
-                    var bmp = neighborhood.GetHouseThumb(1);
-                    if (bmp == null) throw new InvalidOperationException("House 1 has no BMP 512 thumbnail.");
-                    thumbnail = bmp.GetTexture(GraphicsDevice);
-                    var data = new Color[thumbnail.Width * thumbnail.Height];
-                    thumbnail.GetData(data);
-                    if (thumbnail.Width < 2 || thumbnail.Height < 2 || data.Distinct().Take(2).Count() < 2)
-                        throw new InvalidOperationException("Thumbnail is empty or uniform.");
-                    if (!data.Any(x => x.A == 0) || !data.Any(x => x.A == 255) ||
-                        data.Any(x => FSO.Files.ImageLoader.MASK_COLORS.Contains(x.PackedValue)))
-                        throw new InvalidOperationException("Thumbnail color-key transparency is missing.");
-                    results.Add("PASS HOUSE THUMBNAIL GPU READBACK");
-                    ProofLog.Write("PASS HOUSE THUMBNAIL GPU READBACK " + thumbnail.Width + "x" + thumbnail.Height);
-                } catch (Exception ex) { results.Add("FAIL HOUSE THUMBNAIL GPU READBACK"); ProofLog.Write(ex.ToString()); }
-                ProofLog.Write("RESULT " + results.Count(x => x.StartsWith("PASS ")) + "/9 PASS");
+                    var neighborhood = new FSO.Content.TS1.TS1NeighborhoodProvider(paths, 0);
+                    foreach (int house in new[] { 2, 28 }) {
+                        objectCounts[house] = LotPlacementTests.Load(paths, house).ObjectData.Count;
+                        var bmp = neighborhood.GetHouseThumb(house);
+                        if (bmp == null) throw new InvalidOperationException("Missing BMP 512 for house " + house);
+                        var texture = bmp.GetTexture(GraphicsDevice);
+                        thumbnails.Add(house, texture);
+                        var data = new Color[texture.Width * texture.Height];
+                        texture.GetData(data);
+                        if (texture.Width < 2 || texture.Height < 2 || !data.Any(x => x.A == 0) ||
+                            !data.Any(x => x.A == 255) || data.Any(x => FSO.Files.ImageLoader.MASK_COLORS.Contains(x.PackedValue)))
+                            throw new InvalidOperationException("Thumbnail transparency is missing for house " + house);
+                        ProofLog.Write("THUMBNAIL " + house + " " + texture.Width + "x" + texture.Height);
+                    }
+                    results.Add("PASS LOT THUMBNAILS GPU COLOR KEYS");
+                    ProofLog.Write("PASS LOT THUMBNAILS GPU COLOR KEYS");
+                } catch (Exception ex) { results.Add("FAIL LOT THUMBNAILS GPU COLOR KEYS"); ProofLog.Write(ex.ToString()); }
+                ProofLog.Write("RESULT " + results.Count(x => x.StartsWith("PASS ")) + "/" + TestCount + " PASS");
             }
             catch (Exception ex) { results = new List<string> { "FAIL STORAGE INITIALIZATION" }; ProofLog.Write(ex.ToString()); }
             ProofLog.Write("TEST RUN " + runs + " END");
@@ -85,6 +95,10 @@ namespace FreeSims.Xbox.Proof
                 ProofLog.Write("CONTROLLER " + (pad.IsConnected ? "CONNECTED" : "DISCONNECTED"));
             if (IsActive && pad.IsButtonDown(Buttons.A) && previous.IsButtonUp(Buttons.A)) RunTests();
             if (IsActive && pad.IsButtonDown(Buttons.B) && previous.IsButtonUp(Buttons.B)) Exit();
+            if (IsActive && pad.IsButtonDown(Buttons.X) && previous.IsButtonUp(Buttons.X)) {
+                selectedHouse = selectedHouse == 2 ? 28 : 2;
+                ProofLog.Write("PREVIEW HOUSE " + selectedHouse);
+            }
             previous = pad;
             base.Update(gameTime);
         }
@@ -99,20 +113,22 @@ namespace FreeSims.Xbox.Proof
             // Recompute from the live viewport every frame: activation/resize events
             // can precede the framework's final back-buffer update.
             batch.Begin(samplerState: SamplerState.PointClamp, transformMatrix: transform);
-            PixelText.Draw(batch, pixel, "FREESIMS OFFLINE PROBE", 48, 36, 4, Color.White);
+            PixelText.Draw(batch, pixel, "FREESIMS LOT PLACEMENT PROBE", 48, 36, 4, Color.White);
             PixelText.Draw(batch, pixel, "COMMIT " + BuildInfo.Commit.Substring(0, 12), 48, 80, 2, Color.LightGray);
-            bool passed = results.Count == 9 && results.All(x => x.StartsWith("PASS "));
-            PixelText.Draw(batch, pixel, passed ? "9/9 PASS" : "TEST FAILURE - SEE LOG",
+            bool passed = results.Count == TestCount && results.All(x => x.StartsWith("PASS "));
+            PixelText.Draw(batch, pixel, passed ? TestCount + "/" + TestCount + " PASS" : "TEST FAILURE - SEE LOG",
                 48, 122, 3, passed ? Color.LimeGreen : Color.OrangeRed);
             for (int i = 0; i < results.Count; i++)
-                PixelText.Draw(batch, pixel, results[i], 48, 175 + i * 32, 2,
+                PixelText.Draw(batch, pixel, results[i], 48, 175 + i * 22, 2,
                     results[i].StartsWith("PASS ") ? Color.LightGreen : Color.OrangeRed);
-            PixelText.Draw(batch, pixel, "A RERUN - B EXIT - RUN " + runs, 48, 534, 2, Color.White);
-            PixelText.Draw(batch, pixel, "EMPTY VM LOT - HOUSE PREVIEW ONLY", 48, 574, 2, Color.LightGray);
+            PixelText.Draw(batch, pixel, "A RERUN - X HOUSE - B EXIT - RUN " + runs, 48, 534, 2, Color.White);
+            PixelText.Draw(batch, pixel, "PLACEMENT DATA ONLY - SIMULATION NOT STARTED", 48, 574, 2, Color.LightGray);
             batch.Draw(pixel, new Rectangle(48 + (int)(elapsed * 80 % 1120), 630, 32, 8), Color.CornflowerBlue);
             PixelText.Draw(batch, pixel, "VIEWPORT " + viewport.Width + "X" + viewport.Height +
                 " - UI 1280X720", 48, 660, 2, Color.LightGray);
-            if (thumbnail != null) {
+            Texture2D thumbnail;
+            if (thumbnails.TryGetValue(selectedHouse, out thumbnail)) {
+                PixelText.Draw(batch, pixel, "HOUSE " + selectedHouse + " - " + objectCounts[selectedHouse] + " OBJECTS", 850, 420, 2, Color.LightGray);
                 float scale = Math.Min(300f/thumbnail.Width, 180f/thumbnail.Height);
                 batch.Draw(thumbnail,new Rectangle(900,455,(int)(thumbnail.Width*scale),(int)(thumbnail.Height*scale)),Color.White);
             }
@@ -145,7 +161,8 @@ namespace FreeSims.Xbox.Proof
 
         protected override void UnloadContent()
         {
-            if (thumbnail != null) thumbnail.Dispose();
+            foreach (var texture in thumbnails.Values) texture.Dispose();
+            thumbnails.Clear();
             if (pixel != null) pixel.Dispose();
             if (batch != null) batch.Dispose();
             base.UnloadContent();
