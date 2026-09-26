@@ -1,0 +1,68 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="15.0" DefaultTargets="Build" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <Import Project="$(MSBuildExtensionsPath)\$(MSBuildToolsVersion)\Microsoft.Common.props" Condition="Exists('$(MSBuildExtensionsPath)\$(MSBuildToolsVersion)\Microsoft.Common.props')" />
+  <PropertyGroup>
+    <Configuration Condition="'$(Configuration)' == ''">Release</Configuration>
+    <Platform Condition="'$(Platform)' == ''">x64</Platform>
+    <ProjectGuid>{9DD74A7F-794F-4F57-A737-0860B8A2ED41}</ProjectGuid>
+    <OutputType>AppContainerExe</OutputType>
+    <RootNamespace>FreeSims.Xbox.Proof</RootNamespace>
+    <AssemblyName>FreeSims.Xbox.OfflineProbe</AssemblyName>
+    <StartupObject>FreeSims.Xbox.Proof.Program</StartupObject>
+    <TargetPlatformIdentifier>UAP</TargetPlatformIdentifier>
+    <TargetPlatformVersion Condition="'$(TargetPlatformVersion)' == ''">10.0.19041.0</TargetPlatformVersion>
+    <TargetPlatformMinVersion>10.0.16299.0</TargetPlatformMinVersion>
+    <MinimumVisualStudioVersion>15</MinimumVisualStudioVersion>
+    <EnableDotNetNativeCompatibleProfile>true</EnableDotNetNativeCompatibleProfile>
+    <ProjectTypeGuids>{A5A43C5B-DE2A-4C0C-9213-0A381AF9435A};{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}</ProjectTypeGuids>
+    <PlatformTarget>x64</PlatformTarget>
+    <Prefer32Bit>false</Prefer32Bit>
+    <UseVSHostingProcess>false</UseVSHostingProcess>
+    <OutputPath>bin\$(Platform)\$(Configuration)\</OutputPath>
+    <DefineConstants>TRACE;NETFX_CORE;WINDOWS_UAP</DefineConstants>
+    <AppxPackageSigningEnabled>false</AppxPackageSigningEnabled>
+    <AppxBundle>Never</AppxBundle>
+    <DefaultLanguage>en-US</DefaultLanguage>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)' == 'Release'">
+    <Optimize>true</Optimize>
+    <DebugType>pdbonly</DebugType>
+    <UseDotNetNativeToolchain>true</UseDotNetNativeToolchain>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)' == 'Debug'">
+    <DebugSymbols>true</DebugSymbols>
+    <DebugType>full</DebugType>
+    <DefineConstants>$(DefineConstants);DEBUG</DefineConstants>
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Include="Program.cs" />
+    <Compile Include="OfflineProbeGame.cs" />
+    <Compile Include="..\XboxFilesProbe\ProbeLayout.cs"><Link>ProbeLayout.cs</Link></Compile>
+    <Compile Include="..\XboxUwpProof\PixelText.cs"><Link>PixelText.cs</Link></Compile>
+    <Compile Include="..\XboxUwpProof\ProofLog.cs"><Link>ProofLog.cs</Link></Compile>
+    <Compile Include="..\..\tests\OfflineCompatibility\OfflineTests.cs"><Link>OfflineTests.cs</Link></Compile>
+    <ProjectReference Include="..\..\SimsVille.uwp\SimsVille.uwp.csproj"><Project>{86EE4050-2E17-455B-BF30-90111D98E256}</Project><Name>SimsVille.uwp</Name></ProjectReference>
+    <ProjectReference Include="..\..\sims.common.uwp\sims.common.uwp.csproj"><Project>{DE76DF1D-693D-4C4A-868C-A0DF7169CDBB}</Project><Name>sims.common.uwp</Name></ProjectReference>
+    <ProjectReference Include="..\..\sims.files.uwp\sims.files.uwp.csproj">
+      <Project>{D2235EF5-1A9E-459C-9BE8-CAC60CB63E89}</Project>
+      <Name>sims.files.uwp</Name>
+    </ProjectReference>
+    <Compile Include="Properties\AssemblyInfo.cs" />
+    <Compile Include="Properties\BuildInfo.g.cs" />
+    <Content Include="Properties\Default.rd.xml" />
+    <Content Include="Assets\StoreLogo.png" />
+    <Content Include="Assets\Square44x44Logo.png" />
+    <Content Include="Assets\Square150x150Logo.png" />
+    <Content Include="Assets\SplashScreen.png" />
+    <AppxManifest Include="Package.appxmanifest"><SubType>Designer</SubType></AppxManifest>
+  </ItemGroup>
+  <ItemGroup>
+    <PackageReference Include="Microsoft.NETCore.UniversalWindowsPlatform" Version="6.2.14" />
+    <PackageReference Include="MonoGame.Framework.WindowsUniversal" Version="3.8.1.303" />
+  </ItemGroup>
+  <Import Project="$(MSBuildExtensionsPath)\Microsoft\WindowsXaml\v$(VisualStudioVersion)\Microsoft.Windows.UI.Xaml.CSharp.targets" />
+  <Target Name="RequireX64" BeforeTargets="PrepareForBuild">
+    <Error Condition="'$(Platform)' != 'x64'" Text="The Xbox proof supports x64 only." />
+    <Error Condition="!Exists('Properties\BuildInfo.g.cs')" Text="Run scripts/Build-XboxProof.ps1 -Target OfflineProbe to generate build identity and package assets." />
+  </Target>
+</Project>

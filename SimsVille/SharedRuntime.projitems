@@ -452,5 +452,7 @@
     <Compile Include="$(MSBuildThisFileDirectory)World\WorldState.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Platform\ClientPlatform.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Platform\ControllerPointer.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)SimsAntics\NetPlay\VMNetworkDriver.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)SimsAntics\NetPlay\Drivers\VMOfflineDriver.cs" />
   </ItemGroup>
 </Project>

@@ -1,4 +1,5 @@
-﻿using FSO.Common;
+using FSO.Common;
+using FSO.Common.Platform;
 using FSO.Files.Formats.IFF;
 using FSO.Files.Formats.IFF.Chunks;
 using System;
@@ -29,6 +30,14 @@ namespace FSO.Content.TS1
         public Content ContentManager;
         public TS1GameState GameState = new TS1GameState();
         public string UserPath;
+        private GamePaths isolatedPaths;
+        private NeighborhoodStore store;
+        public bool IsReadOnly { get { return isolatedPaths != null; } }
+        public TS1NeighborhoodProvider(GamePaths paths, int neighborhood)
+        {
+            isolatedPaths = paths ?? throw new ArgumentNullException(nameof(paths));
+            InitSpecific(neighborhood);
+        }
 
         public HashSet<uint> DirtyAvatars = new HashSet<uint>();
 
@@ -44,6 +53,20 @@ namespace FSO.Content.TS1
         /// <param name="id"></param>
         public void InitSpecific(int id)
         {
+            if (isolatedPaths != null)
+            {
+                var nextStore = new NeighborhoodStore(isolatedPaths, id);
+                var resource = new IffFile(nextStore.GetReadPath("Neighborhood.iff"));
+                var neighbors = resource.List<NBRS>()?.FirstOrDefault();
+                var neighborhood = resource.List<NGBH>()?.FirstOrDefault();
+                if (neighbors == null || neighborhood == null) throw new InvalidDataException("Neighborhood requires NBRS and NGBH chunks.");
+                store = nextStore; MainResource = resource; Neighbors = neighbors; Neighborhood = neighborhood;
+                TypeAttributes = resource.List<TATT>()?.FirstOrDefault();
+                DirtyAvatars.Clear(); ZoningDictionary.Clear(); FamilyForHouse.Clear();
+                GameState = new TS1GameState();
+                UserPath = Path.GetDirectoryName(store.GetReadPath("Neighborhood.iff"));
+                return;
+            }
             DirtyAvatars.Clear();
             ZoningDictionary.Clear();
             FamilyForHouse.Clear();
@@ -104,6 +127,7 @@ namespace FSO.Content.TS1
 
         public bool SaveNeighbourhood(bool withSims)
         {
+            if (IsReadOnly) throw new NotSupportedException("Neighborhood preview is read-only until full TS1 serialization is validated.");
             //todo: save iffs for dirty avatars. 
             DirtyAvatars.Clear();
 
@@ -115,6 +139,7 @@ namespace FSO.Content.TS1
 
         public bool SaveHouse(int houseID, Files.Formats.IFF.IffFile file)
         {
+            if (IsReadOnly) throw new NotSupportedException("House preview is read-only until full TS1 serialization is validated.");
             using (var stream = new FileStream(GetHousePath(houseID), FileMode.Create, FileAccess.Write, FileShare.None))
                 file.Write(stream);
 
@@ -123,11 +148,16 @@ namespace FSO.Content.TS1
 
         public IffFile GetHouse(int id)
         {
-            return new Files.Formats.IFF.IffFile(Path.Combine(UserPath, "Houses/House"+ id.ToString().PadLeft(2, '0')+".iff"));
+            return new Files.Formats.IFF.IffFile(GetHousePath(id));
         }
 
         public string GetHousePath(int id)
         {
+            if (store != null)
+            {
+                if (id < 0 || id > 99) throw new ArgumentOutOfRangeException(nameof(id));
+                return store.GetReadPath("Houses/House" + id.ToString("D2") + ".iff");
+            }
             return Path.Combine(UserPath, "Houses/House" + id.ToString().PadLeft(2, '0') + ".iff");
         }
 

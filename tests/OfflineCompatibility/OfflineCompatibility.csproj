@@ -1,0 +1,13 @@
+<Project ToolsVersion="15.0" DefaultTargets="Build" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+<PropertyGroup><Configuration>Release</Configuration><Platform>x86</Platform><PlatformTarget>x86</PlatformTarget><OutputType>Exe</OutputType><AssemblyName>OfflineCompatibility</AssemblyName><TargetFrameworkVersion>v4.5</TargetFrameworkVersion><OutputPath>bin\Release\</OutputPath></PropertyGroup>
+<ItemGroup><Reference Include="System"/><Reference Include="System.Core"/>
+<Reference Include="SimsVille"><HintPath>..\..\SimsVille\bin\Release\SimsVille.exe</HintPath></Reference>
+<Reference Include="Common"><HintPath>..\..\sims.common\bin\Release\Common.dll</HintPath></Reference>
+<Reference Include="Simslib"><HintPath>..\..\sims.files\bin\Release\Simslib.dll</HintPath></Reference>
+<Reference Include="MonoGame.Framework"><HintPath>..\..\SimsVille\Dependencies\MonoGame.Framework.dll</HintPath></Reference>
+<Reference Include="GonzoNet"><HintPath>..\..\SimsVille\Dependencies\GonzoNet.dll</HintPath></Reference>
+<Reference Include="GOLDEngine"><HintPath>..\..\SimsVille\Dependencies\GOLDEngine.dll</HintPath></Reference>
+<Reference Include="TargaImagePCL"><HintPath>..\..\SimsVille\Dependencies\TargaImagePCL.dll</HintPath></Reference>
+<Compile Include="OfflineTests.cs"/><Compile Include="Program.cs"/>
+</ItemGroup><Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets"/>
+</Project>

@@ -1,4 +1,4 @@
-﻿/*
+/*
  * This Source Code Form is subject to the terms of the Mozilla Public License, v. 2.0.
  * If a copy of the MPL was not distributed with this file, You can obtain one at
  * http://mozilla.org/MPL/2.0/. 
@@ -146,7 +146,7 @@ namespace FSO.SimAntics
             Color col2 = m_TimeColors[(int)Math.Floor(time * (m_TimeColors.Length - 1)) + 1]; //second colour
             double Progress = (time * (m_TimeColors.Length - 1)) % 1; //interpolation progress (mod 1)
 
-            WorldUI.OutsideColor = Color.Lerp(col1, col2, (float)Progress); //linearly interpolate between the two colours for this specific time.
+            if (VM.UseWorld) WorldUI.OutsideColor = Color.Lerp(col1, col2, (float)Progress); //linearly interpolate between the two colours for this specific time.
         }
 
         public void SetObjectSupported(short x, short y, sbyte level, bool support)
@@ -246,7 +246,7 @@ namespace FSO.SimAntics
             {
                 RegenRoomMap();
                 if (WallsChanged != null) WallsChanged(this);
-                WorldUI.RoofComp.SetStylePitch(RoofStyle, RoofPitch);
+                if (VM.UseWorld) WorldUI.RoofComp.SetStylePitch(RoofStyle, RoofPitch);
             }
 
             if (FloorsDirty)

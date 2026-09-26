@@ -1,4 +1,4 @@
-﻿/*
+/*
  * This Source Code Form is subject to the terms of the Mozilla Public License, v. 2.0.
  * If a copy of the MPL was not distributed with this file, You can obtain one at
  * http://mozilla.org/MPL/2.0/. 
@@ -8,7 +8,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
-using GonzoNet;
+
 using FSO.SimAntics.NetPlay.Model;
 using FSO.SimAntics.NetPlay.Model.Commands;
 using FSO.SimAntics.Engine.TSOTransaction;
@@ -58,7 +58,7 @@ namespace FSO.SimAntics.NetPlay
             }
         }
         public abstract void CloseNet();
-        public abstract void OnPacket(NetworkClient client, ProcessedPacket packet);
+        public virtual bool IsAuthoritative { get { return GlobalLink != null; } }
     }
 
     public enum VMCloseNetReason

@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
@@ -16,7 +16,7 @@ using FSO.Vitaboy;
 using FSO.SimAntics.Model;
 using FSO.SimAntics.NetPlay;
 using FSO.SimAntics.NetPlay.Model;
-using GonzoNet;
+
 using System.Collections.Concurrent;
 using FSO.SimAntics.Marshals;
 using FSO.LotView.Components;
@@ -54,7 +54,7 @@ namespace FSO.SimAntics
 
         public bool IsServer
         {
-            get { return GlobalLink != null; }
+            get { return Driver != null && Driver.IsAuthoritative; }
         }
 
         private const long TickInterval = 33 * TimeSpan.TicksPerMillisecond;
@@ -172,7 +172,7 @@ namespace FSO.SimAntics
             GlobalState[20] = 255; //Game Edition. Basically, what "expansion packs" are running. Let's just say all of them.
             GlobalState[25] = 4; //as seen in EA-Land edith's simulator globals, this needs to be set for people to do their idle interactions.
             GlobalState[17] = 4; //Runtime Code Version, is this in EA-Land.
-            if (Driver is VMServerDriver) EODHost = new VMEODHost();
+            if (Driver != null && Driver.IsAuthoritative) EODHost = new VMEODHost();
         }
 
         public void Reset()
@@ -247,10 +247,7 @@ namespace FSO.SimAntics
             return Driver.GetUserIP(uid);
         }
 
-        public void OnPacket(NetworkClient Client, ProcessedPacket Packet)
-        {
-            Driver.OnPacket(Client, Packet);
-        }
+
 
         public void CloseNet(VMCloseNetReason reason)
         {
