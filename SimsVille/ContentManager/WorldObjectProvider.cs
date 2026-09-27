@@ -833,7 +833,7 @@ namespace FSO.Content
             get { return Iff; }
         }
 
-        public GameObjectResource(Files.Formats.IFF.IffFile iff, Files.Formats.IFF.IffFile sprites, OTFFile tuning, string iname, bool ts1)
+        public GameObjectResource(Files.Formats.IFF.IffFile iff, Files.Formats.IFF.IffFile sprites, OTFFile tuning, string iname, bool ts1, Func<string, GameGlobal> globalResolver = null)
         {
             this.Iff = iff;
             this.Sprites = sprites;
@@ -842,9 +842,9 @@ namespace FSO.Content
 
             if (iff == null) return;
             var GLOBChunks = iff.List<GLOB>();
-            if (GLOBChunks != null && GLOBChunks[0].Name != "")
+            if (GLOBChunks != null && GLOBChunks.Count > 0 && GLOBChunks[0].Name != "")
             {
-                var sg = FSO.Content.Content.Get().WorldObjectGlobals.Get(GLOBChunks[0].Name, ts1);
+                var sg = globalResolver != null ? globalResolver(GLOBChunks[0].Name) : FSO.Content.Content.Get().WorldObjectGlobals.Get(GLOBChunks[0].Name, ts1);
                 if (sg != null) SemiGlobal = sg.Resource; //used for tuning constant fetching.
             }
 

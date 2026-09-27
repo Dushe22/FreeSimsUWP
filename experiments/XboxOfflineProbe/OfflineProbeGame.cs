@@ -17,7 +17,7 @@ namespace FreeSims.Xbox.Proof
         private readonly Dictionary<int, Texture2D> thumbnails = new Dictionary<int, Texture2D>();
         private readonly Dictionary<int, int> objectCounts = new Dictionary<int, int>();
         private int selectedHouse = 2;
-        private const int TestCount = 15;
+        private const int TestCount = VMObjectTests.Count + 1;
         private List<string> results = new List<string>();
         private GamePadState previous;
         private int runs;
@@ -58,9 +58,9 @@ namespace FreeSims.Xbox.Proof
             ProofLog.Write("TEST RUN " + runs + " BEGIN");
             try {
                 var paths = UwpGameStorage.CreatePaths();
-                results = OfflineTests.Run(paths, ProofLog.Write);
-                results.AddRange(OBJMPlacementTests.Run(ProofLog.Write));
-                results.AddRange(LotPlacementTests.Run(paths, ProofLog.Write));
+                results = VMObjectTests.Run(paths, ProofLog.Write);
+
+
                 foreach (var texture in thumbnails.Values) texture.Dispose();
                 thumbnails.Clear(); objectCounts.Clear();
                 try {
@@ -116,7 +116,7 @@ namespace FreeSims.Xbox.Proof
             // Recompute from the live viewport every frame: activation/resize events
             // can precede the framework's final back-buffer update.
             batch.Begin(samplerState: SamplerState.PointClamp, transformMatrix: transform);
-            PixelText.Draw(batch, pixel, "FREESIMS LOT PLACEMENT PROBE", 48, 36, 4, Color.White);
+            PixelText.Draw(batch, pixel, "FREESIMS VM OBJECT PROBE", 48, 36, 4, Color.White);
             PixelText.Draw(batch, pixel, "COMMIT " + BuildInfo.Commit.Substring(0, 12), 48, 80, 2, Color.LightGray);
             bool passed = results.Count == TestCount && results.All(x => x.StartsWith("PASS "));
             PixelText.Draw(batch, pixel, passed ? TestCount + "/" + TestCount + " PASS" : "TEST FAILURE - SEE LOG",
@@ -125,13 +125,13 @@ namespace FreeSims.Xbox.Proof
                 PixelText.Draw(batch, pixel, results[i], 48, 175 + i * 22, 2,
                     results[i].StartsWith("PASS ") ? Color.LightGreen : Color.OrangeRed);
             PixelText.Draw(batch, pixel, "A RERUN - X HOUSE - B EXIT - RUN " + runs, 48, 534, 2, Color.White);
-            PixelText.Draw(batch, pixel, "PLACEMENT DATA ONLY - SIMULATION NOT STARTED", 48, 574, 2, Color.LightGray);
+            PixelText.Draw(batch, pixel, "LIVE VM CHAIR AND SOFA - HOUSE IMAGE IS A PREVIEW", 48, 574, 2, Color.LightGray);
             batch.Draw(pixel, new Rectangle(48 + (int)(elapsed * 80 % 1120), 630, 32, 8), Color.CornflowerBlue);
             PixelText.Draw(batch, pixel, "VIEWPORT " + viewport.Width + "X" + viewport.Height +
                 " - UI 1280X720", 48, 660, 2, Color.LightGray);
             Texture2D thumbnail;
             if (thumbnails.TryGetValue(selectedHouse, out thumbnail)) {
-                PixelText.Draw(batch, pixel, "HOUSE " + selectedHouse + " - " + objectCounts[selectedHouse] + " OBJECTS", 850, 420, 2, Color.LightGray);
+                PixelText.Draw(batch, pixel, "PREVIEW " + selectedHouse + " - " + objectCounts[selectedHouse] + " OBJECTS", 850, 420, 2, Color.LightGray);
                 float scale = Math.Min(300f/thumbnail.Width, 180f/thumbnail.Height);
                 batch.Draw(thumbnail,new Rectangle(900,455,(int)(thumbnail.Width*scale),(int)(thumbnail.Height*scale)),Color.White);
             }

@@ -12,11 +12,19 @@ $tempRoot = if ($env:RUNNER_TEMP) { $env:RUNNER_TEMP } else { [IO.Path]::GetTemp
 $references = Join-Path $tempRoot 'freesims-net45-references/Microsoft.NETFramework.ReferenceAssemblies.net45.1.0.3/build'
 & $msbuild (Join-Path $repo 'tests/OfflineCompatibility/OfflineCompatibility.csproj') "/p:TargetFrameworkRootPath=$references\" /verbosity:minimal
 if ($LASTEXITCODE -ne 0) { throw 'Offline test build failed.' }
-$inputs = @('UserData/Neighborhood.iff','UserData/Houses/House01.iff','UserData/Houses/House02.iff','UserData/Houses/House28.iff')
+# Desktop MonoGame resolves these assemblies when VM entity ticks are JIT-compiled,
+# even for a headless run. They are test dependencies, never Xbox package inputs.
+$testPackages = Join-Path $repo 'artifacts/offline-test-packages'
+& $NuGetPath install SharpDX.Direct3D11 -Version 4.0.1 -OutputDirectory $testPackages -NonInteractive -Source https://api.nuget.org/v3/index.json
+if ($LASTEXITCODE -ne 0) { throw 'Failed to restore desktop tick dependencies.' }
+foreach ($package in @('SharpDX','SharpDX.DXGI','SharpDX.Direct3D11')) {
+    Copy-Item -LiteralPath (Join-Path $testPackages "$package.4.0.1/lib/net45/$package.dll") -Destination (Join-Path $repo 'tests/OfflineCompatibility/bin/Release') -Force
+}
+$inputs = @('UserData/Neighborhood.iff','UserData/Houses/House01.iff','UserData/Houses/House02.iff','UserData/Houses/House28.iff','GameData/Objects/Objects.far','GameData/Global/Global.far')
 $before = @($inputs | ForEach-Object { (Get-FileHash -LiteralPath (Join-Path $GameRoot $_)).Hash })
 & (Join-Path $repo 'tests/OfflineCompatibility/bin/Release/OfflineCompatibility.exe') $GameRoot (Join-Path $repo 'artifacts/offline-desktop')
 $testExit = $LASTEXITCODE
 $after = @($inputs | ForEach-Object { (Get-FileHash -LiteralPath (Join-Path $GameRoot $_)).Hash })
 if (($before -join ',') -ne ($after -join ',')) { throw 'Source hashes changed.' }
-Write-Output 'PASS all four source SHA256 hashes unchanged'
+Write-Output 'PASS all six source SHA256 hashes unchanged'
 if ($testExit -ne 0) { throw 'Offline checks failed.' }

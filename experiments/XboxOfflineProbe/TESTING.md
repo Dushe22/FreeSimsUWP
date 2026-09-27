@@ -1,26 +1,25 @@
-# Offline Probe 0.2.1.0 - lot placement check
+# Offline Probe 0.3.0.0 - real TS1 VM objects
 
-Update the existing **FreeSims Offline Probe** through Xbox Device Portal with the new x64 AppX.
-For the 0.2.1.0 transparency retest, keep all previously uploaded game files; no new files are needed.
-If it was removed, install the included x64 dependencies too.
+Update the existing FreeSims Offline Probe using the new x64 AppX.
+Keep the existing Neighborhood.iff and House01/02/28.iff uploads.
+Add these two files using Xbox Device Portal, under this app's LocalState:
 
-Keep these files under this app's LocalState (the first two were used by 0.1.0.0):
-
-| File from the PC installation | Destination under LocalState |
+| Source inside your PC game installation | Destination under LocalState |
 | --- | --- |
-| UserData/Neighborhood.iff | GameData/UserData/Neighborhood.iff |
-| UserData/Houses/House01.iff | GameData/UserData/Houses/House01.iff |
-| UserData/Houses/House02.iff | GameData/UserData/Houses/House02.iff |
-| UserData/Houses/House28.iff | GameData/UserData/Houses/House28.iff |
+| GameData/Objects/Objects.far | GameData/GameData/Objects/Objects.far |
+| GameData/Global/Global.far | GameData/GameData/Global/Global.far |
 
-PC installation: C:\Users\Joaco\Documents\Sims UWP Xbox\GameData\TheSims.
-Upload House02.iff and House28.iff; no Objects.far is needed. Re-upload all four only if the app's data was removed.
+PC game root: `C:\Users\Joaco\Documents\Sims UWP Xbox\GameData\TheSims`.
+The repeated GameData in the destination is intentional: the first is the app's game root.
+Previous uploads remain in `GameData/UserData/Neighborhood.iff` and `GameData/UserData/Houses/House01.iff`, `House02.iff`, `House28.iff`.
+If reinstalling after removal, restore those uploads and the included x64 dependencies.
 
-Expect **15/15 PASS**. **X** switches between House 2 (388 objects) and House 28 (755 objects)
-for this installation. Both thumbnails should have transparent surroundings, without the old magenta rectangle.
-**A** reruns; **B** exits. Test rerun, both previews, Home/return and exit/relaunch.
-Send a photo and this app's LocalState/proof.log; include proof.previous.log if present.
+Expect **9/9 PASS**. **A** reruns; **X** switches house previews; **B** exits.
+Test two reruns, Home/return, then exit/relaunch. Send a photo and LocalState/proof.log
+(plus proof.previous.log if present).
 
-This validates object placement parsing and thumbnail rendering, not running Sims or restoring saved execution state.
-The VM clock check still uses an empty synthetic lot. Full gameplay saves remain blocked.
-Original game files are read only; test writes use isolated scratch storage. No Sims assets are in this package.
+The VM creates a real chair and a three-tile sofa, runs their initialization/main scripts,
+places/rotates them, tests script-created objects, ticks 150 times and deletes/recreates them.
+The house image remains a thumbnail. Full saved-lot restoration, Sims, expansion/download
+objects and gameplay saves are not enabled. Source archives remain read-only; no game assets
+are included in the AppX or handoff ZIP.

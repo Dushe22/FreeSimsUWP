@@ -245,17 +245,14 @@ namespace FSO.SimAntics
         public void UseTreeTableOf(GameObject obj, bool ts1) //manually set the tree table for an object. Used for multitile objects, which inherit this from the master.
         {
             if (TreeTable != null) return;
-            var GLOBChunks = obj.Resource.List<GLOB>();
-            GameGlobal SemiGlobal = null;
-
-            if (GLOBChunks != null && GLOBChunks[0].Name != "") SemiGlobal = FSO.Content.Content.Get().WorldObjectGlobals.Get(GLOBChunks[0].Name, ts1);
+            var SemiGlobal = obj.Resource.SemiGlobal;
 
             TreeTable = obj.Resource.Get<TTAB>(obj.OBJ.TreeTableID);
             if (TreeTable != null) TreeTableStrings = obj.Resource.Get<TTAs>(obj.OBJ.TreeTableID);
             if (TreeTable == null && SemiGlobal != null)
             {
-                TreeTable = SemiGlobal.Resource.Get<TTAB>(obj.OBJ.TreeTableID); //tree not in local, try semiglobal
-                TreeTableStrings = SemiGlobal.Resource.Get<TTAs>(obj.OBJ.TreeTableID);
+                TreeTable = SemiGlobal.Get<TTAB>(obj.OBJ.TreeTableID); //tree not in local, try semiglobal
+                TreeTableStrings = SemiGlobal.Get<TTAs>(obj.OBJ.TreeTableID);
             }
         }
 

@@ -95,6 +95,8 @@ namespace FSO.SimAntics
         public uint MyUID; //UID of this client in the VM
 
         public event VMDialogHandler OnDialog;
+        public event Action<Exception> OnScriptError;
+        internal void SignalScriptError(Exception error) { if (OnScriptError != null) OnScriptError(error); }
         public event VMChatEventHandler OnChatEvent;
         public event VMRefreshHandler OnFullRefresh;
         public event VMBreakpointHandler OnBreakpoint;
@@ -165,7 +167,7 @@ namespace FSO.SimAntics
         /// </summary>
         public void Init()
         {
-            Context.Globals = FSO.Content.Content.Get().WorldObjectGlobals.Get("global", false);
+            Context.Globals = Context.GetGlobal("global", TS1);
             PlatformState = new VMTSOLotState();
             PlatformState.ActivateValidator(this);
             GlobalState = new short[33];
@@ -527,7 +529,7 @@ namespace FSO.SimAntics
             var clientJoin = (Context.Architecture == null);
             var oldWorld = Context.World;
             Context = new VMContext(input.Context, Context);
-            Context.Globals = FSO.Content.Content.Get().WorldObjectGlobals.Get("global", false);
+            Context.Globals = Context.GetGlobal("global", TS1);
             Context.VM = this;
             Context.Architecture.RegenRoomMap();
             Context.RegeneratePortalInfo();

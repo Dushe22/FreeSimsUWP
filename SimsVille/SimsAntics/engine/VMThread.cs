@@ -281,6 +281,7 @@ namespace FSO.SimAntics.Engine
 
 
            } catch (Exception e) {
+                Context.VM.SignalScriptError(e);
                 if (Stack.Count == 0) return; //???
                 var context = Stack[Stack.Count - 1];
                 bool Delete = ((Entity is VMGameObject) && (DialogCooldown > 30 * 20 - 10));

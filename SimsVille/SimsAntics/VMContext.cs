@@ -30,6 +30,15 @@ namespace FSO.SimAntics
     {
         public static bool UseWorld = true;
         public Blueprint Blueprint;
+        public IVMContentProvider ContentProvider;
+        public GameObject GetObject(uint guid, bool ts1)
+        {
+            return ContentProvider != null ? ContentProvider.GetObject(guid, ts1) : Content.Content.Get().WorldObjects.Get(guid, ts1);
+        }
+        public GameGlobal GetGlobal(string name, bool ts1)
+        {
+            return ContentProvider != null ? ContentProvider.GetGlobal(name, ts1) : Content.Content.Get().WorldObjectGlobals.Get(name, ts1);
+        }
         public VMObjectQueries ObjectQueries;
         public VMClock Clock { get; internal set; }
 
@@ -66,6 +75,7 @@ namespace FSO.SimAntics
         public VMContext(LotView.World world, VMContext oldContext){
             //oldContext is passed in case we need to inherit certain things, like the ambient sound player
             this.World = world;
+            ContentProvider = oldContext == null ? null : oldContext.ContentProvider;
             this.Clock = new VMClock();
             this.SetToNextCache = new VMSetToNextCache(this);
 
@@ -896,7 +906,7 @@ namespace FSO.SimAntics
         {
 
             VMMultitileGroup group = new VMMultitileGroup();
-            var objDefinition = FSO.Content.Content.Get().WorldObjects.Get(GUID, ts1);
+            var objDefinition = GetObject(GUID, ts1);
             if (objDefinition == null)
             {
                 return null;
@@ -912,10 +922,10 @@ namespace FSO.SimAntics
                 {
                     if (objd[i].MasterID == master && objd[i].SubIndex != -1) //if sub-part of this object, make it!
                     {
-                        var subObjDefinition = FSO.Content.Content.Get().WorldObjects.Get(objd[i].GUID, ts1);
+                        var subObjDefinition = GetObject(objd[i].GUID, ts1);
                         if (subObjDefinition != null)
                         {
-                            var worldObject = new ObjectComponent(subObjDefinition);
+                            var worldObject = UseWorld ? new ObjectComponent(subObjDefinition) : null;
                             var vmObject = new VMGameObject(subObjDefinition, worldObject);
                             vmObject.GhostImage = ghostImage;
                             if (UseWorld) Blueprint.AddObject(worldObject);
@@ -961,7 +971,7 @@ namespace FSO.SimAntics
                 }
                 else
                 {
-                    var worldObject = new ObjectComponent(objDefinition);
+                    var worldObject = UseWorld ? new ObjectComponent(objDefinition) : null;
                     var vmObject = new VMGameObject(objDefinition, worldObject);
 
                     vmObject.MultitileGroup = group;
