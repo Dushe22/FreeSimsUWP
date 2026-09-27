@@ -11,7 +11,7 @@ No game files are included in the AppX or handoff ZIP.
 
 Expect **11/11 PASS**. A reruns; X switches previews; B exits.
 Test two reruns, Home/return, and B exit/relaunch. Send a photo and proof.log
-(plus proof.previous.log if present). The longer behavior checks may delay startup/reruns.
+(plus proof.log.previous if present). The longer behavior checks may delay startup/reruns.
 
 Expected log:
 - 93 flowers and 41 shrubs run 600 ticks, including real TS1 zoning queries.
@@ -25,4 +25,6 @@ Expected log:
 
 Zoning transitions use controlled VM scenarios with the existing saved geometry.
 Only selected mains restart; saved execution stacks, Sim interactions, full gameplay,
-live lot rendering and saves remain unsupported. Images are still thumbnails.
+live lot rendering and saves remain unsupported. Images are still thumbnails.The displayed RUN counter is per process and resets on a fresh launch, including
+if Home/return starts the app again. Completed results remain in proof.log;
+its rotated backup is proof.log.previous. Test VM progress is not saved.
