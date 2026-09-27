@@ -303,6 +303,7 @@ namespace FSO.SimAntics
             {
                 Thread.TicksThisFrame = 0;
                 Thread.Tick();
+                if (Thread.Context.VM.ScriptExecutionStopped) return;
                 if (SoundThreads.Count > 0) TickSounds();
             }
             if (Headline != null && HeadlineRenderer != null)

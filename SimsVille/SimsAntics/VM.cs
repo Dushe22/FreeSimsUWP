@@ -95,8 +95,17 @@ namespace FSO.SimAntics
         public uint MyUID; //UID of this client in the VM
 
         public event VMDialogHandler OnDialog;
+        // Opt-in for isolated TS1 sessions. A fault latches until the VM is discarded.
+        public bool StopOnScriptError;
+        public Exception ScriptFault { get; private set; }
+        public bool ScriptExecutionStopped { get { return StopOnScriptError && ScriptFault != null; } }
         public event Action<Exception> OnScriptError;
-        internal void SignalScriptError(Exception error) { if (OnScriptError != null) OnScriptError(error); }
+        internal void SignalScriptError(Exception error)
+        {
+            if (ScriptExecutionStopped) return;
+            if (StopOnScriptError) ScriptFault = error;
+            if (OnScriptError != null) OnScriptError(error);
+        }
         public event VMChatEventHandler OnChatEvent;
         public event VMRefreshHandler OnFullRefresh;
         public event VMBreakpointHandler OnBreakpoint;
@@ -289,6 +298,7 @@ namespace FSO.SimAntics
 
         public void InternalTick()
         {
+            if (ScriptExecutionStopped) return;
             if (GlobalLink != null) GlobalLink.Tick(this);
             if (EODHost != null) EODHost.Tick();
             Context.Clock.Tick();
@@ -304,6 +314,7 @@ namespace FSO.SimAntics
             {
                 Context.NextRandom(1);
                 obj.Tick(); //run object specific tick behaviors, like lockout count decrement
+                if (ScriptExecutionStopped) break;
             }
             //Context.SetToNextCache.VerifyPositions(); use only for debug!
         }

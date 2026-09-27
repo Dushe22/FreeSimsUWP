@@ -25,6 +25,7 @@ namespace FSO.SimAntics.NetPlay.Drivers
         public override bool Tick(VM vm)
         {
             if (vm == null) throw new ArgumentNullException(nameof(vm));
+            if (vm.ScriptExecutionStopped) return false;
             VMNetCommandBodyAbstract[] batch;
             lock (gate)
             {
@@ -34,14 +35,18 @@ namespace FSO.SimAntics.NetPlay.Drivers
             }
             // Reentrant commands from Verify/Execute belong to the next tick.
             var verified = new List<VMNetCommandBodyAbstract>();
-            foreach (var command in batch)
+            foreach (var command in batch) {
+                if (vm.ScriptExecutionStopped) return false;
                 if (command.Verify(vm, vm.GetObjectByPersist(command.ActorUID) as VMAvatar)) verified.Add(command);
+            }
             foreach (var command in verified)
             {
                 lock (gate) { if (closed) return false; }
+                if (vm.ScriptExecutionStopped) return false;
                 command.Execute(vm, vm.GetObjectByPersist(command.ActorUID) as VMAvatar);
             }
             lock (gate) { if (closed) return false; }
+            if (vm.ScriptExecutionStopped) return false;
             if (vm.Context.Ready) vm.InternalTick();
             return true;
         }

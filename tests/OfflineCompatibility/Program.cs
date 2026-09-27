@@ -17,6 +17,7 @@ namespace FreeSims.Tests
             var paths = new GamePaths(Path.Combine(args[1],"Content"),args[0],Path.Combine(args[1],"UserData"));
             bool passed = VMObjectTests.Run(paths, Console.WriteLine).All(x => x.StartsWith("PASS "));
             passed &= SavedLotObjectTests.Run(paths, Console.WriteLine).All(x => x.StartsWith("PASS "));
+            passed &= TS1BehaviorTests.Run(paths, Console.WriteLine).All(x => x.StartsWith("PASS "));
             passed &= ObjectTypeMappingTests.Run();
             passed &= LotPlacementTests.Run(paths, Console.WriteLine).All(x => x.StartsWith("PASS "));
             passed &= OBJMPlacementTests.Run(Console.WriteLine).All(x => x.StartsWith("PASS "));

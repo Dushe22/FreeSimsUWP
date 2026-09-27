@@ -1,39 +1,28 @@
-# Saved Lot Probe 0.4.0.0
+# TS1 Behavior Probe 0.5.0.0
 
-Update the existing FreeSims Offline Probe with the included x64 AppX.
+Update the existing Offline Probe with the new x64 AppX. Keep all previous uploads.
 
-Upload/merge the prepared PC folder
-C:\Users\Joaco\Documents\Sims UWP Xbox\FreeSimsUWP\artifacts\saved-lot-upload\GameData
-into the app's **LocalState/GameData**, preserving subfolders. Do not add another
-GameData wrapper. The folder contains 18 files (about 358 MiB), including the six
-previous uploads. Only these 12 archives are new, relative to LocalState/GameData:
+Add one file using Xbox Device Portal:
+- PC: C:\Users\Joaco\Documents\Sims UWP Xbox\FreeSimsUWP\artifacts\behavior-upload\GameData\UserData\LotZoning.iff
+- Xbox: this app's **LocalState/GameData/UserData/LotZoning.iff**
 
-- ExpansionShared/ExpansionShared.far
-- ExpansionPack3/ExpansionPack3.far
-- ExpansionPack5/ExpansionPack5.far
-- Downloads/CCPlugin/CCPlugin.far
-- Downloads/Christmas2000/Christmas2000.far
-- Downloads/FenceParty/FenceParty.far
-- Downloads/HPPottyPack/HPPottyPack.far
-- Downloads/Jukebox/Jukebox.far
-- Downloads/LampHulaUke/LampHulaUke.far
-- Downloads/SlotMach/SlotMach.far
-- Downloads/UnSnacker/UnSnacker.far
-- Downloads/WallLite/WallLite.far
+The prepared file is an unchanged copy from your installed game's UserData folder.
+No game files are included in the AppX or handoff ZIP.
 
-These are local copies of your installation, never included in the handoff ZIP.
-On another PC, copy these relative paths from the installed game; retain the
-existing GameData/{Objects,Global} archives and UserData neighborhood/house files.
+Expect **11/11 PASS**. A reruns; X switches previews; B exits.
+Test two reruns, Home/return, and B exit/relaunch. Send a photo and proof.log
+(plus proof.previous.log if present). The longer behavior checks may delay startup/reruns.
 
-Expect **11/11 PASS**. **A** reruns; **X** switches thumbnail previews; **B** exits.
-Run twice, test Home/return and exit/relaunch, then send a photo and
-LocalState/proof.log (plus proof.previous.log if present).
+Expected log:
+- 93 flowers and 41 shrubs run 600 ticks, including real TS1 zoning queries.
+- 14 ceiling lights and 27 wall lights run 7,200 ticks each.
+- Community daytime: 14 ceiling/25 indoor wall lights turn on.
+- Empty residential daytime: lights turn off. Its 2 outdoor wall lights turn on
+  at night and off again during the day.
+- 80 selected objects run together for 6,000 ticks; 675 other objects remain held.
+- Deliberately unsupported generic-call fixtures stop their VMs without resets,
+  deletions, further ticks or queued commands. EXPECTED FAULT CONTAINED is a pass.
 
-Expected log: 1,893 definitions from 14 archives; House 2: 388 entities/247 groups;
-House 28: 755 entities/540 groups/11 container links. Twenty saved chairs restart
-their main routines and run 150 ticks with zero script errors. Additional installed
-archives may increase the definition count.
-
-This imports headless object graphs and selected behavior only. Other threads remain
-paused; saved stacks, relationships, Sims/person state and full gameplay saves are
-unsupported. House images remain thumbnails, not live rendered lots.
+Zoning transitions use controlled VM scenarios with the existing saved geometry.
+Only selected mains restart; saved execution stacks, Sim interactions, full gameplay,
+live lot rendering and saves remain unsupported. Images are still thumbnails.

@@ -20,7 +20,7 @@ if ($LASTEXITCODE -ne 0) { throw 'Failed to restore desktop tick dependencies.' 
 foreach ($package in @('SharpDX','SharpDX.DXGI','SharpDX.Direct3D11')) {
     Copy-Item -LiteralPath (Join-Path $testPackages "$package.4.0.1/lib/net45/$package.dll") -Destination (Join-Path $repo 'tests/OfflineCompatibility/bin/Release') -Force
 }
-$inputs = @('UserData/Neighborhood.iff','UserData/Houses/House01.iff','UserData/Houses/House02.iff','UserData/Houses/House28.iff','GameData/Objects/Objects.far','GameData/Global/Global.far')
+$inputs = @('UserData/LotZoning.iff','UserData/Neighborhood.iff','UserData/Houses/House01.iff','UserData/Houses/House02.iff','UserData/Houses/House28.iff','GameData/Objects/Objects.far','GameData/Global/Global.far')
 # Include optional VM content sources; the tests must not modify installed assets.
 foreach ($root in @('Deluxe','ExpansionShared','ExpansionPack','ExpansionPack2','ExpansionPack3','ExpansionPack4','ExpansionPack5','ExpansionPack6','ExpansionPack7','Downloads')) {
     $directory = Join-Path $GameRoot $root

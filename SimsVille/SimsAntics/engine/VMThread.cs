@@ -91,12 +91,12 @@ namespace FSO.SimAntics.Engine
             temp.ActionStrings = actionStrings; //generate and place action strings in here
             temp.Push(initFrame);
             if (action != null) temp.Queue.Add(action); //this check runs an action. We may need its interaction number, etc.
-            while (temp.Stack.Count > 0 && temp.DialogCooldown == 0) //keep going till we're done! idling is for losers!
+            while (temp.Stack.Count > 0 && temp.DialogCooldown == 0 && !context.VM.ScriptExecutionStopped) //keep going till we're done! idling is for losers!
             {
                 temp.Tick();
                 temp.ThreadBreak = VMThreadBreakMode.Active; //cannot breakpoint in check trees
             }
-            return (temp.DialogCooldown > 0) ? VMPrimitiveExitCode.ERROR:temp.LastStackExitCode;
+            return (temp.DialogCooldown > 0 || context.VM.ScriptExecutionStopped) ? VMPrimitiveExitCode.ERROR:temp.LastStackExitCode;
         }
 
         public bool RunInMyStack(BHAV bhav, GameObject CodeOwner, short[] passVars, VMEntity stackObj)
@@ -206,6 +206,7 @@ namespace FSO.SimAntics.Engine
         }
 
         public void Tick(){
+            if (Context.VM.ScriptExecutionStopped) return;
 #if IDE_COMPAT
             if (ThreadBreak == VMThreadBreakMode.Pause) return;
             else if (ThreadBreak == VMThreadBreakMode.Immediate)
@@ -258,7 +259,7 @@ namespace FSO.SimAntics.Engine
                         }
 #endif
                         ContinueExecution = true;
-                        while (ContinueExecution)
+                        while (ContinueExecution && !Context.VM.ScriptExecutionStopped)
                         {
                             if (TicksThisFrame++ > MAX_LOOP_COUNT) throw new Exception("Thread entered infinite loop! ( >" + MAX_LOOP_COUNT + " primitives)");
 
@@ -281,6 +282,14 @@ namespace FSO.SimAntics.Engine
 
 
            } catch (Exception e) {
+                if (Context.VM.StopOnScriptError) {
+                    var frame = Stack.LastOrDefault();
+                    var detail = "TS1 object " + Entity.ObjectID + " GUID=" + Entity.Object.OBJ.GUID.ToString("X8") +
+                        (frame == null ? "" : " BHAV=" + frame.Routine.ID + " IP=" + frame.InstructionPointer);
+                    Context.VM.SignalScriptError(new InvalidOperationException(detail + ": " + e.Message, e));
+                    ThreadBreak = VMThreadBreakMode.Pause;
+                    return; // Preserve the failed graph; never run legacy reset/delete recovery.
+                }
                 Context.VM.SignalScriptError(e);
                 if (Stack.Count == 0) return; //???
                 var context = Stack[Stack.Count - 1];

@@ -63,7 +63,7 @@ namespace FSO.SimAntics
                 }
             }
             var driver = new VMOfflineDriver();
-            var vm = new VM(new VMContext(null) { ContentProvider = content }, null) { TS1 = true };
+            var vm = new VM(new VMContext(null) { ContentProvider = content }, null) { TS1 = true, StopOnScriptError = true };
             var session = new TS1LotObjectSession(vm, driver);
             try {
                 vm.VM_SetDriver(driver); vm.Init();
@@ -71,7 +71,9 @@ namespace FSO.SimAntics
                 vm.Context.Clock.Hours = vm.GlobalState[0];
                 vm.Context.Clock.DayOfMonth = vm.GlobalState[1];
                 vm.Context.Clock.Minutes = vm.GlobalState[5];
-                vm.Context.Clock.MinuteFractions = vm.GlobalState[6] * vm.Context.Clock.TicksPerMinute;
+                // Global 6 stores seconds; VMClock runs 150 ticks per simulated minute.
+                vm.Context.Clock.TicksPerMinute = 150;
+                vm.Context.Clock.MinuteFractions = (vm.GlobalState[6] * 150 + 59) / 60;
                 vm.Context.Clock.Month = vm.GlobalState[7];
                 vm.Context.Clock.Year = vm.GlobalState[8];
                 vm.Context.Architecture = new VMArchitecture(size, size, null, vm.Context);
@@ -180,6 +182,7 @@ namespace FSO.SimAntics
         public void RestartMain(short savedID)
         {
             if (disposed) throw new ObjectDisposedException("TS1LotObjectSession");
+            if (VM.ScriptExecutionStopped) throw new InvalidOperationException("Discard the faulted lot before restarting behavior.", VM.ScriptFault);
             var entity = VM.GetObjectById(savedID);
             if (entity == null) throw new ArgumentException("Unknown saved object ID.", "savedID");
             entity.Thread = new VMThread(VM.Context, entity, entity.Object.OBJ.StackSize);
@@ -188,7 +191,8 @@ namespace FSO.SimAntics
         {
             if (disposed) throw new ObjectDisposedException("TS1LotObjectSession");
             if (VM.UseWorld) throw new InvalidOperationException("Imported lot requires headless mode.");
-            driver.Tick(VM);
+            if (!VM.ScriptExecutionStopped) driver.Tick(VM);
+            if (VM.ScriptExecutionStopped) throw new InvalidOperationException("Saved lot simulation stopped after a script fault.", VM.ScriptFault);
         }
         public void Dispose() { if (!disposed) { driver.CloseNet(); disposed = true; } }
     }

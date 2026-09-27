@@ -20,10 +20,27 @@ namespace FSO.SimAntics.Primitives
 
     public class VMGenericTSOCall : VMPrimitiveHandler
     {
+        private static VMPrimitiveExitCode ExecuteTS1(VMStackFrame context, byte call)
+        {
+            switch (call) {
+                case 14: // House radio station = Temp 0.
+                    context.VM.SetGlobalValue(31, context.Thread.TempRegisters[0]);
+                    return VMPrimitiveExitCode.GOTO_TRUE;
+                case 28: // Return zoning type of lot in Temp 0.
+                    var lots = context.VM.Context.ContentProvider as FSO.Content.IVMTS1LotInfo;
+                    if (lots == null) throw new NotSupportedException("TS1 zoning requires an isolated lot-info provider.");
+                    context.Thread.TempRegisters[0] = lots.GetLotZoning(context.Thread.TempRegisters[0]);
+                    return VMPrimitiveExitCode.GOTO_TRUE;
+                default:
+                    throw new NotSupportedException("Unsupported TS1 generic call " + call + "; TSO semantics must not be used.");
+            }
+        }
         public override VMPrimitiveExitCode Execute(VMStackFrame context, VMPrimitiveOperand args)
         {
             var operand = (VMGenericTSOCallOperand)args;
 
+            // Opcode 1 shares its byte encoding, but TS1 and TSO call numbers diverge.
+            if (context.VM.TS1) return ExecuteTS1(context, (byte)operand.Call);
             switch (operand.Call)
             {
                 // 0. HOUSE TUTORIAL COMPLETE

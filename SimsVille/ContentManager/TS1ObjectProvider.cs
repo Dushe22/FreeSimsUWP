@@ -9,6 +9,10 @@ using FSO.Files.Formats.IFF.Chunks;
 
 namespace FSO.Content
 {
+    public interface IVMTS1LotInfo
+    {
+        short GetLotZoning(short lot);
+    }
     public interface IVMContentProvider
     {
         GameObject GetObject(uint guid, bool ts1);
@@ -24,7 +28,7 @@ namespace FSO.Content.TS1
     /// paths precede ordinal loose IFF paths. This is the port's explicit override policy.
     /// No TSO catalogs or graphics device. Use on the VM thread.
     /// </summary>
-    public sealed class TS1ObjectProvider : IVMContentProvider
+    public sealed class TS1ObjectProvider : IVMContentProvider, IVMTS1LotInfo
     {
         private sealed class Source
         {
@@ -41,6 +45,32 @@ namespace FSO.Content.TS1
             }
         }
         private readonly GamePaths paths;
+        private readonly int neighborhood;
+        private Dictionary<short, short> zoning;
+        public short GetLotZoning(short lot)
+        {
+            if (lot <= 0) throw new ArgumentOutOfRangeException("lot");
+            if (zoning == null) {
+                var file = new NeighborhoodStore(paths, neighborhood).GetReadPath("LotZoning.iff");
+                var strings = new IffFile(file).Get<STR>(1);
+                if (strings == null) throw new InvalidDataException("LotZoning.iff requires STR# 1.");
+                var parsed = new Dictionary<short, short>();
+                for (int i = 0; i < strings.Length; i++) {
+                    var parts = strings.GetString(i, STRLangCode.EnglishUS).Split(',');
+                    short id;
+                    if (parts.Length != 2 || !short.TryParse(parts[0].Trim(), System.Globalization.NumberStyles.None,
+                        System.Globalization.CultureInfo.InvariantCulture, out id) || id <= 0 || parsed.ContainsKey(id))
+                        throw new InvalidDataException("Invalid or duplicate lot zoning entry " + i);
+                    string kind = parts[1].Trim();
+                    if (kind != "residential" && kind != "community") throw new InvalidDataException("Unknown lot zoning: " + kind);
+                    parsed.Add(id, (short)(kind == "community" ? 1 : 0));
+                }
+                zoning = parsed; // Publish only after validating the complete table.
+            }
+            short value;
+            // TS1 fixed destination lots are omitted from the editable zoning table.
+            return zoning.TryGetValue(lot, out value) ? value : (short)(lot >= 81 && lot <= 89 ? 2 : 1);
+        }
         private readonly Dictionary<uint, Source> entries = new Dictionary<uint, Source>();
         private readonly Dictionary<uint, GameObject> objects = new Dictionary<uint, GameObject>();
         private readonly Dictionary<Source, GameObjectResource> resources = new Dictionary<Source, GameObjectResource>();
@@ -57,10 +87,11 @@ namespace FSO.Content.TS1
             return entries.TryGetValue(guid, out source) ? source.RelativePath : null;
         }
 
-        public TS1ObjectProvider(GamePaths paths, bool includeExpansionContent = true)
+        public TS1ObjectProvider(GamePaths paths, bool includeExpansionContent = true, int neighborhood = 0)
         {
             if (paths == null) throw new ArgumentNullException("paths");
             this.paths = paths;
+            this.neighborhood = neighborhood;
             IndexArchive("GameData/Global/Global.far");
             IndexArchive("GameData/Objects/Objects.far");
             if (!includeExpansionContent) return; // Stable base-game regression fixture.
