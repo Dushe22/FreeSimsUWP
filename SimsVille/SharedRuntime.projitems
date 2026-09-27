@@ -47,7 +47,7 @@
     <Compile Include="$(MSBuildThisFileDirectory)ContentManager\ResAction.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)ContentManager\UIGraphicsProvider.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)ContentManager\WorldFloorProvider.cs" />
-    <Compile Include="$(MSBuildThisFileDirectory)ContentManager\WorldGlobalProvider.cs" /><Compile Include="$(MSBuildThisFileDirectory)ContentManager\TS1ObjectProvider.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)ContentManager\WorldGlobalProvider.cs" /><Compile Include="$(MSBuildThisFileDirectory)ContentManager\TS1ObjectProvider.cs" /><Compile Include="$(MSBuildThisFileDirectory)SimsAntics\utils\TS1LotObjectSession.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)ContentManager\WorldObjectCatalog.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)ContentManager\WorldObjectGlobals.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)ContentManager\WorldObjectProvider.cs" />

@@ -13,11 +13,11 @@ namespace FSO.Files.Formats.IFF.Chunks
         public OBJD OBJD;
         public OBJTEntry OBJT;
     }
-    // Placement metadata only; saved execution state is not restored.
+    // Placement and scalar state prefixes only; saved execution stacks are not decoded.
 
     public class OBJM : IffChunk
     {
-        // Placement metadata only; saved execution state is not restored.
+        // Placement and scalar state prefixes only; saved execution stacks are not decoded.
 
         public ushort[] IDToOBJT;
 
@@ -65,14 +65,17 @@ namespace FSO.Files.Formats.IFF.Chunks
                     fields.Short(); // unknown prefix field
                     int attributes = fields.Short();
                     if (attributes < 0) throw new InvalidDataException("Negative OBJM attribute count.");
-                    for (int i = 0; i < attributes + 8; i++) fields.Short(); // attributes and temporary registers
+                    var attributeValues = new short[attributes];
+                    for (int i = 0; i < attributes; i++) attributeValues[i] = fields.Short();
+                    var temps = new short[8];
+                    for (int i = 0; i < temps.Length; i++) temps[i] = fields.Short();
                     var data = new short[73]; // 68 object variables plus 5 extra variables
                     for (int i = 0; i < data.Length; i++) data[i] = fields.Short();
                     int id = data[11];
                     if (!ids.Contains(id) || objects.ContainsKey(id)) throw new InvalidDataException("Unknown or duplicate OBJM record ID: " + id);
                     objects.Add(id, new MappedObject {
                         ObjectID = id, Direction = data[1], ContainerID = data[2],
-                        ContainerSlot = data[3], ParentID = data[26], Data = data,
+                        ContainerSlot = data[3], ParentID = data[26], Data = data, Attributes = attributeValues, TempRegisters = temps,
                         SavedX = x, SavedY = y, SavedLevel = level
                     });
                     input.Position = end; // skip the unsupported simulation-state suffix
@@ -168,6 +171,8 @@ namespace FSO.Files.Formats.IFF.Chunks
             public int ContainerSlot;
 
             public short[] Data;
+            public short[] Attributes = new short[0];
+            public short[] TempRegisters = new short[8];
 
             public int SavedX, SavedY, SavedLevel;
             public int ArryX;

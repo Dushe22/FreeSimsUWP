@@ -321,6 +321,17 @@ namespace FSO.SimAntics
             ObjectId = NextObjID();
         }
 
+        // Saved object references use these IDs; allocation must skip them afterwards.
+        internal void AddRestoredEntity(VMEntity entity, short id)
+        {
+            if (id <= 0 || ObjectsById.ContainsKey(id)) throw new InvalidOperationException("Invalid or duplicate restored object ID: " + id);
+            entity.ObjectID = id;
+            ObjectsById.Add(id, entity);
+            AddToObjList(Entities, entity);
+            Context.SetToNextCache.NewObject(entity);
+            ObjectId = NextObjID();
+        }
+
         public static void AddToObjList(List<VMEntity> list, VMEntity entity)
         {
             if (list.Count == 0) { list.Add(entity); return; }

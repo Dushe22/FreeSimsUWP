@@ -1,25 +1,39 @@
-# Offline Probe 0.3.0.0 - real TS1 VM objects
+# Saved Lot Probe 0.4.0.0
 
-Update the existing FreeSims Offline Probe using the new x64 AppX.
-Keep the existing Neighborhood.iff and House01/02/28.iff uploads.
-Add these two files using Xbox Device Portal, under this app's LocalState:
+Update the existing FreeSims Offline Probe with the included x64 AppX.
 
-| Source inside your PC game installation | Destination under LocalState |
-| --- | --- |
-| GameData/Objects/Objects.far | GameData/GameData/Objects/Objects.far |
-| GameData/Global/Global.far | GameData/GameData/Global/Global.far |
+Upload/merge the prepared PC folder
+C:\Users\Joaco\Documents\Sims UWP Xbox\FreeSimsUWP\artifacts\saved-lot-upload\GameData
+into the app's **LocalState/GameData**, preserving subfolders. Do not add another
+GameData wrapper. The folder contains 18 files (about 358 MiB), including the six
+previous uploads. Only these 12 archives are new, relative to LocalState/GameData:
 
-PC game root: `C:\Users\Joaco\Documents\Sims UWP Xbox\GameData\TheSims`.
-The repeated GameData in the destination is intentional: the first is the app's game root.
-Previous uploads remain in `GameData/UserData/Neighborhood.iff` and `GameData/UserData/Houses/House01.iff`, `House02.iff`, `House28.iff`.
-If reinstalling after removal, restore those uploads and the included x64 dependencies.
+- ExpansionShared/ExpansionShared.far
+- ExpansionPack3/ExpansionPack3.far
+- ExpansionPack5/ExpansionPack5.far
+- Downloads/CCPlugin/CCPlugin.far
+- Downloads/Christmas2000/Christmas2000.far
+- Downloads/FenceParty/FenceParty.far
+- Downloads/HPPottyPack/HPPottyPack.far
+- Downloads/Jukebox/Jukebox.far
+- Downloads/LampHulaUke/LampHulaUke.far
+- Downloads/SlotMach/SlotMach.far
+- Downloads/UnSnacker/UnSnacker.far
+- Downloads/WallLite/WallLite.far
 
-Expect **9/9 PASS**. **A** reruns; **X** switches house previews; **B** exits.
-Test two reruns, Home/return, then exit/relaunch. Send a photo and LocalState/proof.log
-(plus proof.previous.log if present).
+These are local copies of your installation, never included in the handoff ZIP.
+On another PC, copy these relative paths from the installed game; retain the
+existing GameData/{Objects,Global} archives and UserData neighborhood/house files.
 
-The VM creates a real chair and a three-tile sofa, runs their initialization/main scripts,
-places/rotates them, tests script-created objects, ticks 150 times and deletes/recreates them.
-The house image remains a thumbnail. Full saved-lot restoration, Sims, expansion/download
-objects and gameplay saves are not enabled. Source archives remain read-only; no game assets
-are included in the AppX or handoff ZIP.
+Expect **11/11 PASS**. **A** reruns; **X** switches thumbnail previews; **B** exits.
+Run twice, test Home/return and exit/relaunch, then send a photo and
+LocalState/proof.log (plus proof.previous.log if present).
+
+Expected log: 1,893 definitions from 14 archives; House 2: 388 entities/247 groups;
+House 28: 755 entities/540 groups/11 container links. Twenty saved chairs restart
+their main routines and run 150 ticks with zero script errors. Additional installed
+archives may increase the definition count.
+
+This imports headless object graphs and selected behavior only. Other threads remain
+paused; saved stacks, relationships, Sims/person state and full gameplay saves are
+unsupported. House images remain thumbnails, not live rendered lots.

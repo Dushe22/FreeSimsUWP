@@ -8,6 +8,6 @@
 <Reference Include="GonzoNet"><HintPath>..\..\SimsVille\Dependencies\GonzoNet.dll</HintPath></Reference>
 <Reference Include="GOLDEngine"><HintPath>..\..\SimsVille\Dependencies\GOLDEngine.dll</HintPath></Reference>
 <Reference Include="TargaImagePCL"><HintPath>..\..\SimsVille\Dependencies\TargaImagePCL.dll</HintPath></Reference>
-<Compile Include="ThumbnailColorKeyTests.cs"/><Compile Include="LotPlacementTests.cs"/><Compile Include="OBJMPlacementTests.cs"/><Compile Include="ObjectTypeMappingTests.cs"/><Compile Include="LotInspection.cs"/><Compile Include="OfflineTests.cs"/><Compile Include="Program.cs"/><Compile Include="VMObjectTests.cs"/>
+<Compile Include="ThumbnailColorKeyTests.cs"/><Compile Include="LotPlacementTests.cs"/><Compile Include="OBJMPlacementTests.cs"/><Compile Include="ObjectTypeMappingTests.cs"/><Compile Include="LotInspection.cs"/><Compile Include="OfflineTests.cs"/><Compile Include="Program.cs"/><Compile Include="VMObjectTests.cs"/><Compile Include="SavedLotObjectTests.cs"/>
 </ItemGroup><Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets"/>
 </Project>

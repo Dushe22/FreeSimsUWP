@@ -39,7 +39,7 @@ namespace FreeSims.Tests
             VM.UseWorld = false;
             var driver = new VMOfflineDriver();
             try {
-                var provider = new TS1ObjectProvider(paths);
+                var provider = new TS1ObjectProvider(paths, false);
                 var vm = new VM(new VMContext(null) { ContentProvider = provider }, null) { TS1 = true };
                 vm.OnScriptError += error => errors.Add(error.ToString());
                 vm.VM_SetDriver(driver); vm.Init();
@@ -119,7 +119,7 @@ namespace FreeSims.Tests
                     long before = vm.Context.Clock.Ticks;
                     foreach (var entity in vm.Entities) entity.SetValue(VMStackObjectVariable.LockoutCount, 100);
                     for (int i = 0; i < 150; i++) Require(driver.Tick(vm), "Offline driver stopped.");
-                    Require(vm.Context.Clock.Ticks == before + 150 && vm.Entities.Count == 4, "Clock/entities changed unexpectedly.");
+                    Require(vm.Context.Clock.Ticks == before + 150 && vm.Entities.Count == 4, "Clock/entities changed unexpectedly: " + vm.Context.Clock.Ticks + " entities=" + string.Join(",", vm.Entities.Select(e => e.Object.OBJ.GUID.ToString("X8") + ":" + e.Object.OBJ.ChunkLabel)));
                     Require(vm.Entities.All(o => !o.Dead && o.Thread != null && o.GetValue(VMStackObjectVariable.LockoutCount) == 0), "Entity ticks did not run.");
                     log("LIVE VM TICKS=150 ENTITIES=" + vm.Entities.Count + " SCRIPT ERRORS=" + errors.Count);
                 });

@@ -5,6 +5,8 @@
     <!-- IffFile constructs chunk classes through Activator.CreateInstance(Type). -->
     <Assembly Name="Simslib.Uwp">
       <Namespace Name="FSO.Files.Formats.IFF.Chunks" Activate="Required Public" />
+      <!-- Synthetic override fixtures serialize OBJD properties by name. -->
+      <Type Name="FSO.Files.Formats.IFF.Chunks.OBJD" Dynamic="Required All" />
     </Assembly>
     <!-- VMTranslator constructs registered behavior operands through Activator.CreateInstance(Type). -->
     <Assembly Name="SimsVille.Uwp">

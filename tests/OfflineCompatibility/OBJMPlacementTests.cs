@@ -26,6 +26,7 @@ namespace FreeSims.Tests
                 Require(record.SavedX == -65537 && record.SavedY == 448 && record.SavedLevel == 2);
                 Require(record.Data[4] == short.MinValue && record.Data[5] == short.MaxValue && record.Data[6] == -1);
                 Require(record.Data[7] == -200 && record.Data[8] == 2000);
+                Require(record.Attributes.SequenceEqual(new short[] { 1997, 2026 }) && record.TempRegisters.SequenceEqual(Enumerable.Range(0, 8).Select(x => (short)x)));
             });
             Check(results, log, "OBJM MALFORMED RECORDS REJECTED", () => {
                 var signature = Fixture(); signature[8] = 0;
