@@ -6,5 +6,10 @@
     <Assembly Name="Simslib.Uwp">
       <Namespace Name="FSO.Files.Formats.IFF.Chunks" Activate="Required Public" />
     </Assembly>
+    <!-- VMTranslator constructs registered behavior operands through Activator.CreateInstance(Type). -->
+    <Assembly Name="SimsVille.Uwp">
+      <Namespace Name="FSO.SimAntics.Primitives" Activate="Required Public" />
+      <Namespace Name="FSO.SimAntics.Engine.Primitives" Activate="Required Public" />
+    </Assembly>
   </Application>
 </Directives>

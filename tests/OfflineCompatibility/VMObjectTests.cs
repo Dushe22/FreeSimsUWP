@@ -55,6 +55,10 @@ namespace FreeSims.Tests
                 };
                 VMMultitileGroup chair = null, sofa = null;
                 check("TS1 ARCHIVE AND GLOBAL CACHE", () => {
+                    var operands = vm.Context.Primitives.Where(p => p != null && p.OperandModel != null).Select(p => p.OperandModel).Distinct().ToArray();
+                    foreach (var type in operands)
+                        Require(Activator.CreateInstance(type) is VMPrimitiveOperand, "Cannot activate VM operand: " + type.FullName);
+                    log("VM OPERAND CONSTRUCTORS=" + operands.Length);
                     var def = provider.GetObject(Chair, true);
                     Require(provider.DefinitionCount > 0 && def != null, "Missing real chair definition.");
                     Require(ReferenceEquals(def, provider.GetObject(Chair, true)), "Unstable object cache.");
