@@ -1,6 +1,8 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using FSO.SimAntics;
+using FSO.Content.TS1;
 using FreeSims.Tests;
 using FSO.Common.Platform.Uwp;
 using Microsoft.Xna.Framework;
@@ -16,8 +18,11 @@ namespace FreeSims.Xbox.Proof
         private Texture2D pixel;
         private readonly Dictionary<int, Texture2D> thumbnails = new Dictionary<int, Texture2D>();
         private readonly Dictionary<int, int> objectCounts = new Dictionary<int, int>();
-        private int selectedHouse = 2;
-        private const int TestCount = TS1BehaviorTests.Count + 1;
+        private int selectedHouse = 28;
+        private TS1SimulationController simulation;
+        private string controlError;
+        private int lastTickReport;
+        private const int TestCount = ControlledSimulationTests.Count + 1;
         private List<string> results = new List<string>();
         private GamePadState previous;
         private int runs;
@@ -35,9 +40,10 @@ namespace FreeSims.Xbox.Proof
                 PreferredBackBufferWidth = ProbeLayout.Width, PreferredBackBufferHeight = ProbeLayout.Height,
                 GraphicsProfile = GraphicsProfile.HiDef, SynchronizeWithVerticalRetrace = true
             };
-            IsFixedTimeStep = true;
-            Activated += (sender, args) => { layoutLogPending = true; ProofLog.Write("ACTIVATED"); };
-            Deactivated += (sender, args) => ProofLog.Write("DEACTIVATED");
+            // The controller owns its fixed simulation cadence; avoid framework catch-up updates.
+            IsFixedTimeStep = false;
+            Activated += (sender, args) => { layoutLogPending = true; Program.RequestPause(); ProofLog.Write("ACTIVATED"); };
+            Deactivated += (sender, args) => { Program.RequestPause(); ProofLog.Write("DEACTIVATED"); };
             graphics.DeviceReset += (sender, args) => { layoutLogPending = true; ProofLog.Write("GRAPHICS DEVICE RESET"); };
             Window.ClientSizeChanged += (sender, args) => { layoutLogPending = true; ProofLog.Write("CLIENT SIZE CHANGED"); };
             Exiting += (sender, args) => ProofLog.Write("EXIT REQUESTED");
@@ -54,11 +60,13 @@ namespace FreeSims.Xbox.Proof
 
         private void RunTests()
         {
+            if (simulation != null) { simulation.Dispose(); simulation = null; }
+            VM.UseWorld = false;
             runs++;
             ProofLog.Write("TEST RUN " + runs + " BEGIN");
             try {
                 var paths = UwpGameStorage.CreatePaths();
-                results = TS1BehaviorTests.Run(paths, ProofLog.Write);
+                results = ControlledSimulationTests.Run(paths, ProofLog.Write);
 
 
                 foreach (var texture in thumbnails.Values) texture.Dispose();
@@ -88,24 +96,70 @@ namespace FreeSims.Xbox.Proof
             }
             catch (Exception ex) { results = new List<string> { "FAIL STORAGE INITIALIZATION" }; ProofLog.Write(ex.ToString()); }
             ProofLog.Write("TEST RUN " + runs + " END");
+            if (results.Count == TestCount && results.All(x => x.StartsWith("PASS "))) LoadSimulation(selectedHouse);
         }
 
+        private void LoadSimulation(int house)
+        {
+            try {
+                var paths = UwpGameStorage.CreatePaths();
+                if (simulation == null) simulation = new TS1SimulationController();
+                simulation.Load(ControlledSimulationTests.House(paths, house), new TS1ObjectProvider(paths), house);
+                selectedHouse = house; controlError = null; lastTickReport = 0;
+                LogSimulation("LOADED PAUSED");
+            } catch (Exception ex) { controlError = "LOAD FAILED - SEE LOG"; ProofLog.Write("LIVE LOAD FAILED " + ex); }
+        }
+        private void LogSimulation(string reason)
+        {
+            if (simulation == null || simulation.VM == null) return;
+            var clock = simulation.VM.Context.Clock;
+            ProofLog.Write("LIVE " + reason + " HOUSE=" + simulation.House + " TICKS=" + simulation.CompletedTicks +
+                " ACTIVE=" + simulation.ActiveObjects + " HELD=" + simulation.HeldObjects + " CLOCK=" + clock.Hours + ":" + clock.Minutes + ":" + clock.Seconds);
+        }
         protected override void Update(GameTime gameTime)
         {
             elapsed += gameTime.ElapsedGameTime.TotalSeconds;
             var pad = GamePad.GetState(PlayerIndex.One);
             if (pad.IsConnected != previous.IsConnected)
                 ProofLog.Write("CONTROLLER " + (pad.IsConnected ? "CONNECTED" : "DISCONNECTED"));
-            if (IsActive && pad.IsButtonDown(Buttons.A) && previous.IsButtonUp(Buttons.A)) RunTests();
-            if (IsActive && pad.IsButtonDown(Buttons.B) && previous.IsButtonUp(Buttons.B)) Exit();
-            if (IsActive && pad.IsButtonDown(Buttons.X) && previous.IsButtonUp(Buttons.X)) {
-                selectedHouse = selectedHouse == 2 ? 28 : 2;
-                ProofLog.Write("PREVIEW HOUSE " + selectedHouse);
+            bool focusPause = Program.ConsumePause() || !IsActive || !pad.IsConnected;
+
+            if (focusPause && simulation != null) {
+                if (simulation.Running) LogSimulation("FOCUS PAUSE");
+                simulation.Pause();
+            }
+            if (IsActive && !focusPause) {
+                if (pad.IsButtonDown(Buttons.B) && previous.IsButtonUp(Buttons.B)) {
+                    if (simulation != null) simulation.Pause();
+                    LogSimulation("EXIT - UNSAVED SESSION");
+                    ProofLog.Write("EXIT REQUESTED BY B"); Exit(); return;
+                }
+                bool changed = false;
+                if (pad.IsButtonDown(Buttons.Start) && previous.IsButtonUp(Buttons.Start)) { RunTests(); changed = true; }
+                if (!changed && simulation != null && simulation.VM != null) {
+                    if (pad.IsButtonDown(Buttons.X) && previous.IsButtonUp(Buttons.X)) { LoadSimulation(selectedHouse == 2 ? 28 : 2); changed = true; }
+                    else if (pad.IsButtonDown(Buttons.Y) && previous.IsButtonUp(Buttons.Y)) { LoadSimulation(selectedHouse); changed = true; }
+                    if (!changed) try {
+                        if (!simulation.LimitReached && simulation.Fault == null && pad.IsButtonDown(Buttons.A) && previous.IsButtonUp(Buttons.A)) {
+                            if (simulation.Running) simulation.Pause(); else simulation.Run();
+                            controlError = null; LogSimulation(simulation.Running ? "RUNNING" : "PAUSED");
+                        }
+                        if (!simulation.LimitReached && simulation.Fault == null && pad.IsButtonDown(Buttons.RightShoulder) && previous.IsButtonUp(Buttons.RightShoulder)) {
+                            simulation.Pause(); simulation.Step(); controlError = null; LogSimulation("STEP");
+                        }
+                        simulation.Advance(gameTime.ElapsedGameTime, true);
+                        if (simulation.CompletedTicks - lastTickReport >= 300 || (simulation.LimitReached && lastTickReport != simulation.CompletedTicks)) {
+                            lastTickReport = simulation.CompletedTicks; LogSimulation(simulation.LimitReached ? "LIMIT REACHED" : "PROGRESS");
+                        }
+                    } catch (Exception ex) {
+                        simulation.Pause(); controlError = "STOPPED - SEE LOG";
+                        ProofLog.Write("LIVE CONTROL STOP " + ex);
+                    }
+                }
             }
             previous = pad;
             base.Update(gameTime);
         }
-
         protected override void Draw(GameTime gameTime)
         {
             var viewport = GraphicsDevice.Viewport;
@@ -116,7 +170,7 @@ namespace FreeSims.Xbox.Proof
             // Recompute from the live viewport every frame: activation/resize events
             // can precede the framework's final back-buffer update.
             batch.Begin(samplerState: SamplerState.PointClamp, transformMatrix: transform);
-            PixelText.Draw(batch, pixel, "FREESIMS TS1 BEHAVIOR PROBE", 48, 36, 4, Color.White);
+            PixelText.Draw(batch, pixel, "FREESIMS CONTROLLED SIMULATION", 48, 36, 4, Color.White);
             PixelText.Draw(batch, pixel, "COMMIT " + BuildInfo.Commit.Substring(0, 12), 48, 80, 2, Color.LightGray);
             bool passed = results.Count == TestCount && results.All(x => x.StartsWith("PASS "));
             PixelText.Draw(batch, pixel, passed ? TestCount + "/" + TestCount + " PASS" : "TEST FAILURE - SEE LOG",
@@ -124,11 +178,22 @@ namespace FreeSims.Xbox.Proof
             for (int i = 0; i < results.Count; i++)
                 PixelText.Draw(batch, pixel, results[i], 48, 175 + i * 22, 2,
                     results[i].StartsWith("PASS ") ? Color.LightGreen : Color.OrangeRed);
-            PixelText.Draw(batch, pixel, "A RERUN - X HOUSE - B EXIT - RUN " + runs, 48, 534, 2, Color.White);
-            PixelText.Draw(batch, pixel, "FLOWERS AND LIGHTS - HEADLESS - THUMBNAIL PREVIEW", 48, 574, 2, Color.LightGray);
+            PixelText.Draw(batch, pixel, "A PLAY/PAUSE - RB STEP - X HOUSE - Y RELOAD", 48, 534, 2, Color.White);
+            PixelText.Draw(batch, pixel, "MENU TESTS - B EXIT - TEST RUN " + runs, 48, 574, 2, Color.LightGray);
             batch.Draw(pixel, new Rectangle(48 + (int)(elapsed * 80 % 1120), 630, 32, 8), Color.CornflowerBlue);
             PixelText.Draw(batch, pixel, "VIEWPORT " + viewport.Width + "X" + viewport.Height +
                 " - UI 1280X720", 48, 660, 2, Color.LightGray);
+            if (simulation != null && simulation.VM != null) {
+                string state = simulation.Fault != null ? "FAULT - RELOAD" : simulation.LimitReached ? "LIMIT - RELOAD" : simulation.Running ? "RUNNING" : "PAUSED";
+                var clock = simulation.VM.Context.Clock;
+                PixelText.Draw(batch, pixel, "LIVE HOUSE " + simulation.House + " - " + state, 820, 170, 2, Color.White);
+                PixelText.Draw(batch, pixel, "ACTIVE " + simulation.ActiveObjects + " HELD " + simulation.HeldObjects, 820, 200, 2, Color.LightGreen);
+                PixelText.Draw(batch, pixel, "TICKS " + simulation.CompletedTicks + "/" + TS1SimulationController.TickLimit, 820, 230, 2, Color.LightGray);
+                PixelText.Draw(batch, pixel, "CLOCK " + clock.Hours.ToString("00") + ":" + clock.Minutes.ToString("00") + ":" + clock.Seconds.ToString("00"), 820, 260, 2, Color.LightGray);
+                PixelText.Draw(batch, pixel, "SESSION NOT SAVED", 820, 305, 2, Color.Gold);
+                PixelText.Draw(batch, pixel, "IMAGE IS A THUMBNAIL", 820, 335, 2, Color.LightGray);
+            }
+            if (controlError != null) PixelText.Draw(batch, pixel, controlError, 820, 370, 2, Color.OrangeRed);
             Texture2D thumbnail;
             if (thumbnails.TryGetValue(selectedHouse, out thumbnail)) {
                 PixelText.Draw(batch, pixel, "PREVIEW " + selectedHouse + " - " + objectCounts[selectedHouse] + " OBJECTS", 850, 420, 2, Color.LightGray);
@@ -164,6 +229,7 @@ namespace FreeSims.Xbox.Proof
 
         protected override void UnloadContent()
         {
+            if (simulation != null) simulation.Dispose();
             foreach (var texture in thumbnails.Values) texture.Dispose();
             thumbnails.Clear();
             if (pixel != null) pixel.Dispose();

@@ -1,30 +1,27 @@
-# TS1 Behavior Probe 0.5.0.0
+# Controlled Simulation Probe 0.6.0.0
 
-Update the existing Offline Probe with the new x64 AppX. Keep all previous uploads.
+Update the existing Offline Probe with the new x64 AppX. No new game files:
+keep all previous uploads, including UserData/LotZoning.iff.
 
-Add one file using Xbox Device Portal:
-- PC: C:\Users\Joaco\Documents\Sims UWP Xbox\FreeSimsUWP\artifacts\behavior-upload\GameData\UserData\LotZoning.iff
-- Xbox: this app's **LocalState/GameData/UserData/LotZoning.iff**
+Expect **10/10 PASS**, then House 28 **PAUSED**, 80 active / 675 held, ticks 0.
+The nine controller checks plus GPU thumbnails run automatically at startup.
 
-The prepared file is an unchanged copy from your installed game's UserData folder.
-No game files are included in the AppX or handoff ZIP.
+- **RB:** pause and step exactly one tick. Confirm ticks and clock advance.
+- **A:** play/pause. Leave running for 10 seconds; pause and confirm ticks stop.
+- **X:** switch lots; each loads paused at tick 0. House 2: 134 active / 254 held.
+- **Y:** reload the current lot from source, paused at tick 0.
+- **Menu:** rerun the automated checks (twice); expect 10/10 each time.
+- **B:** exit. Relaunch starts a fresh paused session; check proof.log for EXIT REQUESTED BY B.
 
-Expect **11/11 PASS**. A reruns; X switches previews; B exits.
-Test two reruns, Home/return, and B exit/relaunch. Send a photo and proof.log
-(plus proof.log.previous if present). The longer behavior checks may delay startup/reruns.
+While running, go Home and return. A surviving process must retain its tick count
+and return paused without catching up; a new process starts at tick 0, paused.
+Disconnect/reconnect the controller while running: it must pause and require A.
+Let House 28 reach 6,000 ticks (about 3 minutes 20 seconds): LIMIT - RELOAD appears.
+It must stop there; Y reloads. Please send a photo and proof.log (and
+proof.log.previous if present), plus whether the manual controls passed.
 
-Expected log:
-- 93 flowers and 41 shrubs run 600 ticks, including real TS1 zoning queries.
-- 14 ceiling lights and 27 wall lights run 7,200 ticks each.
-- Community daytime: 14 ceiling/25 indoor wall lights turn on.
-- Empty residential daytime: lights turn off. Its 2 outdoor wall lights turn on
-  at night and off again during the day.
-- 80 selected objects run together for 6,000 ticks; 675 other objects remain held.
-- Deliberately unsupported generic-call fixtures stop their VMs without resets,
-  deletions, further ticks or queued commands. EXPECTED FAULT CONTAINED is a pass.
-
-Zoning transitions use controlled VM scenarios with the existing saved geometry.
-Only selected mains restart; saved execution stacks, Sim interactions, full gameplay,
-live lot rendering and saves remain unsupported. Images are still thumbnails.The displayed RUN counter is per process and resets on a fresh launch, including
-if Home/return starts the app again. Completed results remain in proof.log;
-its rotated backup is proof.log.previous. Test VM progress is not saved.
+The test run counter is per process. Completed results remain in proof.log.
+Live tick/clock counters reflect selected object mains; the image is a static
+thumbnail. Sessions are NOT saved. Sims, full lot rendering, original saved
+execution stacks, arbitrary behaviors and gameplay saves remain unsupported.
+The bounded 6,000-tick exercise keeps this milestone within tested coverage.

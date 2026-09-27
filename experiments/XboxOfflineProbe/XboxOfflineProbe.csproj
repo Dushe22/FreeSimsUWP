@@ -38,7 +38,7 @@
     <Compile Include="..\..\tests\OfflineCompatibility\OBJMPlacementTests.cs"><Link>OBJMPlacementTests.cs</Link></Compile>
     <Compile Include="..\..\tests\OfflineCompatibility\LotPlacementTests.cs"><Link>LotPlacementTests.cs</Link></Compile>
     <Compile Include="..\..\tests\OfflineCompatibility\ThumbnailColorKeyTests.cs"><Link>ThumbnailColorKeyTests.cs</Link></Compile>
-    <Compile Include="Program.cs" /><Compile Include="..\..\tests\OfflineCompatibility\TS1BehaviorTests.cs"><Link>TS1BehaviorTests.cs</Link></Compile>
+    <Compile Include="Program.cs" /><Compile Include="..\..\tests\OfflineCompatibility\ControlledSimulationTests.cs"><Link>ControlledSimulationTests.cs</Link></Compile>
     <Compile Include="OfflineProbeGame.cs" />
     <Compile Include="..\XboxFilesProbe\ProbeLayout.cs"><Link>ProbeLayout.cs</Link></Compile>
     <Compile Include="..\XboxUwpProof\PixelText.cs"><Link>PixelText.cs</Link></Compile>
