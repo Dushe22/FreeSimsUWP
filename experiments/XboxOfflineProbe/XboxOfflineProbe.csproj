@@ -35,15 +35,15 @@
     <DefineConstants>$(DefineConstants);DEBUG</DefineConstants>
   </PropertyGroup>
   <ItemGroup>
-    <Compile Include="..\..\tests\OfflineCompatibility\OBJMPlacementTests.cs"><Link>OBJMPlacementTests.cs</Link></Compile>
-    <Compile Include="..\..\tests\OfflineCompatibility\LotPlacementTests.cs"><Link>LotPlacementTests.cs</Link></Compile>
-    <Compile Include="..\..\tests\OfflineCompatibility\ThumbnailColorKeyTests.cs"><Link>ThumbnailColorKeyTests.cs</Link></Compile>
-    <Compile Include="Program.cs" /><Compile Include="..\..\tests\OfflineCompatibility\ReplayCheckpointTests.cs"><Link>ReplayCheckpointTests.cs</Link></Compile>
-    <Compile Include="OfflineProbeGame.cs" />
+
+
+
+    <Compile Include="Program.cs" />
+    <Compile Include="SpriteProbeGame.cs" /><Compile Include="SpriteGpuScene.cs" /><Compile Include="..\..\tests\OfflineCompatibility\TS1SpriteTests.cs"><Link>TS1SpriteTests.cs</Link></Compile>
     <Compile Include="..\XboxFilesProbe\ProbeLayout.cs"><Link>ProbeLayout.cs</Link></Compile>
     <Compile Include="..\XboxUwpProof\PixelText.cs"><Link>PixelText.cs</Link></Compile>
     <Compile Include="..\XboxUwpProof\ProofLog.cs"><Link>ProofLog.cs</Link></Compile>
-    <Compile Include="..\..\tests\OfflineCompatibility\OfflineTests.cs"><Link>OfflineTests.cs</Link></Compile>
+
     <ProjectReference Include="..\..\SimsVille.uwp\SimsVille.uwp.csproj"><Project>{86EE4050-2E17-455B-BF30-90111D98E256}</Project><Name>SimsVille.uwp</Name></ProjectReference>
     <ProjectReference Include="..\..\sims.common.uwp\sims.common.uwp.csproj"><Project>{DE76DF1D-693D-4C4A-868C-A0DF7169CDBB}</Project><Name>sims.common.uwp</Name></ProjectReference>
     <ProjectReference Include="..\..\sims.files.uwp\sims.files.uwp.csproj">

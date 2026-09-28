@@ -12,6 +12,7 @@ namespace FreeSims.Tests
     {
         private static int Main(string[] args)
         {
+            if (args.Length == 3 && args[0] == "--sprite-gpu") return SpriteGpuChecks.Run(args[1], args[2]);
             if (args.Length == 2 && args[0] == "--inspect-lots") return LotInspection.Run(args[1]);
             if (args.Length != 2) { Console.Error.WriteLine("Expected game root and scratch root."); return 2; }
             var paths = new GamePaths(Path.Combine(args[1],"Content"),args[0],Path.Combine(args[1],"UserData"));
@@ -20,6 +21,7 @@ namespace FreeSims.Tests
             passed &= TS1BehaviorTests.Run(paths, Console.WriteLine).All(x => x.StartsWith("PASS "));
             passed &= ControlledSimulationTests.Run(paths, Console.WriteLine).All(x => x.StartsWith("PASS "));
             passed &= ReplayCheckpointTests.Run(paths, Console.WriteLine).All(x => x.StartsWith("PASS "));
+            passed &= TS1SpriteTests.Run(paths, Console.WriteLine).All(x => x.StartsWith("PASS "));
             passed &= ObjectTypeMappingTests.Run();
             passed &= LotPlacementTests.Run(paths, Console.WriteLine).All(x => x.StartsWith("PASS "));
             passed &= OBJMPlacementTests.Run(Console.WriteLine).All(x => x.StartsWith("PASS "));

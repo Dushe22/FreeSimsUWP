@@ -11,10 +11,10 @@ namespace FreeSims.Xbox.Proof
         internal static bool ConsumePause() { return System.Threading.Interlocked.Exchange(ref pauseRequested, 0) != 0; }
         private static void Main()
         {
-            ProofLog.Write("START OFFLINE PROBE commit=" + BuildInfo.Commit + " platform=x64 configuration=Release");
+            ProofLog.Write("START SPRITE PROBE commit=" + BuildInfo.Commit + " platform=x64 configuration=Release");
             AppDomain.CurrentDomain.UnhandledException += (sender, args) =>
                 ProofLog.Write("UNHANDLED " + args.ExceptionObject);
-            CoreApplication.Suspending += (sender, args) => { RequestPause(); ProofLog.Write("SUSPENDING - LAST CONFIRMED CHECKPOINT ON DISK"); };
+            CoreApplication.Suspending += (sender, args) => { RequestPause(); ProofLog.Write("SUSPENDING"); };
             CoreApplication.Resuming += (sender, args) => ProofLog.Write("RESUMING");
             try
             {

@@ -1,6 +1,6 @@
 <Project ToolsVersion="15.0" DefaultTargets="Build" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
 <PropertyGroup><Configuration>Release</Configuration><Platform>x86</Platform><PlatformTarget>x86</PlatformTarget><OutputType>Exe</OutputType><AssemblyName>OfflineCompatibility</AssemblyName><TargetFrameworkVersion>v4.5</TargetFrameworkVersion><OutputPath>bin\Release\</OutputPath></PropertyGroup>
-<ItemGroup><Reference Include="System"/><Reference Include="System.Core"/>
+<ItemGroup><Reference Include="System"/><Reference Include="System.Core"/><Reference Include="System.Drawing"/><Reference Include="System.Windows.Forms"/>
 <Reference Include="SimsVille"><HintPath>..\..\SimsVille\bin\Release\SimsVille.exe</HintPath></Reference>
 <Reference Include="Common"><HintPath>..\..\sims.common\bin\Release\Common.dll</HintPath></Reference>
 <Reference Include="Simslib"><HintPath>..\..\sims.files\bin\Release\Simslib.dll</HintPath></Reference>
@@ -8,6 +8,6 @@
 <Reference Include="GonzoNet"><HintPath>..\..\SimsVille\Dependencies\GonzoNet.dll</HintPath></Reference>
 <Reference Include="GOLDEngine"><HintPath>..\..\SimsVille\Dependencies\GOLDEngine.dll</HintPath></Reference>
 <Reference Include="TargaImagePCL"><HintPath>..\..\SimsVille\Dependencies\TargaImagePCL.dll</HintPath></Reference>
-<Compile Include="ThumbnailColorKeyTests.cs"/><Compile Include="LotPlacementTests.cs"/><Compile Include="OBJMPlacementTests.cs"/><Compile Include="ObjectTypeMappingTests.cs"/><Compile Include="LotInspection.cs"/><Compile Include="OfflineTests.cs"/><Compile Include="Program.cs"/><Compile Include="VMObjectTests.cs"/><Compile Include="SavedLotObjectTests.cs"/><Compile Include="TS1BehaviorTests.cs"/><Compile Include="ControlledSimulationTests.cs"/><Compile Include="ReplayCheckpointTests.cs"/>
+<Compile Include="TS1SpriteTests.cs"/><Compile Include="SpriteGpuChecks.cs"/><Compile Include="..\..\experiments\XboxOfflineProbe\SpriteGpuScene.cs"><Link>SpriteGpuScene.cs</Link></Compile><Compile Include="ThumbnailColorKeyTests.cs"/><Compile Include="LotPlacementTests.cs"/><Compile Include="OBJMPlacementTests.cs"/><Compile Include="ObjectTypeMappingTests.cs"/><Compile Include="LotInspection.cs"/><Compile Include="OfflineTests.cs"/><Compile Include="Program.cs"/><Compile Include="VMObjectTests.cs"/><Compile Include="SavedLotObjectTests.cs"/><Compile Include="TS1BehaviorTests.cs"/><Compile Include="ControlledSimulationTests.cs"/><Compile Include="ReplayCheckpointTests.cs"/>
 </ItemGroup><Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets"/>
 </Project>

@@ -1611,3 +1611,25 @@ Pending Series S gate: 9/9 plus matching paused house/ticks/clock after LB save 
 Replacement proof.log (168,054 bytes) contains four launches of dc462372b491 and four 9/9 passes, with no FAIL/FATAL/UNHANDLED, live control/load errors, checkpoint rejection or write failure. Supplied photos show both previews, saved tick 66 on House 28 and saved tick 0 on House 2. Native automated checks verify both lots at 0/76 ticks, identical continuation from 1,561 to 1,861, the 6,000-tick restore limit, malformed/incompatible records, divergent replay rejection and failed-write preservation.
 End-to-end persistence is hardware verified: House 28 saves tick 66 at 10:07:08; explicit B exit/relaunch restores that exact house/tick/clock paused. Subsequent SUSPENDING then fresh START restores the same checkpoint again, resolving the previously observed Home/return tick reset. Repeated lot switches save fresh paused sessions; later B exit/relaunch restores House 2 at tick 0, 12:40:52. Three accepted runtime restores are logged. Viewport handling is observed at 1920x1080 and 1280x720.
 Core bounded replay checkpoint recovery passes on Series S. This upload does not exercise Menu reruns, controller disconnect/reconnect, surviving-process RESUMING, or a running-session suspension flush; do not claim those manual cases verified. Full arbitrary-state TS1 snapshots, Sims and live rendering remain future work.
+
+## 2026-09-28 - TS1 object sprite rendering
+Offline Probe 0.8 draws VM-initialized chair/three-tile sofa DGRP/SPR2 layers,
+with four camera angles, three zooms and checkerboard backgrounds. Shared
+TS1SpriteLayer resolves the VM graphic and dynamic flags, copies CPU color/depth
+data and premultiplies alpha without consuming cached IFF textures. The Xbox
+host owns/disposes GPU textures and rebuilds after device reset. The previous
+checkpoint host remains in source; the new host does not touch its checkpoint.
+
+Local desktop regressions pass, all 91 original input hashes unchanged. The
+managed UWP build passes. Desktop GPU checks pass all 24 object/view combinations:
+exact color/depth upload, rendered alpha/flip/layer output versus CPU reference.
+The exported contact sheet was visually checked (four chair and four assembled
+sofa angles). Repeat GPU validation after building OfflineCompatibility.exe:
+`OfflineCompatibility.exe --sprite-gpu <game-root> <scratch-root>`.
+
+Xbox gate: 6/6 plus both objects/all views, light/dark edges, reruns, Home/return,
+and B exit/relaunch (see experiments/XboxOfflineProbe/TESTING.md). No new assets.
+This is the first object rendering stage, not a complete rendered lot: full
+per-pixel depth/occlusion, terrain, walls and lighting remain next. Native package
+and hardware results are recorded separately; do not infer Xbox GPU success from
+local desktop checks.

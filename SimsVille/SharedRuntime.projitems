@@ -1,6 +1,7 @@
 <Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
   <!-- Explicit runtime inputs from the desktop project; no recursive source/content glob. -->
   <ItemGroup>
+    <Compile Include="$(MSBuildThisFileDirectory)World\TS1SpriteLayer.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)ContentManager\Audio.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)ContentManager\AvatarAnimationProvider.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)ContentManager\AvatarAppearanceProvider.cs" />
