@@ -6,8 +6,8 @@ keep all previous uploads, including UserData/LotZoning.iff.
 Expect **10/10 PASS**, then House 28 **PAUSED**, 80 active / 675 held, ticks 0.
 The nine controller checks plus GPU thumbnails run automatically at startup.
 
-- **RB:** pause and step exactly one tick. Confirm ticks and clock advance.
-- **A:** play/pause. Leave running for 10 seconds; pause and confirm ticks stop.
+- **RB:** pause and step exactly one tick. Confirm the tick count increases by one.
+- **A:** play/pause. Leave running for 10 seconds; the clock advances. Pause and confirm ticks stop.
 - **X:** switch lots; each loads paused at tick 0. House 2: 134 active / 254 held.
 - **Y:** reload the current lot from source, paused at tick 0.
 - **Menu:** rerun the automated checks (twice); expect 10/10 each time.
