@@ -1643,3 +1643,16 @@ ZIP: artifacts/xbox-sprites-cd2eea486719.zip, SHA256
 69F20E2E7677C5D925EE86E7A1EF793BB8441C0FC7A3E9F86D5E9E05AE8F9597.
 Both full-install and exact Xbox-upload-subset desktop GPU checks pass all 24 views.
 Series S testing remains pending; next rendering work is lot depth/terrain/walls.
+
+## 2026-09-28 - Object sprite hardware results
+Series S evidence for cd2eea486719 (0.8.0.0): supplied proof.log (221,075 bytes)
+contains three launches, six 6/6 passes and 288 GPU view checks, with no logged
+FAIL/FATAL/UNHANDLED/ERROR in the sprite-build segment. Three Menu reruns pass.
+Manual input logs cover all four angles for chair/sofa and all three sofa zooms;
+automated checks cover all 24 object/view combinations on each run. Photos show
+an assembled sofa on light/dark backgrounds and transparent chair edges.
+Deactivation/reactivation is followed by successful reruns; SUSPENDING is followed
+by a fresh launch and 6/6. The observed viewport is 1280x720. No EXIT REQUESTED
+marker appears, so explicit B exit/relaunch remains unconfirmed. Manual chair
+zoom cycling and device-reset recovery are not separately evidenced. The object
+sprite rendering gate passes; full lot depth/terrain/walls remain next.
