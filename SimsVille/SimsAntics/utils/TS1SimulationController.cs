@@ -82,6 +82,7 @@ namespace FSO.SimAntics
                 if (LimitReached) Pause();
             } catch (Exception error) { Fault = error; Pause(); throw; }
         }
+        internal void CheckpointReady() { EnsureReady(); if (Fault != null || VM.ScriptExecutionStopped) throw new InvalidOperationException("Cannot checkpoint a faulted session."); }
         private void EnsureAlive() { if (disposed) throw new ObjectDisposedException("TS1SimulationController"); }
         private void EnsureReady() { EnsureAlive(); if (session == null) throw new InvalidOperationException("Load a lot first."); }
         public void Dispose() { if (!disposed) { if (session != null) session.Dispose(); Running = false; disposed = true; } }

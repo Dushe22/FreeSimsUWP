@@ -22,7 +22,11 @@ namespace FreeSims.Xbox.Proof
         private TS1SimulationController simulation;
         private string controlError;
         private int lastTickReport;
-        private const int TestCount = ControlledSimulationTests.Count + 1;
+        private TS1ReplayCheckpointStore checkpoints;
+        private int savedTicks = -1, savedHouse;
+        private bool checkpointWriteFailed;
+        private string checkpointStatus = "NO CHECKPOINT";
+        private const int TestCount = ReplayCheckpointTests.Count + 1;
         private List<string> results = new List<string>();
         private GamePadState previous;
         private int runs;
@@ -60,13 +64,16 @@ namespace FreeSims.Xbox.Proof
 
         private void RunTests()
         {
-            if (simulation != null) { simulation.Dispose(); simulation = null; }
+            if (simulation != null) {
+                simulation.Pause(); if (!SaveCheckpoint()) return;
+                simulation.Dispose(); simulation = null;
+            }
             VM.UseWorld = false;
             runs++;
             ProofLog.Write("TEST RUN " + runs + " BEGIN");
             try {
                 var paths = UwpGameStorage.CreatePaths();
-                results = ControlledSimulationTests.Run(paths, ProofLog.Write);
+                results = ReplayCheckpointTests.Run(paths, ProofLog.Write);
 
 
                 foreach (var texture in thumbnails.Values) texture.Dispose();
@@ -96,18 +103,52 @@ namespace FreeSims.Xbox.Proof
             }
             catch (Exception ex) { results = new List<string> { "FAIL STORAGE INITIALIZATION" }; ProofLog.Write(ex.ToString()); }
             ProofLog.Write("TEST RUN " + runs + " END");
-            if (results.Count == TestCount && results.All(x => x.StartsWith("PASS "))) LoadSimulation(selectedHouse);
+            if (results.Count == TestCount && results.All(x => x.StartsWith("PASS "))) RestoreSimulation();
         }
 
+        private void RestoreSimulation()
+        {
+            try {
+                checkpoints = new TS1ReplayCheckpointStore(UwpGameStorage.CreatePaths(), BuildInfo.Commit);
+                if (!checkpoints.Exists) { LoadSimulation(28); return; }
+                var candidate = checkpoints.Read();
+                if (simulation != null) simulation.Dispose();
+                simulation = candidate; selectedHouse = simulation.House;
+                savedHouse = selectedHouse; savedTicks = simulation.CompletedTicks;
+                lastTickReport = savedTicks; checkpointWriteFailed = false; controlError = null;
+                checkpointStatus = "SAVED TICKS " + savedTicks;
+                LogSimulation("CHECKPOINT RESTORED PAUSED");
+            } catch (Exception ex) {
+                checkpointStatus = "RESTORE FAILED - Y RESET";
+                controlError = "RESTORE FAILED - Y RESET";
+                ProofLog.Write("CHECKPOINT RESTORE REJECTED " + ex);
+            }
+        }
         private void LoadSimulation(int house)
         {
             try {
-                var paths = UwpGameStorage.CreatePaths();
-                if (simulation == null) simulation = new TS1SimulationController();
-                simulation.Load(ControlledSimulationTests.House(paths, house), new TS1ObjectProvider(paths), house);
-                selectedHouse = house; controlError = null; lastTickReport = 0;
-                LogSimulation("LOADED PAUSED");
+                if (checkpoints == null) checkpoints = new TS1ReplayCheckpointStore(UwpGameStorage.CreatePaths(), BuildInfo.Commit);
+                var candidate = checkpoints.Fresh(house);
+                if (simulation != null) simulation.Dispose();
+                simulation = candidate; selectedHouse = house;
+                savedTicks = -1; lastTickReport = 0; checkpointWriteFailed = false; controlError = null;
+                LogSimulation("LOADED PAUSED"); SaveCheckpoint();
             } catch (Exception ex) { controlError = "LOAD FAILED - SEE LOG"; ProofLog.Write("LIVE LOAD FAILED " + ex); }
+        }
+        private bool SaveCheckpoint()
+        {
+            if (simulation == null || simulation.VM == null) return true;
+            if (simulation.Fault == null && !simulation.VM.ScriptExecutionStopped && !checkpointWriteFailed && savedHouse == simulation.House && savedTicks == simulation.CompletedTicks) return true;
+            try {
+                checkpoints.Save(simulation);
+                savedHouse = simulation.House; savedTicks = simulation.CompletedTicks;
+                checkpointWriteFailed = false; checkpointStatus = "SAVED TICKS " + savedTicks;
+                controlError = null; LogSimulation("CHECKPOINT SAVED"); return true;
+            } catch (Exception ex) {
+                simulation.Pause(); checkpointWriteFailed = true;
+                checkpointStatus = "SAVE FAILED - LB RETRY"; controlError = "CHECKPOINT ERROR - SEE LOG";
+                ProofLog.Write("CHECKPOINT WRITE FAILED " + ex); return false;
+            }
         }
         private void LogSimulation(string reason)
         {
@@ -127,29 +168,36 @@ namespace FreeSims.Xbox.Proof
             if (focusPause && simulation != null) {
                 if (simulation.Running) LogSimulation("FOCUS PAUSE");
                 simulation.Pause();
+                if (!checkpointWriteFailed) SaveCheckpoint();
             }
             if (IsActive && !focusPause) {
                 if (pad.IsButtonDown(Buttons.B) && previous.IsButtonUp(Buttons.B)) {
                     if (simulation != null) simulation.Pause();
-                    LogSimulation("EXIT - UNSAVED SESSION");
+                    if (!SaveCheckpoint()) { previous = pad; return; }
+                    LogSimulation("EXIT - CHECKPOINT SAVED");
                     ProofLog.Write("EXIT REQUESTED BY B"); Exit(); return;
                 }
                 bool changed = false;
                 if (pad.IsButtonDown(Buttons.Start) && previous.IsButtonUp(Buttons.Start)) { RunTests(); changed = true; }
-                if (!changed && simulation != null && simulation.VM != null) {
+                if (!changed) {
                     if (pad.IsButtonDown(Buttons.X) && previous.IsButtonUp(Buttons.X)) { LoadSimulation(selectedHouse == 2 ? 28 : 2); changed = true; }
                     else if (pad.IsButtonDown(Buttons.Y) && previous.IsButtonUp(Buttons.Y)) { LoadSimulation(selectedHouse); changed = true; }
-                    if (!changed) try {
-                        if (!simulation.LimitReached && simulation.Fault == null && pad.IsButtonDown(Buttons.A) && previous.IsButtonUp(Buttons.A)) {
+                    if (!changed && simulation != null && simulation.VM != null) try {
+                        if (!checkpointWriteFailed && !simulation.LimitReached && simulation.Fault == null && pad.IsButtonDown(Buttons.A) && previous.IsButtonUp(Buttons.A)) {
                             if (simulation.Running) simulation.Pause(); else simulation.Run();
                             controlError = null; LogSimulation(simulation.Running ? "RUNNING" : "PAUSED");
+                            if (!simulation.Running) SaveCheckpoint();
                         }
                         if (!simulation.LimitReached && simulation.Fault == null && pad.IsButtonDown(Buttons.RightShoulder) && previous.IsButtonUp(Buttons.RightShoulder)) {
-                            simulation.Pause(); simulation.Step(); controlError = null; LogSimulation("STEP");
+                            simulation.Pause(); simulation.Step(); controlError = null; LogSimulation("STEP"); SaveCheckpoint();
+                        }
+                        if (pad.IsButtonDown(Buttons.LeftShoulder) && previous.IsButtonUp(Buttons.LeftShoulder)) {
+                            simulation.Pause(); SaveCheckpoint();
                         }
                         simulation.Advance(gameTime.ElapsedGameTime, true);
                         if (simulation.CompletedTicks - lastTickReport >= 300 || (simulation.LimitReached && lastTickReport != simulation.CompletedTicks)) {
                             lastTickReport = simulation.CompletedTicks; LogSimulation(simulation.LimitReached ? "LIMIT REACHED" : "PROGRESS");
+                            if (!checkpointWriteFailed) SaveCheckpoint();
                         }
                     } catch (Exception ex) {
                         simulation.Pause(); controlError = "STOPPED - SEE LOG";
@@ -170,7 +218,7 @@ namespace FreeSims.Xbox.Proof
             // Recompute from the live viewport every frame: activation/resize events
             // can precede the framework's final back-buffer update.
             batch.Begin(samplerState: SamplerState.PointClamp, transformMatrix: transform);
-            PixelText.Draw(batch, pixel, "FREESIMS CONTROLLED SIMULATION", 48, 36, 4, Color.White);
+            PixelText.Draw(batch, pixel, "FREESIMS CHECKPOINT PROBE", 48, 36, 4, Color.White);
             PixelText.Draw(batch, pixel, "COMMIT " + BuildInfo.Commit.Substring(0, 12), 48, 80, 2, Color.LightGray);
             bool passed = results.Count == TestCount && results.All(x => x.StartsWith("PASS "));
             PixelText.Draw(batch, pixel, passed ? TestCount + "/" + TestCount + " PASS" : "TEST FAILURE - SEE LOG",
@@ -179,7 +227,7 @@ namespace FreeSims.Xbox.Proof
                 PixelText.Draw(batch, pixel, results[i], 48, 175 + i * 22, 2,
                     results[i].StartsWith("PASS ") ? Color.LightGreen : Color.OrangeRed);
             PixelText.Draw(batch, pixel, "A PLAY/PAUSE - RB STEP - X HOUSE - Y RELOAD", 48, 534, 2, Color.White);
-            PixelText.Draw(batch, pixel, "MENU TESTS - B EXIT - TEST RUN " + runs, 48, 574, 2, Color.LightGray);
+            PixelText.Draw(batch, pixel, "LB SAVE - MENU TESTS - B EXIT - RUN " + runs, 48, 574, 2, Color.LightGray);
             batch.Draw(pixel, new Rectangle(48 + (int)(elapsed * 80 % 1120), 630, 32, 8), Color.CornflowerBlue);
             PixelText.Draw(batch, pixel, "VIEWPORT " + viewport.Width + "X" + viewport.Height +
                 " - UI 1280X720", 48, 660, 2, Color.LightGray);
@@ -189,8 +237,8 @@ namespace FreeSims.Xbox.Proof
                 PixelText.Draw(batch, pixel, "LIVE HOUSE " + simulation.House + " - " + state, 820, 170, 2, Color.White);
                 PixelText.Draw(batch, pixel, "ACTIVE " + simulation.ActiveObjects + " HELD " + simulation.HeldObjects, 820, 200, 2, Color.LightGreen);
                 PixelText.Draw(batch, pixel, "TICKS " + simulation.CompletedTicks + "/" + TS1SimulationController.TickLimit, 820, 230, 2, Color.LightGray);
-                PixelText.Draw(batch, pixel, "CLOCK " + clock.Hours.ToString("00") + ":" + clock.Minutes.ToString("00") + ":" + clock.Seconds.ToString("00"), 820, 260, 2, Color.LightGray);
-                PixelText.Draw(batch, pixel, "SESSION NOT SAVED", 820, 305, 2, Color.Gold);
+                PixelText.Draw(batch, pixel, "CLOCK " + clock.Hours.ToString("00") + "H " + clock.Minutes.ToString("00") + "M " + clock.Seconds.ToString("00") + "S", 820, 260, 2, Color.LightGray);
+                PixelText.Draw(batch, pixel, checkpointStatus, 820, 305, 2, Color.Gold);
                 PixelText.Draw(batch, pixel, "IMAGE IS A THUMBNAIL", 820, 335, 2, Color.LightGray);
             }
             if (controlError != null) PixelText.Draw(batch, pixel, controlError, 820, 370, 2, Color.OrangeRed);

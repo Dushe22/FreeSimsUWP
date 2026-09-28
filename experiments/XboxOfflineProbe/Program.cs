@@ -14,7 +14,7 @@ namespace FreeSims.Xbox.Proof
             ProofLog.Write("START OFFLINE PROBE commit=" + BuildInfo.Commit + " platform=x64 configuration=Release");
             AppDomain.CurrentDomain.UnhandledException += (sender, args) =>
                 ProofLog.Write("UNHANDLED " + args.ExceptionObject);
-            CoreApplication.Suspending += (sender, args) => { RequestPause(); ProofLog.Write("SUSPENDING - LIVE SESSION NOT SAVED"); };
+            CoreApplication.Suspending += (sender, args) => { RequestPause(); ProofLog.Write("SUSPENDING - LAST CONFIRMED CHECKPOINT ON DISK"); };
             CoreApplication.Resuming += (sender, args) => ProofLog.Write("RESUMING");
             try
             {

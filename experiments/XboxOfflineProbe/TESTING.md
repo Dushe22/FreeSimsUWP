@@ -1,27 +1,36 @@
-# Controlled Simulation Probe 0.6.0.0
+# Checkpoint Probe 0.7.0.0
 
-Update the existing Offline Probe with the new x64 AppX. No new game files:
-keep all previous uploads, including UserData/LotZoning.iff.
+Update the existing Offline Probe. No new game files. Expect **9/9 PASS**
+(eight checkpoint checks plus GPU thumbnails). Startup hashes content and runs
+replay checks, so allow more time before the first screen.
 
-Expect **10/10 PASS**, then House 28 **PAUSED**, 80 active / 675 held, ticks 0.
-The nine controller checks plus GPU thumbnails run automatically at startup.
+The controlled session now checkpoints to **LocalState/UserData/Checkpoints/controlled.bin**.
+It saves on pause, RB step, LB save, B exit, lot reload/switch and every 300 ticks.
+The screen shows SAVED TICKS N. Restores always start paused.
 
-- **RB:** pause and step exactly one tick. Confirm the tick count increases by one.
-- **A:** play/pause. Leave running for 10 seconds; the clock advances. Pause and confirm ticks stop.
-- **X:** switch lots; each loads paused at tick 0. House 2: 134 active / 254 held.
-- **Y:** reload the current lot from source, paused at tick 0.
-- **Menu:** rerun the automated checks (twice); expect 10/10 each time.
-- **B:** exit. Relaunch starts a fresh paused session; check proof.log for EXIT REQUESTED BY B.
+1. A play, then A pause at a nonzero tick. Note house, ticks and clock; SAVED TICKS
+   must match. B exit/relaunch: expect the SAME house/ticks/clock, paused.
+2. RB adds one tick and saves. LB explicitly pauses/saves. Go Home and return:
+   a surviving process stays paused; a fresh process replays the saved checkpoint.
+   Both should retain the last confirmed saved tick rather than restart at zero.
+3. While playing, go Home and return. Focus loss should save/pause if the game
+   thread runs before suspension. Abrupt termination can lose work after the last
+   displayed SAVED TICKS (periodic saves are every 300 ticks, about 10 seconds).
+4. X switches lots and saves the new paused tick-0 session. Y deliberately reloads
+   the current lot from source and replaces its checkpoint with tick 0.
+5. Let House 28 reach 6,000. B exit/relaunch: restore LIMIT at 6,000; Y resets it.
+6. Menu reruns the checks twice, preserving/restoring the last checkpoint.
+   Also test controller disconnect/reconnect: pause/save, then explicit A to run.
 
-While running, go Home and return. A surviving process must retain its tick count
-and return paused without catching up; a new process starts at tick 0, paused.
-Disconnect/reconnect the controller while running: it must pause and require A.
-Let House 28 reach 6,000 ticks (about 3 minutes 20 seconds): LIMIT - RELOAD appears.
-It must stop there; Y reloads. Please send a photo and proof.log (and
-proof.log.previous if present), plus whether the manual controls passed.
+Send photo + proof.log (proof.log.previous if present), and whether the restore
+matched after B exit and Home/return. If a checkpoint error appears, send the log
+before pressing Y; the rejected file is preserved. A failed write pauses and
+keeps the old file; LB retries. B waits for a successful write before exiting.
 
-The test run counter is per process. Completed results remain in proof.log.
-Live tick/clock counters reflect selected object mains; the image is a static
-thumbnail. Sessions are NOT saved. Sims, full lot rendering, original saved
-execution stacks, arbitrary behaviors and gameplay saves remain unsupported.
-The bounded 6,000-tick exercise keeps this milestone within tested coverage.
+This is a bounded deterministic replay checkpoint for the two probe profiles,
+not a full TS1 save serializer. It requires the SAME engine revision and content.
+Restore replays at most 6,000 ticks and checks object/thread/architecture/global/
+clock/RNG state before accepting the candidate. Changed or corrupt inputs reject.
+Engine updates invalidate these experimental checkpoints; Y explicitly resets.
+The test-run counter remains per process. Images remain thumbnails; full gameplay,
+Sims, original TS1 saved stacks, live rendering and general save editing are unsupported.
