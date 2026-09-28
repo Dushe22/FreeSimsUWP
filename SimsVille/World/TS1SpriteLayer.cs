@@ -9,13 +9,14 @@ using Microsoft.Xna.Framework;
 namespace FSO.LotView
 {
     // CPU-owned SPR2 layers for the first TS1 renderer bring-up. No cached GPU resources
-    // are borrowed from the IFF. Full world depth, lighting and wall occlusion come later.
+    // are borrowed from the IFF. Renderers own uploads and use WorldOffset for depth.
     public sealed class TS1SpriteLayer
     {
         public int Width { get; private set; }
         public int Height { get; private set; }
         public Vector2 Offset { get; private set; }
         public bool Flip { get; private set; }
+        public Vector3 WorldOffset { get; private set; }
         public Color[] Pixels { get; private set; }
         public byte[] Depth { get; private set; }
 
@@ -47,9 +48,10 @@ namespace FSO.LotView
                 var frame = resource.Frames[sprite.SpriteFrameIndex];
                 frame.DecodeIfRequired();
                 int count = checked(frame.Width * frame.Height);
+                if (frame.Width == 0 && frame.Height == 0) continue; // valid empty animation frame
                 if (frame.Width <= 0 || frame.Height <= 0 || frame.PixelData == null || frame.PixelData.Length != count ||
                     frame.ZBufferData == null || frame.ZBufferData.Length != count)
-                    throw new InvalidDataException("Missing SPR2 color/depth pixels.");
+                    throw new InvalidDataException("Missing SPR2 color/depth pixels: sprite="+sprite.SpriteID+" frame="+sprite.SpriteFrameIndex+" size="+frame.Width+"x"+frame.Height+" flags="+frame.Flags);
                 var pixels = new Color[count];
                 for (int i = 0; i < count; i++) pixels[i] = Premultiply(frame.PixelData[i]);
                 float angle = direction == 4 ? MathHelper.PiOver2 : direction == 16 ? MathHelper.Pi : direction == 64 ? MathHelper.Pi * 1.5f : 0;
@@ -58,7 +60,7 @@ namespace FSO.LotView
                 offset.Y -= frame.Height; // shared ground anchor, excluding the legacy render-target padding
                 result.Add(new TS1SpriteLayer {
                     Width = frame.Width, Height = frame.Height, Offset = new Vector2((int)offset.X, (int)offset.Y),
-                    Flip = sprite.Flip, Pixels = pixels, Depth = (byte[])frame.ZBufferData.Clone()
+                    WorldOffset = relative, Flip = sprite.Flip, Pixels = pixels, Depth = (byte[])frame.ZBufferData.Clone()
                 });
             }
             return result;
@@ -76,6 +78,15 @@ namespace FSO.LotView
         }
         public static Vector2 Project(Vector3 tile, int zoom, int rotation)
         {
+            var point = ProjectWithDepth(tile, zoom, rotation);
+            return new Vector2(point.X, point.Y);
+        }
+
+        // Shared camera coordinates for sprites and future terrain/wall vertices.
+        // Z is camera-space nearness (larger is nearer), independent of zoom.
+        // It is NOT a normalized GPU depth value or a decoded SPR2 depth sample.
+        public static Vector3 ProjectWithDepth(Vector3 tile, int zoom, int rotation)
+        {
             ValidateView(zoom, rotation);
             float halfWidth = 16 * (1 << (zoom - 1));
             float x = tile.X, y = tile.Y;
@@ -84,7 +95,10 @@ namespace FSO.LotView
                 case 2: x = -tile.X; y = -tile.Y; break;
                 case 3: x = tile.Y; y = -tile.X; break;
             }
-            return new Vector2((x-y)*halfWidth, (x+y)*halfWidth/2 - tile.Z*halfWidth*(float)Math.Sqrt(1.5));
+            // Camera elevation is 30 degrees: orthogonal screen-up and view axes.
+            float nearness = (x+y)*(float)Math.Sqrt(3.0/8.0) + tile.Z/2;
+            return new Vector3((x-y)*halfWidth,
+                (x+y)*halfWidth/2 - tile.Z*halfWidth*(float)Math.Sqrt(1.5), nearness);
         }
     }
 }

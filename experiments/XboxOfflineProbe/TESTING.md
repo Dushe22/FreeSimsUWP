@@ -1,23 +1,24 @@
-# Object Sprite Probe 0.8.0.0
+# Static Lot Render Probe 0.9.0.0
 
-Update the existing Offline Probe with this AppX and its x64 dependencies.
-No additional game files are needed. Keep the existing LocalState/GameData.
-Expect **6/6 PASS**. This build draws real VM chair/sofa SPR2 sprites.
+Update the existing Offline Probe. No new game files. Expect **4/4 PASS** after
+startup checks. The image is rendered from saved lot data, not a thumbnail.
 
-1. X switches chair/three-tile sofa. A cycles four camera angles.
-2. Y cycles all three zoom levels for both objects. Check for separated sofa
-   tiles, clipped parts, unexpected flips, or missing pixels.
-3. LB switches light/dark checkerboards. Edges should be transparent without
-   colored fringes or solid rectangular backgrounds.
-4. Menu reruns twice: still 6/6, with the selected object visible.
-5. Home/return, then B exit/relaunch: image and controls still work at either
-   viewport size. Test run and view selections start fresh after a new launch.
+- A rotates; X switches House 2/28; Y toggles walls.
+- LB cycles zoom; RB selects floor level 1/2.
+- Left stick pans; View recenters; Menu reruns tests; B exits.
 
-Send proof.log and a photo of the sofa from a front angle. Report any visual
-issue even if the automated comparisons pass.
+Check both lots, all four angles, both levels and zooms. With walls enabled,
+objects behind solid walls should be hidden. With walls disabled, inspect the
+interiors. Pan at higher zoom, then recenter. Rerun twice, try Home/return, and
+B exit/relaunch. Send proof.log plus photos with walls on and off.
 
-The previous 0.7 checkpoint file is left untouched. This rendering probe does
-not load/save simulation sessions. Objects are initialized in a headless VM;
-there is no advancing simulation, terrain, walls, lighting or full lot depth
-compositing yet. Depth textures are uploaded and checked, but fixture drawing
-uses ordered color layers. No game assets or private keys are in this package.
+Expected limitations: flat checkerboard terrain; diagnostic floor/wall colors
+(including an artificial road color); flat blue pool/water surfaces; solid wall
+geometry without window/door openings; no roofs, lighting or simulation. Objects
+in container slots are held and counted. Empty/hidden/out-of-world objects are
+not drawn; unsupported drawable records are reported in the log/UI. Current
+fixtures have zero unsupported records; House 28 has 11 contained objects held.
+Intersections between translucent surfaces still use sorted blending.
+
+Camera/test counters reset on a new launch. The older simulation checkpoint is
+left untouched. The package contains no game files or private key.

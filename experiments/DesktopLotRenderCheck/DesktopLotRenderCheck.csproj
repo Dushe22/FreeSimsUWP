@@ -1,0 +1,10 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup><OutputType>Exe</OutputType><TargetFramework>net9.0-windows</TargetFramework><UseWindowsForms>true</UseWindowsForms><EnableDefaultCompileItems>false</EnableDefaultCompileItems><PlatformTarget>x64</PlatformTarget></PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="MonoGame.Framework.WindowsDX" Version="3.8.1.303" />
+    <Reference Include="SimsVille"><HintPath>../../artifacts/lot-check-engine/SimsVille.dll</HintPath></Reference>
+    <Reference Include="Common"><HintPath>../../artifacts/lot-check-engine/Common.dll</HintPath></Reference>
+    <Reference Include="Simslib"><HintPath>../../artifacts/lot-check-engine/Simslib.dll</HintPath></Reference>
+    <Compile Include="Program.cs" /><Compile Include="../../tests/OfflineCompatibility/LotProjectionTests.cs" Link="LotProjectionTests.cs" /><Compile Include="../../tests/OfflineCompatibility/LotRenderTests.cs" Link="LotRenderTests.cs" />
+  </ItemGroup>
+</Project>

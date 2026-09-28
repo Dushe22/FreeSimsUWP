@@ -1656,3 +1656,28 @@ by a fresh launch and 6/6. The observed viewport is 1280x720. No EXIT REQUESTED
 marker appears; the user separately confirmed B exit/relaunch passed. Manual chair
 zoom cycling and device-reset recovery are not separately evidenced. The object
 sprite rendering gate passes; full lot depth/terrain/walls remain next.
+
+## 2026-09-28 - Static saved-lot renderer
+Offline Probe 0.9 adds camera depth coordinates, a DirectX SPR2 depth shader,
+flat terrain, saved floor/wall geometry and saved-object layers. Opaque texels
+write depth; alpha holes discard; partial alpha reads depth with sorted blending.
+Sprite depth calibration follows the existing 2DWorldBatch back/front span.
+Valid empty SPR2 animation frames are skipped without rejecting their object.
+
+Both lots render at four angles/two levels; projection tests cover all zooms.
+Modern desktop GPU checks verify wall/sprite draw-order independence, transparent
+holes, partial alpha, accounting for every object and nonempty real-lot images.
+All four checks and the existing desktop regressions pass; 91 source hashes are
+unchanged. Managed UWP compilation passes. Exported walls-on/off images, including
+upper floors, were visually inspected. No unsupported drawable records occur;
+11 contained House 28 objects await SLOT visual positioning. Surfaces currently
+use diagnostic colors; materials, wall openings, roofs, lighting, translucent
+intersections and simulation remain separate work. The old checkpoint is untouched.
+
+Repeat local GPU checks with scripts/Test-LotRendering.ps1 after desktop reference
+setup; this builds an isolated AnyCPU engine library for the .NET 9 Windows harness
+using MonoGame 3.8.1.303, matching the Xbox shader format. The legacy desktop runtime
+cannot load that MGFX version. -RebuildShader uses dotnet-mgfxc 3.8.1.303 installed
+in artifacts/mgfxc; both shader source and compiled bytecode are tracked. Outputs
+stay in artifacts/lot-render-check. Xbox 4/4 and manual controls/lifecycle checks
+are pending; see experiments/XboxOfflineProbe/TESTING.md.

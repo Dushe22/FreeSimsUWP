@@ -39,7 +39,8 @@
 
 
     <Compile Include="Program.cs" />
-    <Compile Include="SpriteProbeGame.cs" /><Compile Include="SpriteGpuScene.cs" /><Compile Include="..\..\tests\OfflineCompatibility\TS1SpriteTests.cs"><Link>TS1SpriteTests.cs</Link></Compile>
+    <Compile Include="LotRenderProbeGame.cs" /><Compile Include="..\..\tests\OfflineCompatibility\LotRenderTests.cs"><Link>LotRenderTests.cs</Link></Compile><Compile Include="..\..\tests\OfflineCompatibility\LotProjectionTests.cs"><Link>LotProjectionTests.cs</Link></Compile>
+    <Content Include="Effects\TS1SpriteDepth.mgfxo" />
     <Compile Include="..\XboxFilesProbe\ProbeLayout.cs"><Link>ProbeLayout.cs</Link></Compile>
     <Compile Include="..\XboxUwpProof\PixelText.cs"><Link>PixelText.cs</Link></Compile>
     <Compile Include="..\XboxUwpProof\ProofLog.cs"><Link>ProofLog.cs</Link></Compile>
