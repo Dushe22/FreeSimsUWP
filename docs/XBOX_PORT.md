@@ -1693,3 +1693,18 @@ B224B1308AB1188E9BBCA33AF89EB504BB65D2A9E458ECA9376D73C031240B2A.
 Final local level-2 views draw 307 House 2 objects and 497 House 28 objects,
 excluding invisible/empty frames, out-of-world and contained records; unsupported
 count is zero across all tested views. Hardware verification remains pending.
+
+## 2026-09-28 - Static lot Xbox results
+Series S evidence for 575680436978: five 4/4 passes across three launches,
+80 automated lot GPU views and 63 logged view changes. No failures/exceptions
+in this build's log segment. Both houses, four rotations, two floors, three zooms
+and wall toggles exercised. Photos show real objects and diagnostic architecture
+with walls on/off. Explicit EXIT REQUESTED followed by successful relaunch;
+SUSPENDING followed by a fresh successful launch, then device reset and a rebuilt
+view at 1920x1080 (logical UI 1280x720). This proves restart recovery, not camera
+state persistence or in-process resume. Pan/recenter are not independently logged.
+Rendering gate passes within the documented static/diagnostic scope.
+Follow-up: House 2 draws 17 extra objects at medium zoom (280 vs 263 on floor 1,
+324 vs 307 on floor 2); inspect empty-frame/view selection before claiming complete
+cross-zoom visibility. Next rendering work: TS1 floor/wall materials and openings.
+Evidence preserved in artifacts/xbox-lot-render-575680436978/proof.log.
