@@ -1633,3 +1633,13 @@ This is the first object rendering stage, not a complete rendered lot: full
 per-pixel depth/occlusion, terrain, walls and lighting remain next. Native package
 and hardware results are recorded separately; do not infer Xbox GPU success from
 local desktop checks.
+
+Native handoff: source cd2eea486719fa15b8472ddc52965fbdc1a65bbe, version 0.8.0.0,
+Release/x64/.NET Native signed successfully; no ILT/MCG warnings. Audit verifies
+235 block hashes, native x64 binaries, signature/block-map digest and public cert
+0264B74B20921BDC651AD59259476D572379E283. Seven handoff files, no game data/private keys.
+AppX SHA256: 23C6CBF0AB8A493C3584A583E79B109FB0388F519F47C442AA679EC2A053FACB.
+ZIP: artifacts/xbox-sprites-cd2eea486719.zip, SHA256
+69F20E2E7677C5D925EE86E7A1EF793BB8441C0FC7A3E9F86D5E9E05AE8F9597.
+Both full-install and exact Xbox-upload-subset desktop GPU checks pass all 24 views.
+Series S testing remains pending; next rendering work is lot depth/terrain/walls.
