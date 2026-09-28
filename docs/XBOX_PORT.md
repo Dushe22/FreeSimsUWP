@@ -1681,3 +1681,15 @@ cannot load that MGFX version. -RebuildShader uses dotnet-mgfxc 3.8.1.303 instal
 in artifacts/mgfxc; both shader source and compiled bytecode are tracked. Outputs
 stay in artifacts/lot-render-check. Xbox 4/4 and manual controls/lifecycle checks
 are pending; see experiments/XboxOfflineProbe/TESTING.md.
+
+Native handoff: 575680436978addc83d9e25bbe258718e55a5ece, 0.9.0.0,
+Release/x64/.NET Native signed successfully, no ILT/MCG warnings. Audit verifies
+239 block hashes, native x64 binaries, signature/block-map digest, matching tested
+shader bytecode and certificate 9134840217BB2FF6AA61AC7DC7A007EE871054CC.
+Seven handoff files; no game assets/private key. AppX SHA256:
+27EFDD5467CA8CA6216B02AF69D58310DAF4C76823ECF8A01A935E6465B49BAD.
+ZIP artifacts/xbox-lot-render-575680436978.zip SHA256:
+B224B1308AB1188E9BBCA33AF89EB504BB65D2A9E458ECA9376D73C031240B2A.
+Final local level-2 views draw 307 House 2 objects and 497 House 28 objects,
+excluding invisible/empty frames, out-of-world and contained records; unsupported
+count is zero across all tested views. Hardware verification remains pending.
