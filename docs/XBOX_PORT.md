@@ -1653,6 +1653,6 @@ automated checks cover all 24 object/view combinations on each run. Photos show
 an assembled sofa on light/dark backgrounds and transparent chair edges.
 Deactivation/reactivation is followed by successful reruns; SUSPENDING is followed
 by a fresh launch and 6/6. The observed viewport is 1280x720. No EXIT REQUESTED
-marker appears, so explicit B exit/relaunch remains unconfirmed. Manual chair
+marker appears; the user separately confirmed B exit/relaunch passed. Manual chair
 zoom cycling and device-reset recovery are not separately evidenced. The object
 sprite rendering gate passes; full lot depth/terrain/walls remain next.
