@@ -1716,3 +1716,13 @@ both lots at four angles/two levels; exported renders visually checked.
 Xbox verification pending. Requires GameData/floors.iff and GameData/walls.iff.
 Terrain/water remain diagnostic; roofs, openings and simulation remain future work.
 User confirms no visible objects disappear when zooming in the 0.9 build.
+
+## 2026-09-28 - Textured lot Xbox results
+Series S a9c71c2b7f89: five 6/6 passes over three launches, 80 automated GPU
+views and 36 view loads; no failures/exceptions in this build's log segment.
+Eleven Device Portal PNGs show both lots, authored floor/wall materials and
+transparent low fences. Exit/relaunch and suspend followed by fresh launch pass.
+The visible 4/4 label was stale text; corrected to use the actual result count.
+Existing limits remain: diagnostic terrain/water, no roofs or opening masks,
+contained objects held. Thin inter-floor seams remain visible for follow-up.
+Evidence: artifacts/xbox-materials-a9c71c2b7f89/proof.log.

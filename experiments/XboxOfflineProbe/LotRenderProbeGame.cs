@@ -96,7 +96,7 @@ namespace FreeSims.Xbox.Proof
             GraphicsDevice.Clear(new Color(16,24,39));batch.Begin(samplerState:SamplerState.PointClamp,transformMatrix:transform);
             Text("FREESIMS TEXTURED LOT RENDER",32,18,3,Color.White);
             bool passed=results.Count==LotRenderTests.Count&&results.All(x=>x.StartsWith("PASS "));
-            Text(passed?"4/4 PASS":"TEST FAILURE - SEE LOG",970,24,2,passed?Color.LimeGreen:Color.OrangeRed);
+            Text(passed?(results.Count+"/"+LotRenderTests.Count+" PASS"):"TEST FAILURE - SEE LOG",970,24,2,passed?Color.LimeGreen:Color.OrangeRed);
             Text("COMMIT "+BuildInfo.Commit.Substring(0,12)+" - HOUSE "+house+" - ANGLE "+rotation+" - LEVEL "+level+" - ZOOM "+zoom,32,52,2,Color.LightGray);
             if(image!=null)batch.Draw(image,new Vector2(0,88),Color.White);
             Text("TS1 FLOOR AND WALL TEXTURES - STATIC - NO SIMULATION",32,625,2,Color.Gold);
