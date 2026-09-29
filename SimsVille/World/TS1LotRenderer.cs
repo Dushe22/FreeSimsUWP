@@ -34,7 +34,7 @@ namespace FSO.LotView
                 materials=new AlphaTestEffect(device) {VertexColorEnabled=true,ReferenceAlpha=128,AlphaFunction=CompareFunction.GreaterEqual};
                 ground=data.Ground.ToArray();walls=data.Walls.ToArray();
                 foreach(var source in data.FloorMaterials.Concat(data.WallMaterials)) {
-                    var item=new MaterialItem {Wall=data.WallMaterials.Contains(source),Vertices=source.Vertices.ToArray()};materialItems.Add(item);
+                    var item=new MaterialItem {Wall=data.WallMaterials.Contains(source) && !source.KeepWhenWallsHidden,Vertices=source.Vertices.ToArray()};materialItems.Add(item);
                     item.Texture=new Texture2D(device,source.Material.Width,source.Material.Height);item.Texture.SetData(source.Material.Pixels);
                 }
                 foreach(var source in data.Sprites) {

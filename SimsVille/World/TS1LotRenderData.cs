@@ -44,6 +44,7 @@ namespace FSO.LotView
         public sealed class Surface
         {
             public TS1MaterialProvider.Material Material;
+            public bool KeepWhenWallsHidden;
             public readonly List<VertexPositionColorTexture> Vertices = new List<VertexPositionColorTexture>();
         }
         public sealed class View
@@ -92,7 +93,7 @@ namespace FSO.LotView
                         if(!edges.Add(Math.Min(a,b)+":"+Math.Max(a,b))) return;
                         var color=ax==bx?new Color(225,225,225):Color.White;
                         var points=new[]{new Vector3(ax,ay,z),new Vector3(bx,by,z),new Vector3(bx,by,z+2.95f),new Vector3(ax,ay,z+2.95f)};
-                        Textured(view.WallMaterials,materials.Wall(pattern,style),points,new[]{Vector2.UnitY,Vector2.One,Vector2.UnitX,Vector2.Zero},new[]{0,1,2,0,2,3},color,zoom,rotation);
+                        Textured(view.WallMaterials,materials.Wall(pattern,style),points,new[]{Vector2.UnitY,Vector2.One,Vector2.UnitX,Vector2.Zero},new[]{0,1,2,0,2,3},color,zoom,rotation,style==2 || style==12 || style==13 || style==14);
                         view.WallEdges++;
                     };
                     edge(WallSegments.TopLeft,x,y,x,y+1,camera.X>0?wall.TopLeftPattern:wallAt(x-1,y).BottomRightPattern,wall.TopLeftStyle);
@@ -127,10 +128,10 @@ namespace FSO.LotView
             }
             return view;
         }
-        private static void Textured(List<Surface> surfaces,TS1MaterialProvider.Material material,Vector3[] corners,Vector2[] uv,int[] indices,Color color,int zoom,int rotation)
+        private static void Textured(List<Surface> surfaces,TS1MaterialProvider.Material material,Vector3[] corners,Vector2[] uv,int[] indices,Color color,int zoom,int rotation,bool keepWhenWallsHidden=false)
         {
-            var surface=surfaces.FirstOrDefault(x=>ReferenceEquals(x.Material,material));
-            if(surface==null){surface=new Surface{Material=material};surfaces.Add(surface);}
+            var surface=surfaces.FirstOrDefault(x=>ReferenceEquals(x.Material,material) && x.KeepWhenWallsHidden==keepWhenWallsHidden);
+            if(surface==null){surface=new Surface{Material=material,KeepWhenWallsHidden=keepWhenWallsHidden};surfaces.Add(surface);}
             foreach(int i in indices)surface.Vertices.Add(new VertexPositionColorTexture(TS1SpriteLayer.ProjectWithDepth(corners[i],zoom,rotation),color,uv[i]));
         }
         private static void TriangleSurface(List<VertexPositionColor> vertices,Vector3[] corners,int[] indices,Color color,int zoom,int rotation)

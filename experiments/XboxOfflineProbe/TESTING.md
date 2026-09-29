@@ -1,4 +1,4 @@
-# Textured Lot Render Probe 0.10.1.0
+# Textured Lot Render Probe 0.10.2.0
 
 Update the existing Offline Probe. Add these two files from your own game to
 LocalState/GameData/GameData/ using Device Portal:
@@ -11,7 +11,8 @@ Expect **7/7 PASS**. Controls are unchanged: A rotate, X house, Y walls,
 LB zoom, RB floor, stick pan, View center, Menu tests, B exit.
 
 First check House 2, level 2, angle 1: both small blue-carpet gaps must be gone;
-the staircase opening must remain. Then check both houses and wall toggles. Look at
+the staircase opening must remain. Toggle Y: stair and balcony railings must
+remain visible with walls hidden. Check rotations/zooms, then both houses. Look at
 roads, paving, wallpaper and low fences/railings. Rerun, Home/return, exit/relaunch.
 Send proof.log and original Device Portal PNGs.
 

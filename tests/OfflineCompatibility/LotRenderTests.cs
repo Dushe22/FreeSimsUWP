@@ -20,7 +20,7 @@ namespace FreeSims.Tests
                 check("CAMERA DEPTH AND WALL HEIGHT",()=>{if(!LotProjectionTests.Run())throw new InvalidOperationException("Projection checks failed.");});
                 check("GPU DEPTH HOLES AND ALPHA",()=>DepthFixture(device,effect));
                 check("TS1 MATERIAL MAPPING AND FENCE ALPHA",()=>MaterialMapping(paths));
-                check("GPU MATERIAL CUTOUTS AND WALL TOGGLE",()=>MaterialFixture(device,effect));
+                check("GPU WALL TOGGLE PRESERVES RAILINGS",()=>MaterialFixture(device,effect));
                 check("DIAGONAL FULL FLOORS AND STAIR OPENING",()=>DiagonalFloors(paths));
                 foreach(int house in new[]{2,28}) check("HOUSE "+house+" FOUR ANGLES TWO LEVELS",()=> {
                     using(var lot=new TS1LotRenderData(paths,house)) {
@@ -30,6 +30,7 @@ namespace FreeSims.Tests
                                 var data=lot.Build(1,rotation,level);
                                 if(data.Rendered+data.Hidden+data.OutOfWorld+data.Contained+data.NoGraphic+data.Unsupported+data.AboveLevel!=lot.ObjectCount)
                                     throw new InvalidOperationException("Unaccounted saved objects.");
+                                if(level==2 && !data.WallMaterials.Any(s=>s.KeepWhenWallsHidden && s.Material.Name=="wall:251")) throw new InvalidOperationException("Saved banisters missing from persistent geometry.");
                                 if(data.Rendered!=data.Sprites.Select(s=>s.ObjectID).Distinct().Count()) throw new InvalidOperationException("Visible object count mismatch.");
                                 if(data.Rendered<20 || data.FloorTiles==0 || data.WallEdges==0 || data.FloorMaterials.Count<3 || data.WallMaterials.Count<3) throw new InvalidOperationException("Missing lot geometry/content.");
                                 if(floorCount>=0 && (data.FloorTiles!=floorCount || data.WallEdges!=wallCount)) throw new InvalidOperationException("Camera changed architecture.");
@@ -91,18 +92,21 @@ namespace FreeSims.Tests
             data.Ground.AddRange(quad.Select(v=>new VertexPositionColor(v.Position,v.Color)));
             var wall=new TS1LotRenderData.Surface {Material=new FSO.Content.TS1.TS1MaterialProvider.Material {Width=2,Height=2,Pixels=new[]{Color.Red,Color.Transparent,Color.Lime,Color.Transparent}}};
             wall.Vertices.AddRange(Quad(1,Color.White));data.WallMaterials.Add(wall);
-            using(var renderer=new TS1LotRenderer(device,data,effect)) using(var target=new RenderTarget2D(device,64,64,false,SurfaceFormat.Color,DepthFormat.Depth24)) {
-                try {
-                    foreach(bool show in new[]{true,false}) {
-                        device.SetRenderTarget(target);device.Clear(ClearOptions.Target|ClearOptions.DepthBuffer,Color.Black,1,0);
-                        renderer.Draw(Matrix.CreateOrthographicOffCenter(0,64,64,0,-128,128),show);
-                        device.SetRenderTargets(previous);device.Viewport=viewport;
-                        var pixels=new Color[4096];target.GetData(pixels);
-                        Expect(pixels[16*64+16],show?Color.Red:Color.Blue);Expect(pixels[16*64+48],Color.Blue);
-                        Expect(pixels[48*64+16],show?Color.Lime:Color.Blue);Expect(pixels[48*64+48],Color.Blue);
-                    }
-                }finally{device.SetRenderTargets(previous);device.Viewport=viewport;}
-            }
+            foreach(bool keep in new[]{false,true}) {
+                wall.KeepWhenWallsHidden=keep;
+                using(var renderer=new TS1LotRenderer(device,data,effect)) using(var target=new RenderTarget2D(device,64,64,false,SurfaceFormat.Color,DepthFormat.Depth24)) {
+                    try {
+                        foreach(bool show in new[]{true,false}) {
+                            device.SetRenderTarget(target);device.Clear(ClearOptions.Target|ClearOptions.DepthBuffer,Color.Black,1,0);
+                            renderer.Draw(Matrix.CreateOrthographicOffCenter(0,64,64,0,-128,128),show);
+                            device.SetRenderTargets(previous);device.Viewport=viewport;
+                            var pixels=new Color[4096];target.GetData(pixels);
+                            Expect(pixels[16*64+16],(show||keep)?Color.Red:Color.Blue);Expect(pixels[16*64+48],Color.Blue);
+                            Expect(pixels[48*64+16],(show||keep)?Color.Lime:Color.Blue);Expect(pixels[48*64+48],Color.Blue);
+                        }
+                    }finally{device.SetRenderTargets(previous);device.Viewport=viewport;}
+                }
+        }
         }
         private static void DepthFixture(GraphicsDevice device,byte[] bytes)
         {
