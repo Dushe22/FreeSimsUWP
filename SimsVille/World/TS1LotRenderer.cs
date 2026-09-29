@@ -14,8 +14,14 @@ namespace FSO.LotView
             public float Nearness; public short ID;
             public void Dispose() {if(Color!=null)Color.Dispose();if(Depth!=null)Depth.Dispose();}
         }
+        private sealed class MaterialItem
+        {
+            public Texture2D Texture; public VertexPositionColorTexture[] Vertices; public bool Wall;
+        }
+        private readonly List<MaterialItem> materialItems=new List<MaterialItem>();
         private readonly GraphicsDevice device;
         private readonly BasicEffect surfaces;
+        private readonly AlphaTestEffect materials;
         private readonly Effect sprites;
         private readonly List<Item> items=new List<Item>();
         private readonly VertexPositionColor[] ground,walls;
@@ -25,7 +31,12 @@ namespace FSO.LotView
             this.device=device;Data=data;
             try {
                 surfaces=new BasicEffect(device) {VertexColorEnabled=true};sprites=new Effect(device,effect);
+                materials=new AlphaTestEffect(device) {VertexColorEnabled=true,ReferenceAlpha=128,AlphaFunction=CompareFunction.GreaterEqual};
                 ground=data.Ground.ToArray();walls=data.Walls.ToArray();
+                foreach(var source in data.FloorMaterials.Concat(data.WallMaterials)) {
+                    var item=new MaterialItem {Wall=data.WallMaterials.Contains(source),Vertices=source.Vertices.ToArray()};materialItems.Add(item);
+                    item.Texture=new Texture2D(device,source.Material.Width,source.Material.Height);item.Texture.SetData(source.Material.Pixels);
+                }
                 foreach(var source in data.Sprites) {
                     var layer=source.Layer;var item=new Item {Nearness=source.BackNearness,ID=source.ObjectID};items.Add(item);
                     item.Color=new Texture2D(device,layer.Width,layer.Height);item.Color.SetData(layer.Pixels);
@@ -43,7 +54,14 @@ namespace FSO.LotView
         {
             device.RasterizerState=RasterizerState.CullNone;device.DepthStencilState=DepthStencilState.Default;device.BlendState=BlendState.Opaque;
             surfaces.World=Matrix.Identity;surfaces.View=Matrix.Identity;surfaces.Projection=projection;
+            surfaces.TextureEnabled=false;
             foreach(var pass in surfaces.CurrentTechnique.Passes) {pass.Apply();DrawSurface(ground);if(showWalls)DrawSurface(walls);}
+            materials.World=Matrix.Identity;materials.View=Matrix.Identity;materials.Projection=projection;device.SamplerStates[0]=SamplerState.PointClamp;
+            foreach(var item in materialItems) {
+                if(item.Wall&&!showWalls)continue;
+                materials.Texture=item.Texture;
+                foreach(var pass in materials.CurrentTechnique.Passes) {pass.Apply();for(int offset=0;offset<item.Vertices.Length;offset+=18000)device.DrawUserPrimitives(PrimitiveType.TriangleList,item.Vertices,offset,Math.Min(18000,item.Vertices.Length-offset)/3);}
+            }
             sprites.Parameters["Projection"].SetValue(projection);
             // Same depth calibration as 2DWorldBatch.fx: a two-tile diagonal span
             // multiplied by (1 - SPR2 depth/255) / 0.4. Projection maps 256 units to [0,1].
@@ -74,6 +92,6 @@ namespace FSO.LotView
             return Matrix.CreateScale(scale,scale,1)*Matrix.CreateTranslation(width/2f-center.X*scale+pan.X,height/2f-center.Y*scale+pan.Y,0)*
                 Matrix.CreateOrthographicOffCenter(0,width,height,0,-128,128);
         }
-        public void Dispose() {foreach(var item in items)item.Dispose();items.Clear();if(surfaces!=null)surfaces.Dispose();if(sprites!=null)sprites.Dispose();}
+        public void Dispose() {foreach(var item in materialItems)if(item.Texture!=null)item.Texture.Dispose();materialItems.Clear();foreach(var item in items)item.Dispose();items.Clear();if(surfaces!=null)surfaces.Dispose();if(materials!=null)materials.Dispose();if(sprites!=null)sprites.Dispose();}
     }
 }

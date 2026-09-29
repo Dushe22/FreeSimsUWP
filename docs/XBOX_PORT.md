@@ -1708,3 +1708,11 @@ Follow-up: House 2 draws 17 extra objects at medium zoom (280 vs 263 on floor 1,
 324 vs 307 on floor 2); inspect empty-frame/view selection before claiming complete
 cross-zoom visibility. Next rendering work: TS1 floor/wall materials and openings.
 Evidence preserved in artifacts/xbox-lot-render-575680436978/proof.log.
+
+## 2026-09-28 - Textured lot 0.10
+Added TS1 floor/wall catalogs, saved material maps, diagonal floor halves and
+alpha-tested fence styles. Six local checks pass, including GPU cutouts and
+both lots at four angles/two levels; exported renders visually checked.
+Xbox verification pending. Requires GameData/floors.iff and GameData/walls.iff.
+Terrain/water remain diagnostic; roofs, openings and simulation remain future work.
+User confirms no visible objects disappear when zooming in the 0.9 build.

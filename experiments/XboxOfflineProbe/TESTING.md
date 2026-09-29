@@ -1,24 +1,20 @@
-# Static Lot Render Probe 0.9.0.0
+# Textured Lot Render Probe 0.10.0.0
 
-Update the existing Offline Probe. No new game files. Expect **4/4 PASS** after
-startup checks. The image is rendered from saved lot data, not a thumbnail.
+Update the existing Offline Probe. Add these two files from your own game to
+LocalState/GameData/GameData/ using Device Portal:
+- floors.iff
+- walls.iff
+Local copies are staged in artifacts/lot-material-upload. Keep the previously
+uploaded files, including the expansion archives. No game files are in the AppX.
 
-- A rotates; X switches House 2/28; Y toggles walls.
-- LB cycles zoom; RB selects floor level 1/2.
-- Left stick pans; View recenters; Menu reruns tests; B exits.
+Expect **6/6 PASS**. Controls are unchanged: A rotate, X house, Y walls,
+LB zoom, RB floor, stick pan, View center, Menu tests, B exit.
 
-Check both lots, all four angles, both levels and zooms. With walls enabled,
-objects behind solid walls should be hidden. With walls disabled, inspect the
-interiors. Pan at higher zoom, then recenter. Rerun twice, try Home/return, and
-B exit/relaunch. Send proof.log plus photos with walls on and off.
+Check House 2 and 28, all angles and zooms, both levels, walls on/off. Look at
+roads, paving, wallpaper and low fences/railings. Rerun, Home/return, exit/relaunch.
+Send proof.log and original Device Portal PNGs.
 
-Expected limitations: flat checkerboard terrain; diagnostic floor/wall colors
-(including an artificial road color); flat blue pool/water surfaces; solid wall
-geometry without window/door openings; no roofs, lighting or simulation. Objects
-in container slots are held and counted. Empty/hidden/out-of-world objects are
-not drawn; unsupported drawable records are reported in the log/UI. Current
-fixtures have zero unsupported records; House 28 has 11 contained objects held.
-Intersections between translucent surfaces still use sorted blending.
-
-Camera/test counters reset on a new launch. The older simulation checkpoint is
-left untouched. The package contains no game files or private key.
+Still static: flat checker terrain, flat blue water, no roofs/lighting/simulation,
+no window/door cutout masks. Contained objects remain held. Materials are sampled
+from authored near-view sprites onto geometry; exact original filtering/shading
+is not yet reproduced. Camera/test counters reset on a fresh launch.

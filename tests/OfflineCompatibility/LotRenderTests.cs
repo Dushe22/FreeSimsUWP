@@ -11,7 +11,7 @@ namespace FreeSims.Tests
 {
     public static class LotRenderTests
     {
-        public const int Count=4;
+        public const int Count=6;
         public static List<string> Run(GraphicsDevice device,GamePaths paths,byte[] effect,Action<string> log)
         {
             var result=new List<string>();bool oldWorld=VM.UseWorld;VM.UseWorld=false;
@@ -19,6 +19,8 @@ namespace FreeSims.Tests
             try {
                 check("CAMERA DEPTH AND WALL HEIGHT",()=>{if(!LotProjectionTests.Run())throw new InvalidOperationException("Projection checks failed.");});
                 check("GPU DEPTH HOLES AND ALPHA",()=>DepthFixture(device,effect));
+                check("TS1 MATERIAL MAPPING AND FENCE ALPHA",()=>MaterialMapping(paths));
+                check("GPU MATERIAL CUTOUTS AND WALL TOGGLE",()=>MaterialFixture(device,effect));
                 foreach(int house in new[]{2,28}) check("HOUSE "+house+" FOUR ANGLES TWO LEVELS",()=> {
                     using(var lot=new TS1LotRenderData(paths,house)) {
                         for(int level=1;level<=2;level++) {
@@ -28,7 +30,7 @@ namespace FreeSims.Tests
                                 if(data.Rendered+data.Hidden+data.OutOfWorld+data.Contained+data.NoGraphic+data.Unsupported+data.AboveLevel!=lot.ObjectCount)
                                     throw new InvalidOperationException("Unaccounted saved objects.");
                                 if(data.Rendered!=data.Sprites.Select(s=>s.ObjectID).Distinct().Count()) throw new InvalidOperationException("Visible object count mismatch.");
-                                if(data.Rendered<20 || data.FloorTiles==0 || data.WallEdges==0) throw new InvalidOperationException("Missing lot geometry/content.");
+                                if(data.Rendered<20 || data.FloorTiles==0 || data.WallEdges==0 || data.FloorMaterials.Count<3 || data.WallMaterials.Count<3) throw new InvalidOperationException("Missing lot geometry/content.");
                                 if(floorCount>=0 && (data.FloorTiles!=floorCount || data.WallEdges!=wallCount)) throw new InvalidOperationException("Camera changed architecture.");
                                 floorCount=data.FloorTiles;wallCount=data.WallEdges;
                                 var previous=device.GetRenderTargets();var viewport=device.Viewport;
@@ -50,6 +52,39 @@ namespace FreeSims.Tests
                 });
             }finally{VM.UseWorld=oldWorld;}
             return result;
+        }
+        private static void MaterialMapping(GamePaths paths)
+        {
+            var iff=new FSO.Files.Formats.IFF.IffFile(new FSO.Common.Platform.NeighborhoodStore(paths,0).GetReadPath("Houses/House28.iff"));
+            var material=new FSO.Content.TS1.TS1MaterialProvider(paths,iff);
+            if(!ReferenceEquals(material.Floor(31,false),material.Floor(287,false)))throw new InvalidOperationException("Extended floor ID did not resolve its lot map.");
+            if(ReferenceEquals(material.Floor(1,true),material.Floor(1,false)))throw new InvalidOperationException("Global floor flag ignored.");
+            if(material.Floor(31,false).Pixels.Select(p=>p.PackedValue).Distinct().Count()<8)throw new InvalidOperationException("Floor lacks authored texture.");
+            var fence=material.Wall(250,13);
+            if(!fence.Pixels.Any(p=>p.A==0)||!fence.Pixels.Any(p=>p.A==255))throw new InvalidOperationException("Fence cutout was lost.");
+            if(fence.Pixels.Take(fence.Width*100).Any(p=>p.A!=0))throw new InvalidOperationException("Low fence mask became a full-height wall.");
+            if(material.Wall(15).Name!="street_brick2.wll")throw new InvalidOperationException("Wallpaper map ignored.");
+        }
+        private static void MaterialFixture(GraphicsDevice device,byte[] effect)
+        {
+            var previous=device.GetRenderTargets();var viewport=device.Viewport;
+            var data=new TS1LotRenderData.View();
+            var quad=Quad(0,Color.Blue);
+            data.Ground.AddRange(quad.Select(v=>new VertexPositionColor(v.Position,v.Color)));
+            var wall=new TS1LotRenderData.Surface {Material=new FSO.Content.TS1.TS1MaterialProvider.Material {Width=2,Height=2,Pixels=new[]{Color.Red,Color.Transparent,Color.Lime,Color.Transparent}}};
+            wall.Vertices.AddRange(Quad(1,Color.White));data.WallMaterials.Add(wall);
+            using(var renderer=new TS1LotRenderer(device,data,effect)) using(var target=new RenderTarget2D(device,64,64,false,SurfaceFormat.Color,DepthFormat.Depth24)) {
+                try {
+                    foreach(bool show in new[]{true,false}) {
+                        device.SetRenderTarget(target);device.Clear(ClearOptions.Target|ClearOptions.DepthBuffer,Color.Black,1,0);
+                        renderer.Draw(Matrix.CreateOrthographicOffCenter(0,64,64,0,-128,128),show);
+                        device.SetRenderTargets(previous);device.Viewport=viewport;
+                        var pixels=new Color[4096];target.GetData(pixels);
+                        Expect(pixels[16*64+16],show?Color.Red:Color.Blue);Expect(pixels[16*64+48],Color.Blue);
+                        Expect(pixels[48*64+16],show?Color.Lime:Color.Blue);Expect(pixels[48*64+48],Color.Blue);
+                    }
+                }finally{device.SetRenderTargets(previous);device.Viewport=viewport;}
+            }
         }
         private static void DepthFixture(GraphicsDevice device,byte[] bytes)
         {

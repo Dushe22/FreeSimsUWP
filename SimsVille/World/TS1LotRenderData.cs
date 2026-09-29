@@ -5,6 +5,7 @@ using System.Linq;
 using FSO.Common.Platform;
 using FSO.Content.TS1;
 using FSO.Files.Formats.IFF;
+using FSO.Files.Formats.IFF.Chunks;
 using FSO.LotView.Model;
 using FSO.SimAntics;
 using FSO.SimAntics.Model;
@@ -13,11 +14,12 @@ using Microsoft.Xna.Framework.Graphics;
 
 namespace FSO.LotView
 {
-    // Static architecture blockout: real saved floor/wall layout with diagnostic
-    // colors. TS1 material textures, roof shapes and wall openings are not mapped.
+    // Static saved architecture with TS1 material textures; no roofs or wall openings.
     public sealed class TS1LotRenderData : IDisposable
     {
         private readonly TS1LotObjectSession session;
+        private readonly TS1MaterialProvider materials;
+        private readonly byte[] floorFlags;
         public int Size { get { return session.VM.Context.Architecture.Width; } }
         public int ObjectCount { get { return session.SavedObjectCount; } }
         public TS1LotRenderData(GamePaths paths, int house)
@@ -25,7 +27,12 @@ namespace FSO.LotView
             if (house != 2 && house != 28) throw new ArgumentOutOfRangeException("house");
             if (VM.UseWorld) throw new InvalidOperationException("Static lot renderer requires a headless VM.");
             var store = new NeighborhoodStore(paths, 0);
-            session = TS1LotObjectSession.Load(new IffFile(store.GetReadPath("Houses/House"+house.ToString("00")+".iff")),new TS1ObjectProvider(paths));
+            var iff = new IffFile(store.GetReadPath("Houses/House"+house.ToString("00")+".iff"));
+            materials = new TS1MaterialProvider(paths, iff);
+            var flags = iff.Get<ARRY>(8);
+            if (flags == null || flags.Width != 64 || flags.Height != 64 || flags.ByteSize() != 1) throw new InvalidDataException("Missing lot floor flags.");
+            floorFlags = flags.TransposeData;
+            session = TS1LotObjectSession.Load(iff,new TS1ObjectProvider(paths));
         }
         public sealed class Sprite
         {
@@ -34,10 +41,17 @@ namespace FSO.LotView
             public float BackNearness;
             public short ObjectID;
         }
+        public sealed class Surface
+        {
+            public TS1MaterialProvider.Material Material;
+            public readonly List<VertexPositionColorTexture> Vertices = new List<VertexPositionColorTexture>();
+        }
         public sealed class View
         {
             public readonly List<VertexPositionColor> Ground = new List<VertexPositionColor>();
             public readonly List<VertexPositionColor> Walls = new List<VertexPositionColor>();
+            public readonly List<Surface> FloorMaterials = new List<Surface>();
+            public readonly List<Surface> WallMaterials = new List<Surface>();
             public readonly List<Sprite> Sprites = new List<Sprite>();
             public int Rendered, Hidden, OutOfWorld, Contained, NoGraphic, Unsupported, AboveLevel, FloorTiles, WallEdges;
             public readonly List<string> Issues = new List<string>();
@@ -51,28 +65,39 @@ namespace FSO.LotView
                 byte green=(byte)(94+((x+y)%2)*6);
                 Quad(view.Ground,new Vector3(x,y,0),new Vector3(x+1,y,0),new Vector3(x+1,y+1,0),new Vector3(x,y+1,0),new Color(56,green,44),zoom,rotation);
             }
+            var camera = new[] {new Vector2(1,1),new Vector2(1,-1),new Vector2(-1,-1),new Vector2(-1,1)}[rotation];
             for(int story=0;story<level;story++) {
                 var edges=new HashSet<string>(); float z=story*2.95f;
+                Func<int,int,WallTile> wallAt=(xx,yy)=>xx<0||yy<0||xx>=Size||yy>=Size?default(WallTile):arch.Walls[story][yy*Size+xx];
                 for(int y=0;y<Size;y++) for(int x=0;x<Size;x++) {
-                    var floor=arch.Floors[story][y*Size+x];
-                    if(floor.Pattern!=0) {
-                        var color=floor.Pattern>=65534?new Color(45,125,175):new Color(145+(floor.Pattern*17)%65,130+(floor.Pattern*7)%55,100+(floor.Pattern*11)%60);
-                        Quad(view.Ground,new Vector3(x,y,z+0.003f),new Vector3(x+1,y,z+0.003f),new Vector3(x+1,y+1,z+0.003f),new Vector3(x,y+1,z+0.003f),color,zoom,rotation);
+                    var wall=wallAt(x,y);
+                    bool global=(floorFlags[y*64+x]&0x20)!=0;
+                    var corners=new[]{new Vector3(x,y,z+.003f),new Vector3(x+1,y,z+.003f),new Vector3(x+1,y+1,z+.003f),new Vector3(x,y+1,z+.003f)};
+                    var uv=new[]{Vector2.Zero,Vector2.UnitX,Vector2.One,Vector2.UnitY};
+                    Action<ushort,int[]> floor=(pattern,indices)=>{
+                        if(pattern==0)return;
+                        if(pattern>=65534){TriangleSurface(view.Ground,corners,indices,new Color(45,125,175),zoom,rotation);}
+                        else Textured(view.FloorMaterials,materials.Floor(pattern,global&&(wall.Segments&WallSegments.AnyDiag)==0&&pattern<=30),corners,uv,indices,Color.White,zoom,rotation);
                         view.FloorTiles++;
-                    }
-                    var wall=arch.Walls[story][y*Size+x];
-                    Action<WallSegments,int,int,int,int> edge=(flag,ax,ay,bx,by)=> {
+                    };
+                    if((wall.Segments&WallSegments.HorizontalDiag)!=0){floor(wall.TopLeftPattern,new[]{1,2,3});floor(wall.TopLeftStyle,new[]{0,1,3});}
+                    else if((wall.Segments&WallSegments.VerticalDiag)!=0){floor(wall.TopLeftPattern,new[]{0,1,2});floor(wall.TopLeftStyle,new[]{0,2,3});}
+                    else floor(arch.Floors[story][y*Size+x].Pattern,new[]{0,1,2,0,2,3});
+                    Action<WallSegments,int,int,int,int,ushort,ushort> edge=(flag,ax,ay,bx,by,pattern,style)=> {
                         if((wall.Segments&flag)==0) return;
                         int a=ay*(Size+1)+ax,b=by*(Size+1)+bx;
-                        var key=Math.Min(a,b)+":"+Math.Max(a,b);
-                        if(!edges.Add(key)) return;
-                        var color=ax==bx?new Color(189,180,161):new Color(220,209,189);
-                        Quad(view.Walls,new Vector3(ax,ay,z),new Vector3(bx,by,z),new Vector3(bx,by,z+2.95f),new Vector3(ax,ay,z+2.95f),color,zoom,rotation);
+                        if(!edges.Add(Math.Min(a,b)+":"+Math.Max(a,b))) return;
+                        var color=ax==bx?new Color(225,225,225):Color.White;
+                        var points=new[]{new Vector3(ax,ay,z),new Vector3(bx,by,z),new Vector3(bx,by,z+2.95f),new Vector3(ax,ay,z+2.95f)};
+                        Textured(view.WallMaterials,materials.Wall(pattern,style),points,new[]{Vector2.UnitY,Vector2.One,Vector2.UnitX,Vector2.Zero},new[]{0,1,2,0,2,3},color,zoom,rotation);
                         view.WallEdges++;
                     };
-                    edge(WallSegments.TopLeft,x,y,x,y+1);edge(WallSegments.TopRight,x,y,x+1,y);
-                    edge(WallSegments.BottomRight,x+1,y,x+1,y+1);edge(WallSegments.BottomLeft,x,y+1,x+1,y+1);
-                    edge(WallSegments.HorizontalDiag,x,y+1,x+1,y);edge(WallSegments.VerticalDiag,x,y,x+1,y+1);
+                    edge(WallSegments.TopLeft,x,y,x,y+1,camera.X>0?wall.TopLeftPattern:wallAt(x-1,y).BottomRightPattern,wall.TopLeftStyle);
+                    edge(WallSegments.TopRight,x,y,x+1,y,camera.Y>0?wall.TopRightPattern:wallAt(x,y-1).BottomLeftPattern,wall.TopRightStyle);
+                    edge(WallSegments.BottomRight,x+1,y,x+1,y+1,camera.X<0?wall.BottomRightPattern:wallAt(x+1,y).TopLeftPattern,wallAt(x+1,y).TopLeftStyle);
+                    edge(WallSegments.BottomLeft,x,y+1,x+1,y+1,camera.Y<0?wall.BottomLeftPattern:wallAt(x,y+1).TopRightPattern,wallAt(x,y+1).TopRightStyle);
+                    edge(WallSegments.HorizontalDiag,x,y+1,x+1,y,camera.X+camera.Y>=0?wall.BottomRightPattern:wall.BottomLeftPattern,wall.TopRightStyle);
+                    edge(WallSegments.VerticalDiag,x,y,x+1,y+1,camera.X-camera.Y>=0?wall.BottomRightPattern:wall.BottomLeftPattern,wall.TopRightStyle);
                 }
             }
             var backOffsets=new[]{Vector3.Zero,new Vector3(0,1,0),new Vector3(1,1,0),new Vector3(1,0,0)};
@@ -98,6 +123,16 @@ namespace FSO.LotView
                 }
             }
             return view;
+        }
+        private static void Textured(List<Surface> surfaces,TS1MaterialProvider.Material material,Vector3[] corners,Vector2[] uv,int[] indices,Color color,int zoom,int rotation)
+        {
+            var surface=surfaces.FirstOrDefault(x=>ReferenceEquals(x.Material,material));
+            if(surface==null){surface=new Surface{Material=material};surfaces.Add(surface);}
+            foreach(int i in indices)surface.Vertices.Add(new VertexPositionColorTexture(TS1SpriteLayer.ProjectWithDepth(corners[i],zoom,rotation),color,uv[i]));
+        }
+        private static void TriangleSurface(List<VertexPositionColor> vertices,Vector3[] corners,int[] indices,Color color,int zoom,int rotation)
+        {
+            foreach(int i in indices)vertices.Add(new VertexPositionColor(TS1SpriteLayer.ProjectWithDepth(corners[i],zoom,rotation),color));
         }
         private static void Quad(List<VertexPositionColor> target,Vector3 a,Vector3 b,Vector3 c,Vector3 d,Color color,int zoom,int rotation)
         {
