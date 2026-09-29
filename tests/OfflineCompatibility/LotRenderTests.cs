@@ -11,7 +11,7 @@ namespace FreeSims.Tests
 {
     public static class LotRenderTests
     {
-        public const int Count=6;
+        public const int Count=7;
         public static List<string> Run(GraphicsDevice device,GamePaths paths,byte[] effect,Action<string> log)
         {
             var result=new List<string>();bool oldWorld=VM.UseWorld;VM.UseWorld=false;
@@ -21,6 +21,7 @@ namespace FreeSims.Tests
                 check("GPU DEPTH HOLES AND ALPHA",()=>DepthFixture(device,effect));
                 check("TS1 MATERIAL MAPPING AND FENCE ALPHA",()=>MaterialMapping(paths));
                 check("GPU MATERIAL CUTOUTS AND WALL TOGGLE",()=>MaterialFixture(device,effect));
+                check("DIAGONAL FULL FLOORS AND STAIR OPENING",()=>DiagonalFloors(paths));
                 foreach(int house in new[]{2,28}) check("HOUSE "+house+" FOUR ANGLES TWO LEVELS",()=> {
                     using(var lot=new TS1LotRenderData(paths,house)) {
                         for(int level=1;level<=2;level++) {
@@ -52,6 +53,23 @@ namespace FreeSims.Tests
                 });
             }finally{VM.UseWorld=oldWorld;}
             return result;
+        }
+        private static void DiagonalFloors(GamePaths paths)
+        {
+            using(var lot=new TS1LotRenderData(paths,2))
+            for(int zoom=1;zoom<=3;zoom++) for(int rotation=0;rotation<4;rotation++) {
+                var data=lot.Build(zoom,rotation,2);
+                // Actual saved carpet tiles reported in Xbox screenshots 5/6,
+                // plus a genuine stairwell tile that must remain open.
+                foreach(var tile in new[]{new Point(22,31),new Point(23,32),new Point(24,26)}) {
+                    var corners=new[]{new Vector3(tile.X,tile.Y,2.953f),new Vector3(tile.X+1,tile.Y,2.953f),new Vector3(tile.X+1,tile.Y+1,2.953f),new Vector3(tile.X,tile.Y+1,2.953f)}
+                        .Select(p=>TS1SpriteLayer.ProjectWithDepth(p,zoom,rotation)).ToArray();
+                    int triangles=0;
+                    foreach(var surface in data.FloorMaterials) for(int i=0;i<surface.Vertices.Count;i+=3)
+                        if(Enumerable.Range(0,3).All(j=>corners.Any(p=>Vector3.DistanceSquared(p,surface.Vertices[i+j].Position)<0.000001f))) triangles++;
+                    if(triangles!=(tile.X==24?0:2)) throw new InvalidOperationException("Incorrect saved floor coverage at "+tile+" zoom="+zoom+" rotation="+rotation);
+                }
+            }
         }
         private static void MaterialMapping(GamePaths paths)
         {

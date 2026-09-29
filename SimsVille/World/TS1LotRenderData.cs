@@ -72,15 +72,18 @@ namespace FSO.LotView
                 for(int y=0;y<Size;y++) for(int x=0;x<Size;x++) {
                     var wall=wallAt(x,y);
                     bool global=(floorFlags[y*64+x]&0x20)!=0;
+                    bool splitFloor=(wall.Segments&WallSegments.AnyDiag)!=0 && (wall.TopLeftPattern!=0 || wall.TopLeftStyle!=0);
                     var corners=new[]{new Vector3(x,y,z+.003f),new Vector3(x+1,y,z+.003f),new Vector3(x+1,y+1,z+.003f),new Vector3(x,y+1,z+.003f)};
                     var uv=new[]{Vector2.Zero,Vector2.UnitX,Vector2.One,Vector2.UnitY};
                     Action<ushort,int[]> floor=(pattern,indices)=>{
                         if(pattern==0)return;
                         if(pattern>=65534){TriangleSurface(view.Ground,corners,indices,new Color(45,125,175),zoom,rotation);}
-                        else Textured(view.FloorMaterials,materials.Floor(pattern,global&&(wall.Segments&WallSegments.AnyDiag)==0&&pattern<=30),corners,uv,indices,Color.White,zoom,rotation);
+                        else Textured(view.FloorMaterials,materials.Floor(pattern,global&&!splitFloor&&pattern<=30),corners,uv,indices,Color.White,zoom,rotation);
                         view.FloorTiles++;
                     };
-                    if((wall.Segments&WallSegments.HorizontalDiag)!=0){floor(wall.TopLeftPattern,new[]{1,2,3});floor(wall.TopLeftStyle,new[]{0,1,3});}
+                    // A diagonal wall can cross an ordinary full floor. Empty split fields do not erase it.
+                    if((wall.Segments&WallSegments.AnyDiag)!=0 && !splitFloor) floor(arch.Floors[story][y*Size+x].Pattern,new[]{0,1,2,0,2,3});
+                    else if((wall.Segments&WallSegments.HorizontalDiag)!=0){floor(wall.TopLeftPattern,new[]{1,2,3});floor(wall.TopLeftStyle,new[]{0,1,3});}
                     else if((wall.Segments&WallSegments.VerticalDiag)!=0){floor(wall.TopLeftPattern,new[]{0,1,2});floor(wall.TopLeftStyle,new[]{0,2,3});}
                     else floor(arch.Floors[story][y*Size+x].Pattern,new[]{0,1,2,0,2,3});
                     Action<WallSegments,int,int,int,int,ushort,ushort> edge=(flag,ax,ay,bx,by,pattern,style)=> {
