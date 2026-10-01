@@ -1,23 +1,21 @@
 # Resume after quota reset
 
-Branch: xbox-uwp-port. Latest milestone: Xbox 0.10.2 railing visibility fix.
-User requested stopping here to conserve weekly quota; resume when requested.
+Branch: xbox-uwp-port. Latest build: Xbox 0.10.3 stair handrail fix.
 
-Completed: real lot floor/wall textures, diagonal full-floor repair (0.10.1
-Xbox screenshots show 7/7 and closed gaps), fences/banisters now remain visible
-with walls hidden. Existing seven tests extended with GPU persistent-railing
-coverage and saved banister classification for both houses. Local suite passes.
-Local House 2 level 2 angle 1 render reviewed: railings visible, carpet intact,
-stair opening retained. No separate stair-sprite clipping fault established;
-Xbox confirmation of the user's reported cut railing remains pending.
+The 0.10.2 Xbox screenshots confirmed persistent stairwell banisters, but exposed
+missing upper pieces of the separate inclined stair handrail. Saved OBJM loading
+had not reconstructed its dynamic sprite flags. The static renderer now runs the
+two known upper-stub visual callbacks in its isolated session, restoring only the
+exposed-side layers. No Init/Main or wider simulation is enabled.
 
-First: install latest artifacts/xbox-railings-*.zip, expect 7/7. Check House 2
-level 2 angle 1 zoom 3 with Y on/off, other angles, Home/return and B/relaunch.
-Existing game files suffice. Obtain original PNGs and proof.log.
+Local renderer suite: 8/8, both houses, all rotations and levels; stair layers
+checked at all three zooms. Existing floor and persistent-railing checks pass.
+Xbox 0.10.3 validation pending: House 2 angle 0 zoom 3, levels 1/2, then rotations,
+wall toggle, Home/return and B/relaunch. Existing game files suffice.
 
-Next development: door/window opening masks and thin inter-floor seams, then
-roofs. Terrain/water are still diagnostic, contained objects remain held, and
-this host is static (no simulation). Do not claim full gameplay readiness.
+Logs: artifacts/stair-fix-test.log and artifacts/stair-fix-native.log.
+Package audit: artifacts/offline-stair-fix-final/AUDIT.txt.
+Handoff: artifacts/xbox-stair-fix-*.zip. No game data or private keys included.
 
-Validation: artifacts/railing-test.log; package build: artifacts/railing-native.log.
-Audit: artifacts/offline-railings-final/AUDIT.txt. No game files in public ZIP.
+Next: door/window opening masks, thin inter-floor seams, then roofs.
+Terrain/water remain diagnostic; contained objects remain held; host is static.

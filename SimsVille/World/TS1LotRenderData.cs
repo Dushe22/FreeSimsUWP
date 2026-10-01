@@ -33,6 +33,16 @@ namespace FSO.LotView
             if (flags == null || flags.Width != 64 || flags.Height != 64 || flags.ByteSize() != 1) throw new InvalidDataException("Missing lot floor flags.");
             floorFlags = flags.TransposeData;
             session = TS1LotObjectSession.Load(iff,new TS1ObjectProvider(paths));
+            try {
+                // OBJM loading holds behaviors and does not reconstruct dynamic sprite
+                // flags. Refresh only the known TS1 stair upper-stub visual callbacks;
+                // never run Init/Main or placement callbacks on saved objects.
+                foreach(var stub in session.VM.Entities.Where(e=>e.Object.OBJ.GUID==0xB7F590C4u || e.Object.OBJ.GUID==0x9431BD2Au).ToArray()) {
+                    int expected=stub.Object.OBJ.GUID==0xB7F590C4u?4123:4122;
+                    if(stub.EntryPoints[6].ActionFunction!=expected || !stub.ExecuteEntryPoint(6,session.VM.Context,true))
+                        throw new InvalidDataException("Unsupported stair visual callback: "+stub.ObjectID);
+                }
+            } catch {session.Dispose();throw;}
         }
         public sealed class Sprite
         {

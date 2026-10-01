@@ -1,4 +1,4 @@
-# Textured Lot Render Probe 0.10.2.0
+# Textured Lot Render Probe 0.10.3.0
 
 Update the existing Offline Probe. Add these two files from your own game to
 LocalState/GameData/GameData/ using Device Portal:
@@ -7,7 +7,7 @@ LocalState/GameData/GameData/ using Device Portal:
 Local copies are staged in artifacts/lot-material-upload. Keep the previously
 uploaded files, including the expansion archives. No game files are in the AppX.
 
-Expect **7/7 PASS**. Controls are unchanged: A rotate, X house, Y walls,
+Expect **8/8 PASS**. Controls are unchanged: A rotate, X house, Y walls,
 LB zoom, RB floor, stick pan, View center, Menu tests, B exit.
 
 First check House 2, level 2, angle 1: both small blue-carpet gaps must be gone;
@@ -20,3 +20,7 @@ Still static: flat checker terrain, flat blue water, no roofs/lighting/simulatio
 no window/door cutout masks. Contained objects remain held. Materials are sampled
 from authored near-view sprites onto geometry; exact original filtering/shading
 is not yet reproduced. Camera/test counters reset on a fresh launch.
+
+Handrail regression: House 2, angle 0, zoom 3, levels 1 and 2. The inclined
+stair handrail must continue through the upper steps. Check all four angles.
+STAIR UPPER HANDRAIL SPRITES verifies the original dynamic layers at every zoom.

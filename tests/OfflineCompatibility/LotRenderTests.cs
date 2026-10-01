@@ -11,7 +11,7 @@ namespace FreeSims.Tests
 {
     public static class LotRenderTests
     {
-        public const int Count=7;
+        public const int Count=8;
         public static List<string> Run(GraphicsDevice device,GamePaths paths,byte[] effect,Action<string> log)
         {
             var result=new List<string>();bool oldWorld=VM.UseWorld;VM.UseWorld=false;
@@ -22,6 +22,7 @@ namespace FreeSims.Tests
                 check("TS1 MATERIAL MAPPING AND FENCE ALPHA",()=>MaterialMapping(paths));
                 check("GPU WALL TOGGLE PRESERVES RAILINGS",()=>MaterialFixture(device,effect));
                 check("DIAGONAL FULL FLOORS AND STAIR OPENING",()=>DiagonalFloors(paths));
+                check("STAIR UPPER HANDRAIL SPRITES",()=>StairHandrails(paths));
                 foreach(int house in new[]{2,28}) check("HOUSE "+house+" FOUR ANGLES TWO LEVELS",()=> {
                     using(var lot=new TS1LotRenderData(paths,house)) {
                         for(int level=1;level<=2;level++) {
@@ -54,6 +55,23 @@ namespace FreeSims.Tests
                 });
             }finally{VM.UseWorld=oldWorld;}
             return result;
+        }
+        private static void StairHandrails(GamePaths paths)
+        {
+            using(var lot=new TS1LotRenderData(paths,2)) {
+                for(int zoom=1;zoom<=3;zoom++) for(int rotation=0;rotation<4;rotation++) {
+                    var lower=lot.Build(zoom,rotation,1);
+                    var upper=lot.Build(zoom,rotation,2);
+                    foreach(short id in new short[]{101,107}) {
+                        // House 2: two static layers plus the exposed-side dynamic
+                        // handrail. The wall-side dynamic layer stays hidden.
+                        if(lower.Sprites.Count(s=>s.ObjectID==id)!=3 || upper.Sprites.Count(s=>s.ObjectID==id)!=3)
+                            throw new InvalidOperationException("Missing/extra stair handrail: "+id+" zoom="+zoom+" rotation="+rotation);
+                    }
+                    var repeat=lot.Build(zoom,rotation,2);
+                    if(repeat.Sprites.Count!=upper.Sprites.Count) throw new InvalidOperationException("Stair view rebuild changed sprite state.");
+                }
+            }
         }
         private static void DiagonalFloors(GamePaths paths)
         {
