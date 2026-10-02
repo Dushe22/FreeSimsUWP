@@ -29,6 +29,9 @@ namespace FSO.LotView
         private readonly Dictionary<short, Vector2> openingNormals = new Dictionary<short, Vector2>();
         private readonly Dictionary<short, List<string>> attachmentEdges = new Dictionary<short, List<string>>();
         private readonly Dictionary<string, Opening> openings = new Dictionary<string, Opening>();
+        // Per-lot CPU contours only; no process-wide roots retaining disposed scenes.
+        private readonly Dictionary<TS1MaterialProvider.Material, WallProfile> wallProfiles = new Dictionary<TS1MaterialProvider.Material, WallProfile>();
+        public const float StoryHeight = 2.95f, WallJointOverlap = .015f, WallThickness = .09f, LowWallHeight = .22f;
         public int Size { get { return session.VM.Context.Architecture.Width; } }
         public int ObjectCount { get { return session.SavedObjectCount; } }
         public TS1LotRenderData(GamePaths paths, int house)
@@ -193,7 +196,7 @@ namespace FSO.LotView
             for (int story = 0; story < 2; story++) {
                 int width=Size*2; var footprint=new bool[width*width];
                 for(int y=0;y<width;y++)for(int x=0;x<width;x++)footprint[y*width+x]=Roofable(x,y,story);
-                var mesh = TS1RoofMesh.Build(footprint,width,width,(story + 1) * 2.95f,arch.RoofPitch);
+                var mesh = TS1RoofMesh.Build(footprint,width,width,(story + 1) * StoryHeight,arch.RoofPitch);
                 if(mesh.Count==0)continue;
                 var material = materials.Roof(roofName);
                 foreach (var triangle in mesh) {
@@ -232,7 +235,7 @@ namespace FSO.LotView
             public double RestoreAt;
             public VertexPositionColorTexture[] Low;
             public Vector3[] Full;
-            public VertexPositionColor[] Top, LowTop, EndFaceA, EndFaceB, LowEndA, LowEndB;
+            public VertexPositionColor[] Top, LowTop, EndFaceA, EndFaceB, LowEndA, LowEndB, Reveals, LowReveals;
         }
         public sealed class View
         {
@@ -270,7 +273,7 @@ namespace FSO.LotView
             }
             var camera = new[] {new Vector2(1,1),new Vector2(1,-1),new Vector2(-1,-1),new Vector2(-1,1)}[rotation];
             for(int story=0;story<Math.Min(level,2);story++) {
-                var edges=new HashSet<string>(); float z=story*2.95f;
+                var edges=new HashSet<string>(); float z=story*StoryHeight;
                 Func<int,int,WallTile> wallAt=(xx,yy)=>xx<0||yy<0||xx>=Size||yy>=Size?default(WallTile):arch.Walls[story][yy*Size+xx];
                 for(int y=0;y<Size;y++) for(int x=0;x<Size;x++) {
                     var wall=wallAt(x,y);
@@ -301,7 +304,10 @@ namespace FSO.LotView
                         // Share the exact floor elevation and overlap adjoining solid
                         // walls by a subpixel amount to close raster cracks between stories.
                         bool joint = story==0 && level>=2 && !persistent && (arch.Walls[1][y*Size+x].Segments & flag)!=0;
-                        float bottom = z - (story>0 && !persistent ? .015f : 0), top = z+2.95f+(joint ? .015f : 0);
+                        // Lower faces and caps end below the next floor. Upper
+                        // faces overlap downward, never through the carpet above.
+                        float bottom = z - (story>0 && !persistent ? WallJointOverlap : 0);
+                        float top = z+StoryHeight-(story==0 && level>=2 && !persistent ? WallJointOverlap : 0);
                         if(joint)view.StoryJoints++;
                         var points=new[]{new Vector3(ax,ay,bottom),new Vector3(bx,by,bottom),new Vector3(bx,by,top),new Vector3(ax,ay,top)};
                         var material=materials.Wall(pattern,style);
@@ -315,22 +321,29 @@ namespace FSO.LotView
                         var faceUV=new[]{Vector2.UnitY,Vector2.One,Vector2.UnitX,Vector2.Zero};
                         var surface=Textured(view.WallMaterials,material,points,faceUV,new[]{0,1,2,0,2,3},color,zoom,rotation,persistent);
                         if(!persistent) {
-                            var lowPoints=(Vector3[])points.Clone();lowPoints[2].Z=lowPoints[3].Z=z+.22f;
-                            var lowUV=(Vector2[])faceUV.Clone();lowUV[2].Y=lowUV[3].Y=1-(z+.22f-bottom)/(top-bottom);
+                            var lowPoints=(Vector3[])points.Clone();lowPoints[2].Z=lowPoints[3].Z=z+LowWallHeight;
+                            var lowUV=(Vector2[])faceUV.Clone();lowUV[2].Y=lowUV[3].Y=1-(z+LowWallHeight-bottom)/(top-bottom);
                             var lowSurface=new List<Surface>();
                             var low=Textured(lowSurface,material,lowPoints,lowUV,new[]{0,1,2,0,2,3},color,zoom,rotation).Vertices.ToArray();
                             // Extrude away from the visible plane, keeping authored opening depths intact.
                             var direction=Vector2.Normalize(new Vector2(bx-ax,by-ay));
-                            var normal=new Vector2(-direction.Y,direction.X)*.09f;
+                            var normal=new Vector2(-direction.Y,direction.X)*WallThickness;
                             if(Vector2.Dot(normal,camera)>0)normal=-normal;
                             var thickness=new Vector3(normal,0);
+                            WallProfile profile;
+                            if(!wallProfiles.TryGetValue(material,out profile))wallProfiles.Add(material,profile=new WallProfile(material));
                             view.WallSections.Add(new WallSection {
                                 Key=EdgeKey(story,ax,ay,bx,by),EndA=story+":"+ax+":"+ay,EndB=story+":"+bx+":"+by,
                                 Story=story,TileX=x,TileY=y,Surface=surface,Offset=surface.Vertices.Count-6,Low=low,
                                 Full=points.Select(p=>TS1SpriteLayer.ProjectWithDepth(p,zoom,rotation)).ToArray(),
-                                Top=WallCap(points[3],points[2],thickness,zoom,rotation),LowTop=WallCap(lowPoints[3],lowPoints[2],thickness,zoom,rotation),
-                                EndFaceA=WallCap(points[0],points[3],thickness,zoom,rotation),EndFaceB=WallCap(points[2],points[1],thickness,zoom,rotation),
-                                LowEndA=WallCap(lowPoints[0],lowPoints[3],thickness,zoom,rotation),LowEndB=WallCap(lowPoints[2],lowPoints[1],thickness,zoom,rotation)
+                                Top=profile.Cap(points[3],points[2],Vector2.Zero,Vector2.UnitX,thickness,zoom,rotation),
+                                LowTop=profile.Cap(lowPoints[3],lowPoints[2],lowUV[3],lowUV[2],thickness,zoom,rotation),
+                                EndFaceA=profile.Cap(points[0],points[3],Vector2.UnitY,Vector2.Zero,thickness,zoom,rotation),
+                                EndFaceB=profile.Cap(points[2],points[1],Vector2.UnitX,Vector2.One,thickness,zoom,rotation),
+                                LowEndA=profile.Cap(lowPoints[0],lowPoints[3],Vector2.UnitY,lowUV[3],thickness,zoom,rotation),
+                                LowEndB=profile.Cap(lowPoints[2],lowPoints[1],lowUV[2],Vector2.One,thickness,zoom,rotation),
+                                Reveals=profile.Reveals(points,0,thickness,zoom,rotation),
+                                LowReveals=profile.Reveals(points,lowUV[2].Y,thickness,zoom,rotation)
                             });
                         }
                         view.WallEdges++;
@@ -353,7 +366,7 @@ namespace FSO.LotView
                 try {
                     var layers=TS1SpriteLayer.Read(entity,zoom,rotation,spriteFrames);
                     if(layers.Count==0){view.NoGraphic++;continue;}
-                    var world=new Vector3(entity.Position.x/16f,entity.Position.y/16f,(entity.Position.Level-1)*2.95f);
+                    var world=new Vector3(entity.Position.x/16f,entity.Position.y/16f,(entity.Position.Level-1)*StoryHeight);
                     Vector2 poolOffset;if(poolAttachmentOffsets.TryGetValue(entity.ObjectID,out poolOffset))world+=new Vector3(poolOffset,0);
                     var point=TS1SpriteLayer.Project(world,zoom,rotation);
                     Vector2 openingNormal;
@@ -375,11 +388,75 @@ namespace FSO.LotView
             if(level==3)BuildRoofs(view,zoom,rotation);
             return view;
         }
-        private static VertexPositionColor[] WallCap(Vector3 a,Vector3 b,Vector3 thickness,int zoom,int rotation)
+        private sealed class WallProfile
         {
-            var target=new List<VertexPositionColor>();
-            Quad(target,a,b,b+thickness,a+thickness,new Color(153,120,83),zoom,rotation);
-            return target.ToArray();
+            private struct Border { public Vector2 A,B; public Color Color; }
+            private readonly TS1MaterialProvider.Material material;
+            private readonly Border[] borders;
+            private static readonly VertexPositionColor[] Empty = new VertexPositionColor[0];
+            public WallProfile(TS1MaterialProvider.Material material)
+            {
+                this.material=material;
+                var result=new List<Border>();int w=material.Width,h=material.Height;
+                // Merge collinear alpha transitions, rather than extruding each texel.
+                for(int x=1;x<w;x++)for(int y=0;y<h;) {
+                    int side=Solid(x-1,y)==Solid(x,y)?0:Solid(x-1,y)?-1:1;
+                    if(side==0){y++;continue;}
+                    int start=y;Color color=material.Pixels[y*w+(side<0?x-1:x)];
+                    while(++y<h && (Solid(x-1,y)==Solid(x,y)?0:Solid(x-1,y)?-1:1)==side) {}
+                    result.Add(new Border {A=new Vector2(x/(float)w,start/(float)h),B=new Vector2(x/(float)w,y/(float)h),Color=Shade(color,.72f)});
+                }
+                for(int y=1;y<h;y++)for(int x=0;x<w;) {
+                    int side=Solid(x,y-1)==Solid(x,y)?0:Solid(x,y-1)?-1:1;
+                    if(side==0){x++;continue;}
+                    int start=x;Color color=material.Pixels[(side<0?y-1:y)*w+x];
+                    while(++x<w && (Solid(x,y-1)==Solid(x,y)?0:Solid(x,y-1)?-1:1)==side) {}
+                    result.Add(new Border {A=new Vector2(start/(float)w,y/(float)h),B=new Vector2(x/(float)w,y/(float)h),Color=Shade(color,.88f)});
+                }
+                borders=result.ToArray();
+            }
+            private bool Solid(int x,int y) {return material.Pixels[y*material.Width+x].A>=128;}
+            private bool Solid(Vector2 uv) {return Solid(Math.Min(material.Width-1,Math.Max(0,(int)(uv.X*material.Width))),Math.Min(material.Height-1,Math.Max(0,(int)(uv.Y*material.Height))));}
+            private static Color Shade(Color c,float s) {return new Color((byte)(c.R*s),(byte)(c.G*s),(byte)(c.B*s),(byte)255);}
+            public VertexPositionColor[] Cap(Vector3 a,Vector3 b,Vector2 uvA,Vector2 uvB,Vector3 thickness,int zoom,int rotation)
+            {
+                var result=new List<VertexPositionColor>();bool horizontal=uvA.X!=uvB.X;
+                int cells=horizontal?material.Width:material.Height;
+                float from=horizontal?uvA.X:uvA.Y,to=horizontal?uvB.X:uvB.Y;
+                float start=0;bool open=false;
+                // Traverse texel boundaries in either direction, including cropped ends.
+                for(int i=0;i<cells;i++) {
+                    int index=to>from?i:cells-1-i;
+                    float lo=index/(float)cells,hi=(index+1)/(float)cells;
+                    float t0=Math.Max(0,Math.Min((lo-from)/(to-from),(hi-from)/(to-from)));
+                    float t1=Math.Min(1,Math.Max((lo-from)/(to-from),(hi-from)/(to-from)));
+                    if(t1<=t0)continue;
+                    bool solid=Solid(Vector2.Lerp(uvA,uvB,(t0+t1)*.5f));
+                    if(solid&&!open){start=t0;open=true;}
+                    if(open&&(!solid || t1>=1)) {
+                        float end=solid?t1:t0;
+                        var left=Vector3.Lerp(a,b,start);var right=Vector3.Lerp(a,b,end);
+                        Quad(result,left,right,right+thickness,left+thickness,new Color(153,120,83),zoom,rotation);open=false;
+                    }
+                }
+                return result.Count==0?Empty:result.ToArray();
+            }
+            public VertexPositionColor[] Reveals(Vector3[] face,float minV,Vector3 thickness,int zoom,int rotation)
+            {
+                if(borders.Length==0)return Empty;
+                var result=new List<VertexPositionColor>();
+                foreach(var border in borders) {
+                    var a=border.A;var b=border.B;
+                    if(a.Y<minV&&b.Y<minV)continue;
+                    if(a.Y<minV)a=Vector2.Lerp(a,b,(minV-a.Y)/(b.Y-a.Y));
+                    if(b.Y<minV)b=Vector2.Lerp(b,a,(minV-b.Y)/(a.Y-b.Y));
+                    if(Vector2.DistanceSquared(a,b)<.00000001f)continue;
+                    Vector3 left=face[3]+(face[2]-face[3])*a.X+(face[0]-face[3])*a.Y;
+                    Vector3 right=face[3]+(face[2]-face[3])*b.X+(face[0]-face[3])*b.Y;
+                    Quad(result,left,right,right+thickness,left+thickness,border.Color,zoom,rotation);
+                }
+                return result.Count==0?Empty:result.ToArray();
+            }
         }
         // Pointer coordinates are local to the scene target, before the UI letterbox transform.
         public static Vector2 TileAtPointer(Vector2 pointer,Matrix camera,int width,int height,int zoom,int rotation,int level)
@@ -388,7 +465,7 @@ namespace FSO.LotView
             TS1SpriteLayer.Project(Vector3.Zero,zoom,rotation);
             var clip=new Vector3(pointer.X*2/width-1,1-pointer.Y*2/height,0);
             var screen=Vector3.Transform(clip,Matrix.Invert(camera));
-            float w=16*(1<<(zoom-1)),sum=2*(screen.Y+(Math.Min(level,2)-1)*2.95f*w*(float)Math.Sqrt(1.5))/w;
+            float w=16*(1<<(zoom-1)),sum=2*(screen.Y+(Math.Min(level,2)-1)*StoryHeight*w*(float)Math.Sqrt(1.5))/w;
             float diff=screen.X/w,x=(sum+diff)/2,y=(sum-diff)/2;
             switch(rotation) {case 1:return new Vector2(y,-x);case 2:return new Vector2(-x,-y);case 3:return new Vector2(-y,x);default:return new Vector2(x,y);}
         }
@@ -491,6 +568,6 @@ namespace FSO.LotView
             var pd=new VertexPositionColor(TS1SpriteLayer.ProjectWithDepth(d,zoom,rotation),color);
             target.Add(pa);target.Add(pb);target.Add(pc);target.Add(pa);target.Add(pc);target.Add(pd);
         }
-        public void Dispose() {session.Dispose();}
+        public void Dispose() {wallProfiles.Clear();session.Dispose();}
     }
 }

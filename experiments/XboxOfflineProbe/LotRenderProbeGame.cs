@@ -94,7 +94,7 @@ namespace FreeSims.Xbox.Proof
                 if(renderer!=null)renderer.Dispose();if(image!=null)image.Dispose();renderer=candidate;candidate=null;image=target;target=null;error=null;
                 ProofLog.Write("LOT VIEW house="+house+" rotation="+rotation+" zoom="+zoom+" level="+level+" walls="+walls+" rendered="+data.Rendered+" hidden="+data.Hidden+" contained="+data.Contained+" unsupported="+data.Unsupported+" floors="+data.FloorTiles+" wallEdges="+data.WallEdges+" floorMaterials="+data.FloorMaterials.Count+" wallMaterials="+data.WallMaterials.Count+" openings="+data.OpeningEdges+" joints="+data.StoryJoints+" roofTriangles="+data.RoofTriangles+" terrain="+data.TerrainTiles+" pools="+data.PoolTiles+" water="+data.WaterTiles+" poolAttachments="+data.PoolAttachmentAdjustments);
                 foreach(var issue in data.Issues)ProofLog.Write(issue);
-                ProofLog.Write("VIEW COST ms="+timer.ElapsedMilliseconds+" textures="+renderer.TextureCount+" uploadBytes="+renderer.TextureBytes);
+                ProofLog.Write("VIEW COST ms="+timer.ElapsedMilliseconds+" textures="+renderer.TextureCount+" uploadBytes="+renderer.TextureBytes+" wallGeometryVertices="+renderer.WallCapVertexCount+" wallGeometryCapacity="+renderer.WallGeometryCapacity+" wallGeometryBatchBytes="+((long)renderer.WallGeometryCapacity*VertexPositionColor.VertexDeclaration.VertexStride));
                 LogMemory("view-end");
             }finally{if(candidate!=null)candidate.Dispose();if(target!=null)target.Dispose();}
         }

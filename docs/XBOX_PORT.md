@@ -1836,3 +1836,23 @@ expiry, continued hover, re-entry, switching walls, pointer disable and mode
 changes, plus exact GPU restoration of walls/caps/attachments without texture
 allocation. Hardware confirmation: leave a hovered wall and wait ~0.75 s without
 moving the pointer; then move between different walls and repeat on floor 2.
+
+## 0.13.2: masked wall thickness, floor seams and fence materials
+
+Lower solid faces/caps end below the next floor; upper walls overlap downward.
+The previous upward overlap exposed lower caps through upper carpets.
+Top/end caps split at the authored alpha boundary. Coalesced jamb/header/sill
+contours provide inner depth and crop with low walls; door thresholds stay open.
+Sprite masks and depth calibration remain intact.
+
+Persistent styles use their global fence pattern on both faces. Reverse
+wallpaper fields previously supplied room patterns to some House 2 iron railing
+panels, causing pale/green patches.
+
+The colored batch is preallocated, hard-limited to 4 MiB and reused on wall
+revisions. Contours are per-lot; scratch sets are reused. Twenty-seven checks
+cover caps/reveals, upper-floor limits, GPU holes/thresholds, canonical fence
+materials and disposal/resource reuse. Captures: artifacts/architecture-qa.
+Hardware checks: experiments/XboxOfflineProbe/TESTING.md. Follow
+docs/RENDERING_CONTRACT.md for future memory/rendering work.
+Accepted roof geometry remains unchanged.

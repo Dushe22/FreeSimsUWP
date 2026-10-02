@@ -1,6 +1,6 @@
 # Next session
 
-Branch: xbox-uwp-port. Milestone: Xbox 0.13.1 expiring wall hover cuts.
+Branch: xbox-uwp-port. Milestone: Xbox 0.13.2 masked wall thickness and balcony materials.
 
 User confirmed the inclined stair handrail fix works normally on Xbox.
 0.11 evidence (UWP Screenshots/0.11): 13/13 PASS, both houses with roofs at all
@@ -14,12 +14,12 @@ adjacency with the camera and composes concave pool corners around islands.
 Ground remains flat, water static; no broader simulation or new lighting.
 No extra game assets are needed beyond the 0.11 upload.
 
-Local suite: 24 checks pass, including all 256 adjacency masks, four rotations,
+Local suite: 27 checks pass, including all 256 adjacency masks, four rotations,
 three zooms, deterministic saved grass, GPU pool coverage and existing architecture/
-stair regressions. Full renders: artifacts/lot-render-check (48 views).
-Logs: artifacts/wall-restore-tests.log; previous cap QA: artifacts/wall-pointer-qa.
-Native build/audit: artifacts/offline-wall-restore-final.
-Handoff: artifacts/xbox-wall-restore-*.zip. Use XboxOfflineProbe/TESTING.md.
+stair regressions. Dynamic architecture renders: artifacts/architecture-qa (24 views).
+Logs: artifacts/architecture-tests-final.log; previous cap QA: artifacts/wall-pointer-qa.
+Native build/audit: artifacts/offline-architecture-final.
+Handoff: artifacts/xbox-architecture-*.zip. Use XboxOfflineProbe/TESTING.md.
 0.13 adds left-stick-click pointer, right-stick pan and Y down/cutaway/up.
 The selected story gets low wall stubs and brown thickness caps; persistent
 railings remain. User reported that 0.13.0 retained hovered cuts indefinitely.
@@ -27,7 +27,13 @@ railings remain. User reported that 0.13.0 retained hovered cuts indefinitely.
 segment restores 0.75 s after leaving it, even with a stationary/disabled
 pointer. Re-entry cancels expiry; switching targets does not retain the old wall.
 UP restores immediately; DOWN remains down. Textures/geometry buffers are reused.
-Next gate: Xbox timed restoration on both floors, pointer alignment and caps.
+Next gate: Xbox 0.13.2 floor seams, door thresholds/reveals and balcony colors,
+plus unchanged timed restoration. Captures: artifacts/architecture-qa.
+Lower caps/faces end below the upper floor; opening contours cut caps and add
+inner depth. Fences use their style instead of reverse wallpaper.
+Follow docs/RENDERING_CONTRACT.md for ownership, bounds and rendering validation.
+Tests: artifacts/architecture-tests-final.log; native: artifacts/offline-architecture-final.
+Handoff: artifacts/xbox-architecture-*.zip; optional Menu suite is 27/27.
 The user's 0.12 PNG shows 17/17 PASS and clipped House 28 window/door trim.
 0.12.1 keeps a separate authored opening mask for each wall face and applies a
 bounded eight-sample SPR2 depth bias only to the camera-facing architectural

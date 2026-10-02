@@ -1,7 +1,7 @@
-# Expiring pointer wall cuts 0.13.1.0
+# Wall geometry and balcony materials 0.13.2.0
 
 Update the existing Offline Probe; keep the already uploaded game files.
-Menu runs the optional suite: expect 24/24 PASS.
+Menu runs the optional suite: expect 27/27 PASS.
 
 Controls:
 - Click the left stick to toggle POINTER / CAMERA.
@@ -31,11 +31,11 @@ Check both lots, four angles and three zooms:
 6. Alternate houses, run Menu twice, Home/return and relaunch. Return proof.log
    plus screenshots of any wrong cut, cap, opening or stair occlusion.
 
-Local evidence: 24 render checks pass, including timed restoration with a
+Local evidence: 27 render checks pass, including timed restoration with a
 stationary pointer, re-entry, switching walls and mode changes on both lots,
 four angles and two floors. Expired walls/caps/attachments restore identical
 GPU pixels without texture reallocations. Visual captures are under
-artifacts/wall-pointer-qa. Xbox controller behavior still needs hardware validation.
+artifacts/architecture-qa. Xbox controller behavior still needs hardware validation.
 
 0.12.2 hardware proof.log has two launches, 46 view changes and 20/20 PASS,
 no logged exceptions or OOM, with peak logged app usage 425.48 MiB / 1024 MiB.
@@ -43,3 +43,21 @@ This milestone preserves that texture sharing and release-before-load workflow.
 
 Static limits: flat terrain, static water, no live simulation; 11 contained
 House 28 objects await SLOT offsets. Accepted roof geometry remains unchanged.
+
+Architecture regression checks:
+- House 2, angle 2, floor 2, DOWN: lower-story wall faces/caps must not rise
+  through the carpet. Low stubs belonging to floor 2 intentionally remain.
+- House 2, angle 2, roof, zoom 3: balcony railings must use the same iron
+  material on their inside and outside; no white/green wallpaper patches.
+- Both houses, all angles, UP and DOWN: openings have shaded jambs/headers/
+  sills; door thresholds are open and low top caps do not cross their holes.
+- House 28, angle 2, floor 1: wide windows/double doors retain their trim and
+  transparent holes. Foreground geometry must still occlude the frames.
+- Alternate floors, wall modes and houses; leave the cursor stationary after
+  moving off a wall. Restore delay remains 0.75 s. Return proof.log with captures.
+
+Memory/rendering rules are documented in docs/RENDERING_CONTRACT.md.
+The new colored batch is preallocated once per view and hard-limited to 4 MiB.
+CPU contours are cached per lot, coalesced along straight mask boundaries and
+released with it. Visibility scratch sets/buffers are reused. No new textures,
+shaders, assets, simulation callbacks or accepted roof mesh changes.

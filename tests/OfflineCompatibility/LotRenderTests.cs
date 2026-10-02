@@ -12,7 +12,7 @@ namespace FreeSims.Tests
 {
     public static class LotRenderTests
     {
-        public const int Count=24;
+        public const int Count=27;
         public static List<string> Run(GraphicsDevice device,GamePaths paths,byte[] effect,Action<string> log)
         {
             var result=new List<string>();bool oldWorld=VM.UseWorld;VM.UseWorld=false;
@@ -24,6 +24,9 @@ namespace FreeSims.Tests
                 check("THREE WALL MODES HOVER AND STORY BOUNDARIES",()=>WallModes(paths));
                 check("TIMED WALL RESTORE STATIONARY POINTER AND GPU",()=>TimedWallRestore(device,paths,effect));
                 check("GPU WALL CAPS CUT ATTACHMENTS AND HOVER REUSE",()=>WallModeGpu(device,paths,effect));
+                check("MASKED WALL THICKNESS AND FLOOR OCCLUSION",()=>WallThicknessGeometry(paths));
+                check("GPU THICK OPENINGS AND DOOR THRESHOLDS",()=>ThickOpeningGpu(device,paths,effect));
+                check("FENCE STYLE OWNS BOTH FACE MATERIALS",()=>FenceFaces(paths));
                 check("CAMERA DEPTH AND WALL HEIGHT",()=>{if(!LotProjectionTests.Run())throw new InvalidOperationException("Projection checks failed.");});
                 check("GPU DEPTH HOLES AND ALPHA",()=>DepthFixture(device,effect));
                 check("TS1 MATERIAL MAPPING AND FENCE ALPHA",()=>MaterialMapping(paths));
@@ -171,8 +174,8 @@ namespace FreeSims.Tests
                 lot.UpdateWalls(view,TS1WallMode.Down,null,camera,640,360);
                 if(view.WallSections.Any(s=>s.Cut!=(level!=3&&s.Story==level-1)))throw new InvalidOperationException("Cut crossed story/roof boundary.");
                 foreach(var section in view.WallSections) {
-                    if(section.Low.Length!=6||section.Top.Length!=6||section.LowTop.Length!=6)throw new InvalidOperationException("Missing wall thickness/stub.");
-                    if(!section.Top.Any(v=>Math.Abs(v.Position.Z-section.Top[0].Position.Z)>.001f))throw new InvalidOperationException("Wall cap has no thickness.");
+                    if(section.Low.Length!=6||section.Top.Length%6!=0||section.LowTop.Length%6!=0||section.Reveals.Length%6!=0)throw new InvalidOperationException("Missing wall thickness/stub.");
+                    if(section.Top.Length>0&&!section.Top.Any(v=>Math.Abs(v.Position.Z-section.Top[0].Position.Z)>.001f))throw new InvalidOperationException("Wall cap has no thickness.");
                     if(section.Low[2].TextureCoordinate.Y<=0.8f)throw new InvalidOperationException("Low wall texture stretched.");
                 }
                 lot.UpdateWalls(view,TS1WallMode.Up,null,camera,640,360);
@@ -194,7 +197,7 @@ namespace FreeSims.Tests
                     var view=lot.Build(2,0,2);var camera=TS1LotRenderer.Camera(lot.Size,2,0,640,360,Vector2.Zero);
                     using(var renderer=new TS1LotRenderer(device,view,effect))
                     using(var target=new RenderTarget2D(device,640,360,false,SurfaceFormat.Color,DepthFormat.Depth24)) {
-                        int textures=renderer.TextureCount;long bytes=renderer.TextureBytes;Color[] baseline=null,down=null;
+                        int textures=renderer.TextureCount,capacity=renderer.WallGeometryCapacity;long bytes=renderer.TextureBytes;Color[] baseline=null,down=null;
                         foreach(var mode in new[]{TS1WallMode.Up,TS1WallMode.Down,TS1WallMode.Cutaway,TS1WallMode.Up}) {
                             lot.UpdateWalls(view,mode,new Vector2(320,180),camera,640,360);
                             device.SetRenderTarget(target);device.Clear(ClearOptions.Target|ClearOptions.DepthBuffer,new Color(16,24,39),1,0);
@@ -209,14 +212,14 @@ namespace FreeSims.Tests
                                 if(renderer.CutWallCount==0||renderer.HiddenAttachmentCount==0)throw new InvalidOperationException("Walls/windows did not cut.");
                                 if(baseline.SequenceEqual(down))throw new InvalidOperationException("Wall mode did not change GPU output.");
                             }
-                            if(renderer.WallCapVertexCount==0||renderer.TextureCount!=textures||renderer.TextureBytes!=bytes)throw new InvalidOperationException("Missing caps or textures reallocated on hover.");
+                            if(renderer.WallCapVertexCount==0||renderer.TextureCount!=textures||renderer.TextureBytes!=bytes||renderer.WallGeometryCapacity!=capacity)throw new InvalidOperationException("Missing caps or textures reallocated on hover.");
                         }
                         // Moving the cursor only changes CPU visibility; textures remain owned once.
                         for(int i=0;i<80;i++) {
                             lot.UpdateWalls(view,TS1WallMode.Cutaway,new Vector2(100+i*5,100+i%10*12),camera,640,360);
                             device.SetRenderTarget(target);device.Clear(ClearOptions.Target|ClearOptions.DepthBuffer,Color.Black,1,0);
                             renderer.Draw(camera,TS1WallMode.Cutaway);
-                            if(renderer.TextureCount!=textures||renderer.TextureBytes!=bytes)throw new InvalidOperationException("Hover allocated GPU textures.");
+                            if(renderer.TextureCount!=textures||renderer.TextureBytes!=bytes||renderer.WallGeometryCapacity!=capacity)throw new InvalidOperationException("Hover reallocated GPU resources or geometry.");
                         }
                         device.SetRenderTargets(previous);device.Viewport=viewport;
                     }
@@ -241,9 +244,23 @@ namespace FreeSims.Tests
                 return new[]{new WeakReference(first.VM),new WeakReference(second.VM),new WeakReference(content),new WeakReference(bhav)};
             }
         }
+        [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.NoInlining)]
+        private static WeakReference[] DisposedGeometry(GamePaths paths)
+        {
+            var references=new List<WeakReference>();
+            foreach(int house in new[]{2,28})using(var lot=new TS1LotRenderData(paths,house)) {
+                references.Add(new WeakReference(lot));
+                for(int r=0;r<4;r++)for(int level=1;level<=3;level++) {
+                    var view=lot.Build(1,r,level);references.Add(new WeakReference(view));
+                    references.Add(new WeakReference(view.WallMaterials.First().Material.Pixels));
+                    references.Add(new WeakReference(view.WallSections.First(s=>s.Reveals.Length>0).Reveals));
+                }
+            }
+            return references.ToArray();
+        }
         private static void ReleasedLots(GamePaths paths)
         {
-            var references=DisposedSessions(paths);
+            var references=DisposedSessions(paths).Concat(DisposedGeometry(paths)).ToArray();
             GC.Collect();GC.WaitForPendingFinalizers();GC.Collect();
             if(references.Any(r=>r.IsAlive))throw new InvalidOperationException("Disposed VM/content retained by process-wide roots.");
         }
@@ -480,6 +497,113 @@ namespace FreeSims.Tests
                         }
                     }
                 }
+            }finally{device.SetRenderTargets(previous);device.Viewport=viewport;}
+        }
+        private static Vector2 WallUV(TS1LotRenderData.WallSection wall,Vector3 point)
+        {
+            var top=wall.Full[3];var along=wall.Full[2]-top;var down=wall.Full[0]-top;
+            float u=(point.X-top.X)/along.X;
+            return new Vector2(u,(point.Y-top.Y-u*along.Y)/down.Y);
+        }
+        private static float ProjectedHeight(Vector3 p,int zoom)
+        {
+            float w=16*(1<<(zoom-1)),axis=(float)Math.Sqrt(3.0/8);
+            return (p.Z/(2*axis)-p.Y/w)/((float)Math.Sqrt(1.5)+1/(4*axis));
+        }
+        private static void WallThicknessGeometry(GamePaths paths)
+        {
+            int openings=0,thresholds=0;
+            foreach(int house in new[]{2,28})using(var lot=new TS1LotRenderData(paths,house))
+            for(int zoom=1;zoom<=3;zoom++)for(int r=0;r<4;r++)for(int level=1;level<=2;level++) {
+                var view=lot.Build(zoom,r,level);
+                int vertices=0;
+                foreach(var wall in view.WallSections) {
+                    var mat=wall.Surface.Material;
+                    var arrays=new[]{wall.Top,wall.LowTop,wall.EndFaceA,wall.EndFaceB,wall.LowEndA,wall.LowEndB,wall.Reveals,wall.LowReveals};
+                    vertices+=arrays.Sum(a=>a.Length);
+                    if(level==2&&wall.Story==0 && arrays.SelectMany(a=>a).Any(v=>ProjectedHeight(v.Position,zoom)>TS1LotRenderData.StoryHeight-.005f))
+                        throw new InvalidOperationException("Lower wall thickness penetrates the upper floor.");
+                    foreach(var cap in arrays.Take(6))for(int i=0;i<cap.Length;i+=6)
+                    for(int sample=0;sample<20;sample++) {
+                        var uv=WallUV(wall,Vector3.Lerp(cap[i].Position,cap[i+1].Position,(sample+.5f)/20));
+                        int x=Math.Min(mat.Width-1,Math.Max(0,(int)(uv.X*mat.Width+.0001f)));
+                        int y=Math.Min(mat.Height-1,Math.Max(0,(int)(uv.Y*mat.Height+.0001f)));
+                        if(mat.Pixels[y*mat.Width+x].A<128)throw new InvalidOperationException("Opaque thickness bridges an opening.");
+                    }
+                    if(mat.Pixels.Any(p=>p.A<128)) {
+                        openings++;
+                        if(wall.Reveals.Length==0)throw new InvalidOperationException("Opening lacks inner depth.");
+                        if(mat.Pixels.Skip((mat.Height-1)*mat.Width).Any(p=>p.A<128)) {
+                            thresholds++;
+                            if(wall.LowTop.Length==6)throw new InvalidOperationException("Door threshold has a continuous bar.");
+                        }
+                        float minV=wall.Low[2].TextureCoordinate.Y;
+                        if(wall.LowReveals.Where((v,i)=>i%6<2).Any(v=>WallUV(wall,v.Position).Y<minV-.0001f))
+                            throw new InvalidOperationException("Cut wall retained an upper reveal.");
+                    }
+                }
+                if(vertices>TS1LotRenderer.WallGeometryVertexBudget*2)throw new InvalidOperationException("Wall geometry exceeded its bounded budget.");
+            }
+            if(openings<100 || thresholds<30)throw new InvalidOperationException("Opening geometry fixtures did not cover real lots.");
+        }
+        private static void FenceFaces(GamePaths paths)
+        {
+            foreach(int house in new[]{2,28}) {
+                var iff=new FSO.Files.Formats.IFF.IffFile(new NeighborhoodStore(paths,0).GetReadPath("Houses/House"+house.ToString("00")+".iff"));
+                var provider=new FSO.Content.TS1.TS1MaterialProvider(paths,iff);
+                foreach(var pair in new[]{new[]{2,248},new[]{12,249},new[]{13,250},new[]{14,251}}) {
+                    var canonical=provider.Wall((ushort)pair[1],(ushort)pair[0]);
+                    foreach(ushort pattern in new ushort[]{0,4,5,21,250,251})
+                        if(!ReferenceEquals(canonical,provider.Wall(pattern,(ushort)pair[0])))
+                            throw new InvalidOperationException("Fence reverse face inherited room wallpaper.");
+                }
+                using(var lot=new TS1LotRenderData(paths,house))for(int r=0;r<4;r++) {
+                    var data=lot.Build(2,r,2);
+                    if(data.WallMaterials.Where(s=>s.KeepWhenWallsHidden).Any(s=>s.Material.Name!="wall:248"&&s.Material.Name!="wall:249"&&s.Material.Name!="wall:250"&&s.Material.Name!="wall:251"))
+                        throw new InvalidOperationException("Persistent railing contains a wallpaper material.");
+                }
+            }
+        }
+        private static void ThickOpeningGpu(GraphicsDevice device,GamePaths paths,byte[] effect)
+        {
+            var previous=device.GetRenderTargets();var viewport=device.Viewport;int tested=0;
+            try {
+                foreach(int house in new[]{2,28})using(var lot=new TS1LotRenderData(paths,house))
+                for(int zoom=1;zoom<=3;zoom++)for(int r=0;r<4;r++) {
+                    var data=lot.Build(zoom,r,1);
+                    foreach(bool door in new[]{false,true}) {
+                        var source=data.WallSections.First(w=> {
+                            var m=w.Surface.Material;
+                            return m.Pixels[(m.Height/2)*m.Width+m.Width/2].A<128 &&
+                                (m.Pixels[(m.Height-1)*m.Width+m.Width/2].A<128)==door;
+                        });
+                        var mat=source.Surface.Material;
+                        var face=new TS1LotRenderData.Surface {Material=mat};
+                        face.Vertices.AddRange(source.Surface.Vertices.Skip(source.Offset).Take(6));
+                        source.Surface=face;source.Offset=0;
+                        var isolated=new TS1LotRenderData.View {Level=1,Zoom=zoom,Rotation=r};
+                        isolated.WallMaterials.Add(face);isolated.WallSections.Add(source);
+                        var center=(source.Full[0]+source.Full[2])/2;
+                        var camera=Matrix.CreateOrthographicOffCenter(center.X-80,center.X+80,center.Y+120,center.Y-120,-128,128);
+                        using(var renderer=new TS1LotRenderer(device,isolated,effect))
+                        using(var target=new RenderTarget2D(device,320,480,false,SurfaceFormat.Color,DepthFormat.Depth24)) {
+                            foreach(var mode in new[]{TS1WallMode.Up,TS1WallMode.Down,TS1WallMode.Up}) {
+                                lot.UpdateWalls(isolated,mode,null,camera,320,480);
+                                device.SetRenderTarget(target);device.Clear(ClearOptions.Target|ClearOptions.DepthBuffer,Color.Lime,1,0);
+                                renderer.Draw(camera,mode);device.SetRenderTargets(previous);device.Viewport=viewport;
+                                var pixels=new Color[320*480];target.GetData(pixels);
+                                float v=door?.98f:.5f;
+                                var point=source.Full[3]+(source.Full[2]-source.Full[3])*.5f+(source.Full[0]-source.Full[3])*v;
+                                var clip=Vector3.Transform(point,camera);
+                                int px=(int)((clip.X+1)*160),py=(int)((1-clip.Y)*240);
+                                if(pixels[py*320+px]!=Color.Lime)throw new InvalidOperationException("Wall thickness blocked a transparent opening/door threshold.");
+                                if(renderer.WallCapVertexCount==0)throw new InvalidOperationException("GPU fixture omitted thickness.");
+                            }
+                        }
+                        tested++;
+                    }
+                }
+                if(tested!=48)throw new InvalidOperationException("Missing thick opening rotation/zoom fixtures.");
             }finally{device.SetRenderTargets(previous);device.Viewport=viewport;}
         }
         private static void StoryJoints(GamePaths paths)

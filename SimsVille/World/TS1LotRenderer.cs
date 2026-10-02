@@ -25,9 +25,15 @@ namespace FSO.LotView
         private readonly Dictionary<TS1LotRenderData.Surface,MaterialItem> wallItems=new Dictionary<TS1LotRenderData.Surface,MaterialItem>();
         private VertexPositionColor[] caps;
         private int capCount, preparedRevision=int.MinValue;
+        // Reused scratch state; pointer/mode changes allocate no GPU resources.
+        private readonly HashSet<string> cutKeys=new HashSet<string>();
+        private readonly Dictionary<string,int> fullEnds=new Dictionary<string,int>(), allEnds=new Dictionary<string,int>();
         public int CutWallCount {get;private set;}
         public int HiddenAttachmentCount {get;private set;}
         public int WallCapVertexCount {get {return capCount;}}
+        // At most 4 MiB of colored GPU-batch vertices per scene.
+        public const int WallGeometryVertexBudget=262144;
+        public int WallGeometryCapacity {get {return caps==null?0:caps.Length;}}
         private readonly BasicEffect surfaces;
         private readonly AlphaTestEffect materials;
         private readonly Effect sprites;
@@ -83,7 +89,15 @@ namespace FSO.LotView
                     var d=new VertexPositionColorTexture(new Vector3(p.X,p.Y+layer.Height,z),Color.White,new Vector2(l,1));
                     item.Vertices=new[]{a,b,c,a,c,d};
                 }
-                caps=new VertexPositionColor[data.WallSections.Count*18];
+                int capCapacity=0;
+                foreach(var section in data.WallSections) {
+                    capCapacity=checked(capCapacity+Math.Max(section.Top.Length,section.LowTop.Length)+
+                        Math.Max(section.EndFaceA.Length,section.LowEndA.Length)+Math.Max(section.EndFaceB.Length,section.LowEndB.Length)+
+                        Math.Max(section.Reveals.Length,section.LowReveals.Length));
+                    CountEnd(allEnds,section.EndA);CountEnd(allEnds,section.EndB);
+                }
+                if(capCapacity>WallGeometryVertexBudget)throw new InvalidOperationException("Wall thickness exceeds the scene geometry budget.");
+                caps=new VertexPositionColor[capCapacity];
                 alphaItems=items.Where(i=>i.HasAlpha).OrderBy(i=>i.Nearness).ThenBy(i=>i.ID).ToArray();
             } catch {Dispose();throw;}
         }
@@ -102,18 +116,16 @@ namespace FSO.LotView
         {
             if(preparedRevision==Data.WallRevision)return;
             preparedRevision=Data.WallRevision;CutWallCount=0;HiddenAttachmentCount=0;capCount=0;
-            var cutKeys=new HashSet<string>();
-            var fullEnds=new Dictionary<string,int>();var allEnds=new Dictionary<string,int>();
-            Action<Dictionary<string,int>,string> countEnd=(map,key)=>{int count;map.TryGetValue(key,out count);map[key]=count+1;};
+            cutKeys.Clear();fullEnds.Clear();
             foreach(var section in Data.WallSections) {
                 if(section.Cut){cutKeys.Add(section.Key);CutWallCount++;}
-                else {countEnd(fullEnds,section.EndA);countEnd(fullEnds,section.EndB);}
-                countEnd(allEnds,section.EndA);countEnd(allEnds,section.EndB);
+                else {CountEnd(fullEnds,section.EndA);CountEnd(fullEnds,section.EndB);}
             }
             foreach(var pair in wallItems){Array.Copy(pair.Value.Vertices,pair.Value.Active,pair.Value.Vertices.Length);}
             foreach(var section in Data.WallSections) {
                 if(section.Cut)Array.Copy(section.Low,0,wallItems[section.Surface].Active,section.Offset,6);
                 AddCap(section.Cut?section.LowTop:section.Top);
+                AddCap(section.Cut?section.LowReveals:section.Reveals);
                 // Only expose full ends at a physical end or a transition to low walls.
                 if(section.Cut?allEnds[section.EndA]==1:fullEnds[section.EndA]==1)
                     AddCap(section.Cut?section.LowEndA:section.EndFaceA);
@@ -121,9 +133,14 @@ namespace FSO.LotView
                     AddCap(section.Cut?section.LowEndB:section.EndFaceB);
             }
             foreach(var item in items) {
-                item.Hidden=item.WallHosts!=null&&item.WallHosts.Length>0&&item.WallHosts.All(cutKeys.Contains);
+                item.Hidden=item.WallHosts!=null&&item.WallHosts.Length>0;
+                if(item.Hidden)foreach(var host in item.WallHosts)if(!cutKeys.Contains(host)){item.Hidden=false;break;}
                 if(item.Hidden)HiddenAttachmentCount++;
             }
+        }
+        private static void CountEnd(Dictionary<string,int> map,string key)
+        {
+            int count;map.TryGetValue(key,out count);map[key]=count+1;
         }
         private void AddCap(VertexPositionColor[] vertices)
         {
@@ -174,6 +191,6 @@ namespace FSO.LotView
             return Matrix.CreateScale(scale,scale,1)*Matrix.CreateTranslation(width/2f-center.X*scale+pan.X,height/2f-center.Y*scale+pan.Y,0)*
                 Matrix.CreateOrthographicOffCenter(0,width,height,0,-128,128);
         }
-        public void Dispose() {foreach(var texture in textures)texture.Dispose();textures.Clear();materialItems.Clear();wallItems.Clear();items.Clear();alphaItems=null;caps=null;if(surfaces!=null)surfaces.Dispose();if(materials!=null)materials.Dispose();if(sprites!=null)sprites.Dispose();}
+        public void Dispose() {foreach(var texture in textures)texture.Dispose();textures.Clear();materialItems.Clear();wallItems.Clear();items.Clear();cutKeys.Clear();fullEnds.Clear();allEnds.Clear();alphaItems=null;caps=null;if(surfaces!=null)surfaces.Dispose();if(materials!=null)materials.Dispose();if(sprites!=null)sprites.Dispose();}
     }
 }

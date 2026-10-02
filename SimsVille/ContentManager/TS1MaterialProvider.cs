@@ -95,7 +95,11 @@ namespace FSO.Content.TS1
         }
         public Material Wall(ushort id, ushort style = 1)
         {
-            var source = Get(id, false, false);
+            // Fence appearance belongs to its style; reverse wallpaper fields
+            // can contain adjacent room patterns rather than fence materials.
+            bool persistent = style == 2 || style == 12 || style == 13 || style == 14;
+            if (persistent) id = style == 2 ? (ushort)248 : style == 12 ? (ushort)249 : style == 13 ? (ushort)250 : (ushort)251;
+            var source = Get(id, false, persistent);
             if (style == 0 || style == 1 || style == 255) return source;
             string key = source.Name + ":style:" + style;
             Material result;
@@ -108,7 +112,7 @@ namespace FSO.Content.TS1
                 int sx = x * frame.Width / result.Width;
                 int sy = (frame.Width - 1 - sx) / 2 + wallInset[0] + y * (wallSpan[0] - 1) / (result.Height - 1);
                 var pixel = result.Pixels[y * result.Width + x];
-                pixel.A = frame.GetPixel(sx, Math.Min(frame.Height - 1, sy)).A;
+                pixel.A = Math.Min(pixel.A, frame.GetPixel(sx, Math.Min(frame.Height - 1, sy)).A);
                 result.Pixels[y * result.Width + x] = pixel;
             }
             cache.Add(key, result); return result;
