@@ -1739,10 +1739,17 @@ camera-relative neighbor masks and authored concave corners preserve islands.
 No additional game upload is needed. Terrain height is still flat and water is
 static; this does not reproduce TS1's grass shader or enable lighting/simulation.
 
-Sixteen local checks pass: all 256 pool/pond masks, rotation mapping, saved grass
+Seventeen local checks pass: all 256 pool/pond masks, rotation mapping, saved grass
 immutability/determinism, GPU pools in both houses at four angles/three zooms,
 and previous depth, architecture, roof and stair regressions. Forty-eight full
 views were exported. Logs: artifacts/terrain-pool-test.log, pool-close-qa.log.
-Signed native build/audit: artifacts/offline-terrain-final; handoff xbox-terrain-*.zip.
+Signed native build/audit: artifacts/offline-terrain-ladder-final; handoff xbox-terrain-*.zip.
 Xbox 0.12 verification remains pending per XboxOfflineProbe/TESTING.md.
 Next rendering gate: contained-object SLOT offsets, followed by lighting.
+
+Pool ladder follow-up: user confirmed the ladder floating inside House 28 pool.
+Saved deck object 201 is on pool tile (31,11), facing west. The static viewer
+reconciles all three parts one tile east to the adjacent paved deck, without
+moving VM entities or writing the save. Other ladders remain in place.
+An additional regression covers attachment directions and both houses at every
+angle/zoom. LOT VIEW logs poolAttachments=1 for House 28, 0 for House 2.

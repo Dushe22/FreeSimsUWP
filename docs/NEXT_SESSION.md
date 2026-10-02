@@ -14,11 +14,11 @@ adjacency with the camera and composes concave pool corners around islands.
 Ground remains flat, water static; no broader simulation or new lighting.
 No extra game assets are needed beyond the 0.11 upload.
 
-Local suite: 16 checks pass, including all 256 adjacency masks, four rotations,
+Local suite: 17 checks pass, including all 256 adjacency masks, four rotations,
 three zooms, deterministic saved grass, GPU pool coverage and existing architecture/
 stair regressions. Full renders: artifacts/lot-render-check (48 views).
 Logs: artifacts/terrain-pool-test.log and artifacts/pool-close-qa.log.
-Native build/audit: artifacts/offline-terrain-final.
+Native build/audit: artifacts/offline-terrain-ladder-final.
 Handoff: artifacts/xbox-terrain-*.zip. Use XboxOfflineProbe/TESTING.md.
 Xbox 0.12 validation is pending the user's proof.log and Device Portal PNGs.
 
@@ -28,3 +28,10 @@ until these rendering gates pass; connect controlled simulation/rendering next,
 then Sims, interaction/gameplay and full save support.
 Remaining terrain fidelity includes saved corner heights and water animation.
 Architecture openings currently cover cardinal placements in the two test lots.
+
+Pool ladder follow-up: user confirmed the ladder floating inside House 28 pool.
+Saved deck object 201 is on pool tile (31,11), facing west. The static viewer
+reconciles all three parts one tile east to the adjacent paved deck, without
+moving VM entities or writing the save. Other ladders remain in place.
+An additional regression covers attachment directions and both houses at every
+angle/zoom. LOT VIEW logs poolAttachments=1 for House 28, 0 for House 2.

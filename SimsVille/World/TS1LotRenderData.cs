@@ -23,6 +23,7 @@ namespace FSO.LotView
         private readonly string roofName;
         private readonly VMRoomMap[] roofRooms = new VMRoomMap[2];
         private readonly List<VMRoom> roofRoomData = new List<VMRoom> {new VMRoom {IsOutside = true}};
+        private readonly Dictionary<short, Vector2> poolAttachmentOffsets = new Dictionary<short, Vector2>();
         private readonly Dictionary<string, Opening> openings = new Dictionary<string, Opening>();
         public int Size { get { return session.VM.Context.Architecture.Width; } }
         public int ObjectCount { get { return session.SavedObjectCount; } }
@@ -53,12 +54,43 @@ namespace FSO.LotView
                         throw new InvalidDataException("Unsupported stair visual callback: "+stub.ObjectID);
                 }
                 LoadOpenings();
+                LoadPoolAttachments();
                 // Water separates simulation room regions; it must not enclose a roof.
                 for (int story = 0; story < 2; story++) {
                     roofRooms[story] = new VMRoomMap();
                     roofRooms[story].GenerateMap(session.VM.Context.Architecture.Walls[story], new FloorTile[Size * Size], Size, Size, roofRoomData);
                 }
             } catch {session.Dispose();throw;}
+        }
+        private void LoadPoolAttachments()
+        {
+            // A saved ladder may straddle the wrong pool tile. Reconcile only
+            // this known three-part attachment with its adjacent deck for display;
+            // never move VM entities or rewrite the user's saved lot.
+            foreach(var deck in session.VM.Entities.Where(e=>e.Object.OBJ.GUID==0x4208E20Bu && e.Position.Level==1)) {
+                var group=deck.MultitileGroup;
+                if(group==null || group.Objects.Count!=3 || !group.Objects.Any(e=>e.Object.OBJ.GUID==0x4208CF6Eu) ||
+                    !group.Objects.Any(e=>e.Object.OBJ.GUID==0x6A3A76D7u))continue;
+                var offset=PoolLadderOffset(session.VM.Context.Architecture.Floors[0],Size,deck.Position.TileX,deck.Position.TileY,deck.Direction);
+                if(offset==Vector2.Zero)continue;
+                foreach(var part in group.Objects)poolAttachmentOffsets.Add(part.ObjectID,offset);
+            }
+        }
+        public static Vector2 PoolLadderOffset(FloorTile[] floors,int size,int x,int y,Direction direction)
+        {
+            if(floors==null||size<1||floors.Length!=size*size||x<0||y<0||x>=size||y>=size)
+                throw new ArgumentException("Invalid pool attachment footprint.");
+            int dx=0,dy=0;
+            switch(direction) {
+                case Direction.NORTH:dy=-1;break;case Direction.EAST:dx=1;break;
+                case Direction.SOUTH:dy=1;break;case Direction.WEST:dx=-1;break;
+                default:throw new ArgumentOutOfRangeException("direction");
+            }
+            Func<int,int,ushort> pattern=(xx,yy)=>xx<0||yy<0||xx>=size||yy>=size?(ushort)0:floors[yy*size+xx].Pattern;
+            if(pattern(x,y)!=65535)return Vector2.Zero;
+            ushort deck=pattern(x-dx,y-dy);
+            if(deck==0||deck>=65534||pattern(x+dx,y+dy)!=65535)return Vector2.Zero;
+            return new Vector2(-dx,-dy);
         }
         private sealed class Opening
         {
@@ -170,7 +202,7 @@ namespace FSO.LotView
             public readonly List<Surface> RoofMaterials = new List<Surface>();
             public readonly List<Sprite> Sprites = new List<Sprite>();
             public int OpeningEdges, StoryJoints, RoofTriangles;
-            public int TerrainTiles, PoolTiles, WaterTiles;
+            public int TerrainTiles, PoolTiles, WaterTiles, PoolAttachmentAdjustments;
             public int Rendered, Hidden, OutOfWorld, Contained, NoGraphic, Unsupported, AboveLevel, FloorTiles, WallEdges;
             public readonly List<string> Issues = new List<string>();
         }
@@ -178,7 +210,7 @@ namespace FSO.LotView
         {
             if (level < 1 || level > 3) throw new ArgumentOutOfRangeException("level");
             TS1SpriteLayer.Project(Vector3.Zero,zoom,rotation); // validate before allocating
-            var view=new View(); var arch=session.VM.Context.Architecture;
+            var view=new View {PoolAttachmentAdjustments=poolAttachmentOffsets.Count/3}; var arch=session.VM.Context.Architecture;
             var terrain=materials.Terrain(grass,Size);
             for(int y=0;y<Size;y++)for(int x=0;x<Size;x++) {
                 var points=new[]{new Vector3(x,y,-.01f),new Vector3(x+1,y,-.01f),new Vector3(x+1,y+1,-.01f),new Vector3(x,y+1,-.01f)};
@@ -253,6 +285,7 @@ namespace FSO.LotView
                     var layers=TS1SpriteLayer.Read(entity,zoom,rotation);
                     if(layers.Count==0){view.NoGraphic++;continue;}
                     var world=new Vector3(entity.Position.x/16f,entity.Position.y/16f,(entity.Position.Level-1)*2.95f);
+                    Vector2 poolOffset;if(poolAttachmentOffsets.TryGetValue(entity.ObjectID,out poolOffset))world+=new Vector3(poolOffset,0);
                     var point=TS1SpriteLayer.Project(world,zoom,rotation);
                     foreach(var layer in layers) view.Sprites.Add(new Sprite {
                         Layer=layer,Position=point+layer.Offset,ObjectID=entity.ObjectID,

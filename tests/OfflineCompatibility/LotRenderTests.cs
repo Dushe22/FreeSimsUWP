@@ -4,6 +4,7 @@ using System.Linq;
 using FSO.Common.Platform;
 using FSO.LotView;
 using FSO.SimAntics;
+using FSO.LotView.Model;
 using Microsoft.Xna.Framework;
 using Microsoft.Xna.Framework.Graphics;
 
@@ -11,7 +12,7 @@ namespace FreeSims.Tests
 {
     public static class LotRenderTests
     {
-        public const int Count=16;
+        public const int Count=17;
         public static List<string> Run(GraphicsDevice device,GamePaths paths,byte[] effect,Action<string> log)
         {
             var result=new List<string>();bool oldWorld=VM.UseWorld;VM.UseWorld=false;
@@ -31,6 +32,7 @@ namespace FreeSims.Tests
                 check("SAVED GRASS AND DETERMINISTIC TERRAIN",()=>TerrainMaterial(paths));
                 check("AUTHORED POOL AND WATER BORDERS",()=>WaterMaterials(paths));
                 check("GPU POOLS FOUR ANGLES THREE ZOOMS",()=>WaterViews(device,paths,effect));
+                check("POOL LADDER ATTACHMENT FOUR ANGLES THREE ZOOMS",()=>PoolLadderAttachments(paths));
                 foreach(int house in new[]{2,28}) check("HOUSE "+house+" FOUR ANGLES THREE LEVELS",()=> {
                     using(var lot=new TS1LotRenderData(paths,house)) {
                         for(int level=1;level<=3;level++) {
@@ -64,6 +66,47 @@ namespace FreeSims.Tests
                 });
             }finally{VM.UseWorld=oldWorld;}
             return result;
+        }
+        private static void PoolLadderAttachments(GamePaths paths)
+        {
+            foreach(Direction direction in new[]{Direction.NORTH,Direction.EAST,Direction.SOUTH,Direction.WEST}) {
+                var floors=Enumerable.Repeat(new FSO.LotView.Model.FloorTile{Pattern=12},25).ToArray();
+                int dx=direction==Direction.EAST?1:direction==Direction.WEST?-1:0;
+                int dy=direction==Direction.SOUTH?1:direction==Direction.NORTH?-1:0;
+                floors[12].Pattern=65535;floors[(2+dy)*5+2+dx].Pattern=65535;
+                var delta=TS1LotRenderData.PoolLadderOffset(floors,5,2,2,direction);
+                if(delta!=new Vector2(-dx,-dy))throw new InvalidOperationException("Wrong pool attachment direction.");
+                floors[12].Pattern=12;
+                if(TS1LotRenderData.PoolLadderOffset(floors,5,2,2,direction)!=Vector2.Zero)
+                    throw new InvalidOperationException("Valid deck attachment moved.");
+                floors[12].Pattern=65535;floors[(2-dy)*5+2-dx].Pattern=0;
+                if(TS1LotRenderData.PoolLadderOffset(floors,5,2,2,direction)!=Vector2.Zero)
+                    throw new InvalidOperationException("Unattached pool object moved onto grass.");
+            }
+            foreach(int house in new[]{2,28}) {
+                var store=new NeighborhoodStore(paths,0);var iff=new FSO.Files.Formats.IFF.IffFile(store.GetReadPath("Houses/House"+house.ToString("00")+".iff"));
+                using(var saved=TS1LotObjectSession.Load(iff,new FSO.Content.TS1.TS1ObjectProvider(paths)))using(var lot=new TS1LotRenderData(paths,house)) {
+                    var decks=saved.VM.Entities.Where(e=>e.Object.OBJ.GUID==0x4208E20Bu).ToArray();
+                    if(decks.Length!=(house==2?3:2))throw new InvalidOperationException("Missing pool ladders.");
+                    for(int zoom=1;zoom<=3;zoom++)for(int rotation=0;rotation<4;rotation++) {
+                        var view=lot.Build(zoom,rotation,1);
+                        if(view.PoolAttachmentAdjustments!=(house==28?1:0))throw new InvalidOperationException("Unexpected ladder adjustment count.");
+                        foreach(var deck in decks) {
+                            var delta=TS1LotRenderData.PoolLadderOffset(saved.VM.Context.Architecture.Floors[0],lot.Size,deck.Position.TileX,deck.Position.TileY,deck.Direction);
+                            var expected=house==28&&deck.ObjectID==201?Vector2.UnitX:Vector2.Zero;
+                            if(delta!=expected)throw new InvalidOperationException("Unrelated ladder moved.");
+                            foreach(var part in deck.MultitileGroup.Objects.Where(e=>e.Object.OBJ.BaseGraphicID!=0)) {
+                                var before=part.Position;var layer=TS1SpriteLayer.Read(part,zoom,rotation).Single();
+                                var world=new Vector3(before.x/16f+delta.X,before.y/16f+delta.Y,0);
+                                var sprite=view.Sprites.Single(s=>s.ObjectID==part.ObjectID);
+                                if(Vector2.Distance(sprite.Position,TS1SpriteLayer.Project(world,zoom,rotation)+layer.Offset)>.01f)
+                                    throw new InvalidOperationException("Pool ladder parts separated after rotation.");
+                                if(part.Position!=before)throw new InvalidOperationException("Saved ladder placement changed.");
+                            }
+                        }
+                    }
+                }
+            }
         }
         private static void TerrainMaterial(GamePaths paths)
         {
