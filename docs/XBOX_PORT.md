@@ -1753,3 +1753,16 @@ reconciles all three parts one tile east to the adjacent paved deck, without
 moving VM entities or writing the save. Other ladders remain in place.
 An additional regression covers attachment directions and both houses at every
 angle/zoom. LOT VIEW logs poolAttachments=1 for House 28, 0 for House 2.
+
+## 2026-10-02 - Opening frame fix 0.12.1
+The user's 0.12 House 28 angle-2 PNG shows wall textures clipping wide-window
+and double-door trim despite 17/17 PASS. Each saved architectural half now keeps
+its own authored mask; the visible wall face selects the corresponding mask.
+Only the camera-facing architectural half receives a bounded eight-sample SPR2
+depth bias to resolve frame/host-wall overlap. Opposite halves and unrelated
+sprites retain their depth; alpha/depth passes and authored masks are unchanged.
+Eighteen local checks pass, including actual House 28 wide-window/double-door
+frames at four rotations/three zooms and a foreground occlusion guard. Existing
+roof, stair, terrain and pool regressions remain intact. Local log:
+artifacts/openings-release-tests.log. Signed build: artifacts/offline-openings-final;
+handoff: artifacts/xbox-openings-*.zip. Xbox confirmation is pending.

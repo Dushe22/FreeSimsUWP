@@ -1,6 +1,6 @@
 # Next session
 
-Branch: xbox-uwp-port. Milestone: Xbox 0.12 terrain and pools.
+Branch: xbox-uwp-port. Milestone: Xbox 0.12.1 opening frames.
 
 User confirmed the inclined stair handrail fix works normally on Xbox.
 0.11 evidence (UWP Screenshots/0.11): 13/13 PASS, both houses with roofs at all
@@ -14,13 +14,19 @@ adjacency with the camera and composes concave pool corners around islands.
 Ground remains flat, water static; no broader simulation or new lighting.
 No extra game assets are needed beyond the 0.11 upload.
 
-Local suite: 17 checks pass, including all 256 adjacency masks, four rotations,
+Local suite: 18 checks pass, including all 256 adjacency masks, four rotations,
 three zooms, deterministic saved grass, GPU pool coverage and existing architecture/
 stair regressions. Full renders: artifacts/lot-render-check (48 views).
-Logs: artifacts/terrain-pool-test.log and artifacts/pool-close-qa.log.
-Native build/audit: artifacts/offline-terrain-ladder-final.
-Handoff: artifacts/xbox-terrain-*.zip. Use XboxOfflineProbe/TESTING.md.
-Xbox 0.12 validation is pending the user's proof.log and Device Portal PNGs.
+Logs: artifacts/openings-release-tests.log; close-ups: artifacts/architecture-inspect.
+Native build/audit: artifacts/offline-openings-final.
+Handoff: artifacts/xbox-openings-*.zip. Use XboxOfflineProbe/TESTING.md.
+The user's 0.12 PNG shows 17/17 PASS and clipped House 28 window/door trim.
+0.12.1 keeps a separate authored opening mask for each wall face and applies a
+bounded eight-sample SPR2 depth bias only to the camera-facing architectural
+half. Other faces and unrelated sprites retain their depth. Real three-section
+window/double-door GPU fixtures cover four angles/three zooms, frame coverage
+and foreground occlusion. No mask enlargement or asset/save edits.
+Xbox 0.12.1 validation is pending per XboxOfflineProbe/TESTING.md.
 
 After the terrain/pool hardware gate: resolve the 11 held contained objects in
 House 28 using SLOT visual offsets, then lighting. Keep the lot viewer static

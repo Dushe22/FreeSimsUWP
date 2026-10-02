@@ -12,7 +12,7 @@ namespace FreeSims.Tests
 {
     public static class LotRenderTests
     {
-        public const int Count=17;
+        public const int Count=18;
         public static List<string> Run(GraphicsDevice device,GamePaths paths,byte[] effect,Action<string> log)
         {
             var result=new List<string>();bool oldWorld=VM.UseWorld;VM.UseWorld=false;
@@ -26,6 +26,7 @@ namespace FreeSims.Tests
                 check("STAIR UPPER HANDRAIL SPRITES",()=>StairHandrails(paths));
                 check("TS1 DOOR AND WINDOW OPENING MASKS",()=>OpeningMasks(paths));
                 check("GPU OPENINGS PRESERVE DEPTH",()=>OpeningFixture(device,paths,effect));
+                check("GPU WIDE WINDOW AND DOUBLE DOOR FRAMES",()=>OpeningFrames(device,paths,effect));
                 check("SHARED FLOOR HEIGHT AND STORY JOINTS",()=>StoryJoints(paths));
                 check("ROOF BMP RLE8 AND BOUNDS",()=>RoofBitmap());
                 check("ROOF HIPS AND OPEN COURTYARDS",()=>RoofGeometry(paths));
@@ -212,6 +213,66 @@ namespace FreeSims.Tests
                 device.SetRenderTargets(old);device.Viewport=viewport;var pixels=new Color[4096];target.GetData(pixels);
                 Expect(pixels[32*64+32],Color.Blue);Expect(pixels[2*64+32],Color.Red);
             }finally{device.SetRenderTargets(old);device.Viewport=viewport;}
+        }
+        private static void OpeningFrames(GraphicsDevice device,GamePaths paths,byte[] effect)
+        {
+            var previous=device.GetRenderTargets();var viewport=device.Viewport;
+            try {
+                using(var lot=new TS1LotRenderData(paths,28))for(int zoom=1;zoom<=3;zoom++)for(int rotation=0;rotation<4;rotation++) {
+                    var data=lot.Build(zoom,rotation,1);var isolated=new TS1LotRenderData.View();
+                    // The original saved three-section window and adjacent double door.
+                    var ids=rotation<2?new short[]{414,528,530,64,68}:new short[]{445,529,531,63,66};
+                    foreach(var sprite in data.Sprites.Where(s=>ids.Contains(s.ObjectID))) {
+                        for(int i=0;i<sprite.Layer.Pixels.Length;i++) {
+                            byte a=sprite.Layer.Pixels[i].A;sprite.Layer.Pixels[i]=new Color(a,(byte)0,(byte)0,a);
+                        }
+                        isolated.Sprites.Add(sprite);
+                    }
+                    foreach(var source in data.WallMaterials) {
+                        var material=source.Material;
+                        var surface=new TS1LotRenderData.Surface{Material=new FSO.Content.TS1.TS1MaterialProvider.Material {
+                            Name=material.Name,Width=material.Width,Height=material.Height,
+                            Pixels=material.Pixels.Select(p=>new Color((byte)0,(byte)255,(byte)255,p.A)).ToArray()}};
+                        for(int i=0;i<source.Vertices.Count;i+=6)for(int y=29;y<=33;y++) {
+                            var a=TS1SpriteLayer.ProjectWithDepth(new Vector3(14,y,0),zoom,rotation);
+                            var b=TS1SpriteLayer.ProjectWithDepth(new Vector3(14,y+1,0),zoom,rotation);
+                            if(Vector3.DistanceSquared(source.Vertices[i].Position,a)<.0001f && Vector3.DistanceSquared(source.Vertices[i+1].Position,b)<.0001f)
+                                surface.Vertices.AddRange(source.Vertices.Skip(i).Take(6));
+                        }
+                        if(surface.Vertices.Count>0)isolated.WallMaterials.Add(surface);
+                    }
+                    if(isolated.Sprites.Count<5 || isolated.WallMaterials.Sum(s=>s.Vertices.Count)!=30)
+                        throw new InvalidOperationException("Missing saved opening/frame fixture.");
+                    float scale=1<<(3-zoom);var center=TS1SpriteLayer.Project(new Vector3(14,31.5f,1.45f),zoom,rotation);
+                    var camera=Matrix.CreateScale(scale,scale,1)*Matrix.CreateTranslation(256-center.X*scale,192-center.Y*scale,0)*
+                        Matrix.CreateOrthographicOffCenter(0,512,384,0,-128,128);
+                    using(var renderer=new TS1LotRenderer(device,isolated,effect))using(var target=new RenderTarget2D(device,512,384,false,SurfaceFormat.Color,DepthFormat.Depth24)) {
+                        int baseline=0,visible=0;
+                        foreach(bool walls in new[]{false,true}) {
+                            device.SetRenderTarget(target);device.Clear(ClearOptions.Target|ClearOptions.DepthBuffer,Color.Black,1,0);
+                            renderer.Draw(camera,walls);device.SetRenderTargets(previous);device.Viewport=viewport;
+                            var pixels=new Color[512*384];target.GetData(pixels);int red=pixels.Count(p=>p.R>0);
+                            if(walls)visible=red;else baseline=red;
+                        }
+                        if(baseline<500 || visible<baseline*.97f)
+                            throw new InvalidOperationException("Attached frames clipped: zoom="+zoom+" rotation="+rotation+" visible="+visible+" baseline="+baseline);
+                        // An unrelated opaque surface in front must still hide
+                        // the attached frames: this is not an always-on-top pass.
+                        float left=isolated.Sprites.Min(s=>s.Position.X)-2,right=isolated.Sprites.Max(s=>s.Position.X+s.Layer.Width)+2;
+                        float top=isolated.Sprites.Min(s=>s.Position.Y)-2,bottom=isolated.Sprites.Max(s=>s.Position.Y+s.Layer.Height)+2;
+                        float front=isolated.Sprites.Max(s=>s.BackNearness)+(float)Math.Sqrt(1.5)/.4f+.5f;
+                        var corners=new[]{new Vector3(left,top,front),new Vector3(right,top,front),new Vector3(right,bottom,front),new Vector3(left,bottom,front)};
+                        var occluded=new TS1LotRenderData.View();occluded.Sprites.AddRange(isolated.Sprites);
+                        foreach(int i in new[]{0,1,2,0,2,3})occluded.Ground.Add(new VertexPositionColor(corners[i],Color.Cyan));
+                        using(var foreground=new TS1LotRenderer(device,occluded,effect)) {
+                            device.SetRenderTarget(target);device.Clear(ClearOptions.Target|ClearOptions.DepthBuffer,Color.Black,1,0);
+                            foreground.Draw(camera,true);device.SetRenderTargets(previous);device.Viewport=viewport;
+                            var pixels=new Color[512*384];target.GetData(pixels);
+                            if(pixels.Count(p=>p.R>0)>baseline*.05f)throw new InvalidOperationException("Attached frames bypass foreground depth.");
+                        }
+                    }
+                }
+            }finally{device.SetRenderTargets(previous);device.Viewport=viewport;}
         }
         private static void StoryJoints(GamePaths paths)
         {

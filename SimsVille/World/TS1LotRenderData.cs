@@ -24,6 +24,7 @@ namespace FSO.LotView
         private readonly VMRoomMap[] roofRooms = new VMRoomMap[2];
         private readonly List<VMRoom> roofRoomData = new List<VMRoom> {new VMRoom {IsOutside = true}};
         private readonly Dictionary<short, Vector2> poolAttachmentOffsets = new Dictionary<short, Vector2>();
+        private readonly Dictionary<short, Vector2> openingNormals = new Dictionary<short, Vector2>();
         private readonly Dictionary<string, Opening> openings = new Dictionary<string, Opening>();
         public int Size { get { return session.VM.Context.Architecture.Width; } }
         public int ObjectCount { get { return session.SavedObjectCount; } }
@@ -116,19 +117,19 @@ namespace FSO.LotView
                 for (int relative = 0; relative < 4; relative++) {
                     if ((required & (1 << relative)) == 0) continue;
                     int side = (direction + relative) % 4;
-                    // The VM uses only canonical top-left/top-right segments. The
-                    // other saved multitile half supplies the matching opposite side.
-                    if (side != 0 && side != 3) continue;
+                    // Each saved half owns its face's mask. End sections of wide
+                    // windows can use different masks on opposite faces.
                     var wall = session.VM.Context.Architecture.Walls[story][y * Size + x];
-                    var segment = side == 0 ? WallSegments.TopRight : WallSegments.TopLeft;
+                    var segment = new[]{WallSegments.TopRight,WallSegments.BottomRight,WallSegments.BottomLeft,WallSegments.TopLeft}[side];
                     if ((wall.Segments & segment) == 0) continue;
                     var mask = definition.WallStyle > 21 ? entity.Object.Resource.Get<SPR>((ushort)(definition.WallStyleSpriteID + 2)) : materials.OpeningMask(definition.WallStyle);
                     if (mask == null) throw new InvalidDataException("Missing wall opening mask for object " + entity.ObjectID);
                     string identity = definition.WallStyle > 21 ? entity.Object.Resource.Name + ":" + definition.WallStyleSpriteID : "global:" + definition.WallStyle;
-                    string key = side == 0 ? EdgeKey(story, x, y, x + 1, y) : EdgeKey(story, x, y, x, y + 1);
+                    string key = (side == 0 ? EdgeKey(story,x,y,x+1,y) : side == 1 ? EdgeKey(story,x+1,y,x+1,y+1) : side == 2 ? EdgeKey(story,x,y+1,x+1,y+1) : EdgeKey(story,x,y,x,y+1)) + ":face:" + (side == 0 || side == 3);
                     Opening existing;
                     if (openings.TryGetValue(key, out existing) && existing.Identity != identity) throw new InvalidDataException("Conflicting wall openings at " + key);
                     openings[key] = new Opening {Mask = mask, Identity = identity};
+                    openingNormals[entity.ObjectID] = new[]{Vector2.UnitY,-Vector2.UnitX,-Vector2.UnitY,Vector2.UnitX}[side];
                 }
             }
         }
@@ -257,7 +258,7 @@ namespace FSO.LotView
                         var points=new[]{new Vector3(ax,ay,bottom),new Vector3(bx,by,bottom),new Vector3(bx,by,top),new Vector3(ax,ay,top)};
                         var material=materials.Wall(pattern,style);
                         Opening opening;
-                        if(!persistent && openings.TryGetValue(EdgeKey(story,ax,ay,bx,by),out opening)) {
+                        if(!persistent && openings.TryGetValue(EdgeKey(story,ax,ay,bx,by)+":face:"+(ax==bx ? camera.X>0 : camera.Y>0),out opening)) {
                             var delta=TS1SpriteLayer.Project(points[1]-points[0],zoom,rotation);
                             int frame=delta.X*delta.Y<0?0:1;
                             material=materials.WithOpening(material,opening.Mask,frame,delta.X<0,opening.Identity);
@@ -287,9 +288,14 @@ namespace FSO.LotView
                     var world=new Vector3(entity.Position.x/16f,entity.Position.y/16f,(entity.Position.Level-1)*2.95f);
                     Vector2 poolOffset;if(poolAttachmentOffsets.TryGetValue(entity.ObjectID,out poolOffset))world+=new Vector3(poolOffset,0);
                     var point=TS1SpriteLayer.Project(world,zoom,rotation);
+                    Vector2 openingNormal;
+                    // Near-face frames are decals on the host wall. A bounded
+                    // eight-sample SPR2 depth bias resolves overlap with the flat
+                    // wall plane without bringing the opposite face forward.
+                    float attachmentBias=openingNormals.TryGetValue(entity.ObjectID,out openingNormal) && Vector2.Dot(openingNormal,camera)>0 ? (float)Math.Sqrt(1.5)/.4f*8/255 : 0;
                     foreach(var layer in layers) view.Sprites.Add(new Sprite {
                         Layer=layer,Position=point+layer.Offset,ObjectID=entity.ObjectID,
-                        BackNearness=TS1SpriteLayer.ProjectWithDepth(world-new Vector3(0.5f,0.5f,0)+backOffsets[rotation]+layer.WorldOffset,zoom,rotation).Z
+                        BackNearness=TS1SpriteLayer.ProjectWithDepth(world-new Vector3(0.5f,0.5f,0)+backOffsets[rotation]+layer.WorldOffset,zoom,rotation).Z+attachmentBias
                     });
                     view.Rendered++;
                 } catch(Exception ex) {
