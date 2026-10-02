@@ -1868,3 +1868,24 @@ No new shader or persistent cache. Existing SPR2 depth and frame/texture sharing
 remain. The 29-check suite covers placement, nesting, counter depth, resource
 sharing/release and previous architecture/terrain/pool regressions. Hardware
 validation is pending; lighting is the next rendering milestone after this gate.
+
+## 0.15.0: room lighting and day/night preview
+
+0.14 SLOT hardware gate passed: 29/29, all eleven children visible in four
+angles, no logged failures/OOM, peak 459.48 MiB / 1024 MiB and pressure Low.
+
+The static viewer uses saved room daylight/electric contributions and the
+shared engine time palette. Room metadata follows floor triangles, visible wall
+faces/reveals and sprite/container roots. Ground, pools, ponds and accepted roof
+geometry receive exterior tint; emissive flags retain authored luminous color.
+Twelve two-hour palette keys interpolate and wrap through midnight. Shared
+Blueprint room color calculation uses the same implementation.
+
+D-pad left/right: +/-3 hours, pause. Right-stick click: automatic cycle toggle
+(four real minutes/day); noon paused initially. Five-minute palette updates
+reuse CPU vertex arrays and GPU resources. No new textures, shaders, simulation
+ticks, callbacks or save edits. Point-light falloff/cast shadows and lamp behavior
+switching remain later work. 31 checks plus day/night architecture captures
+cover source identity, opacity/depth, restore/cut cycles, slots and resource reuse.
+Hardware gate: verify dawn/day/dusk/night, floors/roof and long preview cycles
+without memory growth, then proceed to controlled simulation/rendering.

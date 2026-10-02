@@ -31,6 +31,7 @@ namespace FSO.LotView
         private readonly Dictionary<string, Opening> openings = new Dictionary<string, Opening>();
         // Per-lot CPU contours only; no process-wide roots retaining disposed scenes.
         private readonly Dictionary<TS1MaterialProvider.Material, WallProfile> wallProfiles = new Dictionary<TS1MaterialProvider.Material, WallProfile>();
+        public const ushort ExteriorLightRoom=65534,EmissiveLightRoom=65535;
         public const float StoryHeight = 2.95f, WallJointOverlap = .015f, WallThickness = .09f, LowWallHeight = .22f;
         public int Size { get { return session.VM.Context.Architecture.Width; } }
         public int ObjectCount { get { return session.SavedObjectCount; } }
@@ -219,11 +220,13 @@ namespace FSO.LotView
             public float BackNearness;
             public short ObjectID;
             public string[] WallHosts;
+            public ushort LightRoom;
         }
         public sealed class Surface
         {
             public TS1MaterialProvider.Material Material;
             public bool KeepWhenWallsHidden;
+            public readonly List<ushort> LightRooms = new List<ushort>();
             public readonly List<VertexPositionColorTexture> Vertices = new List<VertexPositionColorTexture>();
         }
         public sealed class WallSection
@@ -231,6 +234,7 @@ namespace FSO.LotView
             public string Key, EndA, EndB;
             public Surface Surface;
             public int Offset, Story, TileX, TileY;
+            public ushort LightRoom;
             public Vector2 Center;
             public bool Cut, RequestedCut;
             public double RestoreAt;
@@ -248,6 +252,8 @@ namespace FSO.LotView
             public readonly List<Surface> RoofMaterials = new List<Surface>();
             public readonly List<Sprite> Sprites = new List<Sprite>();
             public readonly List<WallSection> WallSections = new List<WallSection>();
+            public RoomLighting[] Lighting = new RoomLighting[0];
+            public bool[] OutsideRooms = new bool[0];
             public int Zoom, Rotation, Level, WallRevision;
             public TS1WallMode WallMode = (TS1WallMode)(-1);
             public Vector2? LastPointer;
@@ -263,6 +269,13 @@ namespace FSO.LotView
             if (level < 1 || level > 3) throw new ArgumentOutOfRangeException("level");
             TS1SpriteLayer.Project(Vector3.Zero,zoom,rotation); // validate before allocating
             var view=new View {Zoom=zoom,Rotation=rotation,Level=level,PoolAttachmentAdjustments=poolAttachmentOffsets.Count/3}; var arch=session.VM.Context.Architecture;
+            // Snapshot primitive light values only; the view must never retain VM entities.
+            var rooms=session.VM.Context.RoomInfo;
+            view.Lighting=new RoomLighting[rooms.Length];view.OutsideRooms=new bool[rooms.Length];
+            for(int i=0;i<rooms.Length;i++){
+                view.Lighting[i]=new RoomLighting{OutsideLight=rooms[i].Light.OutsideLight,AmbientLight=rooms[i].Light.AmbientLight};
+                view.OutsideRooms[i]=rooms[i].Room.IsOutside;
+            }
             var spriteFrames=new Dictionary<SPR2Frame,TS1SpriteLayer>();
             var terrain=materials.Terrain(grass,Size);
             for(int y=0;y<Size;y++)for(int x=0;x<Size;x++) {
@@ -284,15 +297,17 @@ namespace FSO.LotView
                     var uv=new[]{Vector2.Zero,Vector2.UnitX,Vector2.One,Vector2.UnitY};
                     Action<ushort,int[]> floor=(pattern,indices)=>{
                         if(pattern==0)return;
+
                         if(pattern>=65534){
-                            Textured(view.FloorMaterials,materials.Water(pattern,WaterNeighbors(arch.Floors[story],Size,x,y,pattern),rotation),corners,uv,indices,Color.White,zoom,rotation);
+                            LitFloor(view.FloorMaterials,materials.Water(pattern,WaterNeighbors(arch.Floors[story],Size,x,y,pattern),rotation),corners,uv,indices,zoom,rotation,story);
                             if(pattern==65535)view.PoolTiles++;else view.WaterTiles++;
                         }
-                        else Textured(view.FloorMaterials,materials.Floor(pattern,global&&!splitFloor&&pattern<=30),corners,uv,indices,Color.White,zoom,rotation);
+                        else LitFloor(view.FloorMaterials,materials.Floor(pattern,global&&!splitFloor&&pattern<=30),corners,uv,indices,zoom,rotation,story);
                         view.FloorTiles++;
                     };
                     // A diagonal wall can cross an ordinary full floor. Empty split fields do not erase it.
-                    if((wall.Segments&WallSegments.AnyDiag)!=0 && !splitFloor) floor(arch.Floors[story][y*Size+x].Pattern,new[]{0,1,2,0,2,3});
+                    if((wall.Segments&WallSegments.AnyDiag)!=0 && !splitFloor) floor(arch.Floors[story][y*Size+x].Pattern,
+                        (wall.Segments&WallSegments.HorizontalDiag)!=0?new[]{1,2,3,0,1,3}:new[]{0,1,2,0,2,3});
                     else if((wall.Segments&WallSegments.HorizontalDiag)!=0){floor(wall.TopLeftPattern,new[]{1,2,3});floor(wall.TopLeftStyle,new[]{0,1,3});}
                     else if((wall.Segments&WallSegments.VerticalDiag)!=0){floor(wall.TopLeftPattern,new[]{0,1,2});floor(wall.TopLeftStyle,new[]{0,2,3});}
                     else floor(arch.Floors[story][y*Size+x].Pattern,new[]{0,1,2,0,2,3});
@@ -320,7 +335,10 @@ namespace FSO.LotView
                             view.OpeningEdges++;
                         }
                         var faceUV=new[]{Vector2.UnitY,Vector2.One,Vector2.UnitX,Vector2.Zero};
-                        var surface=Textured(view.WallMaterials,material,points,faceUV,new[]{0,1,2,0,2,3},color,zoom,rotation,persistent);
+                        var faceNormal=Vector2.Normalize(new Vector2(ay-by,bx-ax));
+                        if(Vector2.Dot(faceNormal,camera)<0)faceNormal=-faceNormal;
+                        ushort lightRoom=RoomAt(story,(ax+bx)*.5f+faceNormal.X*.1f,(ay+by)*.5f+faceNormal.Y*.1f);
+                        var surface=Textured(view.WallMaterials,material,points,faceUV,new[]{0,1,2,0,2,3},color,zoom,rotation,persistent,lightRoom);
                         if(!persistent) {
                             var lowPoints=(Vector3[])points.Clone();lowPoints[2].Z=lowPoints[3].Z=z+LowWallHeight;
                             var lowUV=(Vector2[])faceUV.Clone();lowUV[2].Y=lowUV[3].Y=1-(z+LowWallHeight-bottom)/(top-bottom);
@@ -335,7 +353,7 @@ namespace FSO.LotView
                             if(!wallProfiles.TryGetValue(material,out profile))wallProfiles.Add(material,profile=new WallProfile(material));
                             view.WallSections.Add(new WallSection {
                                 Key=EdgeKey(story,ax,ay,bx,by),EndA=story+":"+ax+":"+ay,EndB=story+":"+bx+":"+by,
-                                Story=story,TileX=x,TileY=y,Center=new Vector2((ax+bx)*.5f,(ay+by)*.5f),Surface=surface,Offset=surface.Vertices.Count-6,Low=low,
+                                Story=story,TileX=x,TileY=y,LightRoom=lightRoom,Center=new Vector2((ax+bx)*.5f,(ay+by)*.5f),Surface=surface,Offset=surface.Vertices.Count-6,Low=low,
                                 Full=points.Select(p=>TS1SpriteLayer.ProjectWithDepth(p,zoom,rotation)).ToArray(),
                                 Top=profile.Cap(points[3],points[2],Vector2.Zero,Vector2.UnitX,thickness,zoom,rotation),
                                 LowTop=profile.Cap(lowPoints[3],lowPoints[2],lowUV[3],lowUV[2],thickness,zoom,rotation),
@@ -380,6 +398,7 @@ namespace FSO.LotView
                     float attachmentBias=openingNormals.TryGetValue(entity.ObjectID,out openingNormal) && Vector2.Dot(openingNormal,camera)>0 ? (float)Math.Sqrt(1.5)/.4f*8/255 : 0;
                     foreach(var layer in layers) view.Sprites.Add(new Sprite {
                         Layer=layer,Position=point+layer.Offset,ObjectID=entity.ObjectID,
+                        LightRoom=EmitsLight(entity)?EmissiveLightRoom:session.VM.Context.GetObjectRoom(root),
                         WallHosts=attachmentEdges.ContainsKey(root.ObjectID)?attachmentEdges[root.ObjectID].ToArray():null,
                         BackNearness=TS1SpriteLayer.ProjectWithDepth(world-new Vector3(0.5f,0.5f,0)+backOffsets[rotation]+layer.WorldOffset,zoom,rotation).Z+attachmentBias
                     });
@@ -392,6 +411,23 @@ namespace FSO.LotView
             }
             if(level==3)BuildRoofs(view,zoom,rotation);
             return view;
+        }
+        private static bool EmitsLight(VMEntity entity)
+        {
+            var flags=(VMEntityFlags2)entity.GetValue(VMStackObjectVariable.FlagField2);
+            return (flags&VMEntityFlags2.GeneratesLight)!=0 &&
+                (flags&(VMEntityFlags2.ArchitectualDoor|VMEntityFlags2.ArchitectualWindow))==0 &&
+                entity.GetValue(VMStackObjectVariable.LightingContribution)>0;
+        }
+        private ushort RoomAt(int story,float x,float y)
+        {
+            if(story<0||story>=2||x<0||y<0||x>=Size||y>=Size)return ExteriorLightRoom;
+            int xx=(int)x,yy=(int)y,index=yy*Size+xx;
+            var arch=session.VM.Context.Architecture;uint rooms=arch.Rooms[story].Map[index];
+            var wall=arch.Walls[story][index];
+            bool upper=(wall.Segments&WallSegments.HorizontalDiag)!=0?x-xx+y-yy<1:
+                (wall.Segments&WallSegments.VerticalDiag)!=0&&y-yy<x-xx;
+            return (ushort)(upper?rooms>>16:rooms&65535);
         }
         // SLOT offsets are authored in sixteenths of a tile horizontally and
         // fifths vertically, with standard surface heights overriding Offset.Z.
@@ -594,11 +630,26 @@ namespace FSO.LotView
             }
             return (byte)result;
         }
-        private static Surface Textured(List<Surface> surfaces,TS1MaterialProvider.Material material,Vector3[] corners,Vector2[] uv,int[] indices,Color color,int zoom,int rotation,bool keepWhenWallsHidden=false)
+        private void LitFloor(List<Surface> surfaces,TS1MaterialProvider.Material material,Vector3[] corners,Vector2[] uv,int[] indices,int zoom,int rotation,int story)
+        {
+            var surface=Textured(surfaces,material,corners,uv,indices,Color.White,zoom,rotation);
+            int start=surface.Vertices.Count-indices.Length;
+            // Split room assignment per triangle, including ordinary floors crossing
+            // diagonal walls; never interpolate indoor/outdoor light across a room edge.
+            for(int i=0;i<indices.Length;i+=3){
+                var center=(corners[indices[i]]+corners[indices[i+1]]+corners[indices[i+2]])/3;
+                var room=RoomAt(story,center.X,center.Y);
+                for(int j=0;j<3;j++)surface.LightRooms[start+i+j]=room;
+            }
+        }
+        private static Surface Textured(List<Surface> surfaces,TS1MaterialProvider.Material material,Vector3[] corners,Vector2[] uv,int[] indices,Color color,int zoom,int rotation,bool keepWhenWallsHidden=false,ushort lightRoom=ExteriorLightRoom)
         {
             var surface=surfaces.FirstOrDefault(x=>ReferenceEquals(x.Material,material) && x.KeepWhenWallsHidden==keepWhenWallsHidden);
             if(surface==null){surface=new Surface{Material=material,KeepWhenWallsHidden=keepWhenWallsHidden};surfaces.Add(surface);}
-            foreach(int i in indices)surface.Vertices.Add(new VertexPositionColorTexture(TS1SpriteLayer.ProjectWithDepth(corners[i],zoom,rotation),color,uv[i]));
+            foreach(int i in indices){
+                surface.Vertices.Add(new VertexPositionColorTexture(TS1SpriteLayer.ProjectWithDepth(corners[i],zoom,rotation),color,uv[i]));
+                surface.LightRooms.Add(lightRoom);
+            }
             return surface;
         }
         private static void TriangleSurface(List<VertexPositionColor> vertices,Vector3[] corners,int[] indices,Color color,int zoom,int rotation)

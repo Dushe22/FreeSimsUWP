@@ -17,6 +17,26 @@ VM.UseWorld=false;
 using(var c=new Control()) using(var d=new GraphicsDevice(GraphicsAdapter.DefaultAdapter,GraphicsProfile.HiDef,new PresentationParameters {BackBufferWidth=1280,BackBufferHeight=720,DeviceWindowHandle=c.Handle})) {
 var effect=File.ReadAllBytes("experiments/XboxOfflineProbe/Effects/TS1SpriteDepth.mgfxo");
 if(!FreeSims.Tests.LotRenderTests.Run(d,paths,effect,Console.WriteLine).All(x=>x.StartsWith("PASS "))) return 1;
+if(args.Contains("--lighting-qa")) {
+var qa=Path.GetFullPath("artifacts/lighting-qa");Directory.CreateDirectory(qa);
+foreach(int house in new[]{2,28})using(var lot=new TS1LotRenderData(paths,house))
+for(int level=1;level<=3;level++)foreach(int r in new[]{0,2}) {
+var data=lot.Build(2,r,level);
+using(var renderer=new TS1LotRenderer(d,data,effect))using(var target=new RenderTarget2D(d,1280,720,false,SurfaceFormat.Color,DepthFormat.Depth24)) {
+foreach(int hour in new[]{0,8,12,18})foreach(var mode in new[]{TS1WallMode.Up,TS1WallMode.Down}) {
+var camera=TS1LotRenderer.Camera(lot.Size,2,r,1280,720,Vector2.Zero);
+lot.UpdateWalls(data,mode,null,camera,1280,720);
+renderer.UpdateLighting(hour);
+d.SetRenderTarget(target);d.Clear(ClearOptions.Target|ClearOptions.DepthBuffer,new Microsoft.Xna.Framework.Color(16,24,39),1,0);
+renderer.Draw(camera,mode);d.SetRenderTarget(null);
+var pixels=new Microsoft.Xna.Framework.Color[1280*720];target.GetData(pixels);
+SavePixels(pixels,1280,720,Path.Combine(qa,"house"+house+"-level"+level+"-r"+r+"-"+mode+"-hour"+hour+".png"));
+Console.WriteLine("LIGHT QA house="+house+" level="+level+" r="+r+" mode="+mode+" hour="+hour+" rooms="+data.Lighting.Length+" capacity="+renderer.WallGeometryCapacity+" textureBytes="+renderer.TextureBytes);
+}
+}
+}
+return 0;
+}
 if(args.Contains("--architecture-qa")) {
 var qa=Path.GetFullPath("artifacts/architecture-qa");Directory.CreateDirectory(qa);
 foreach(int house in new[]{2,28})using(var lot=new TS1LotRenderData(paths,house))

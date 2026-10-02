@@ -12,7 +12,7 @@ namespace FreeSims.Tests
 {
     public static class LotRenderTests
     {
-        public const int Count=29;
+        public const int Count=31;
         public static List<string> Run(GraphicsDevice device,GamePaths paths,byte[] effect,Action<string> log)
         {
             var result=new List<string>();bool oldWorld=VM.UseWorld;VM.UseWorld=false;
@@ -22,6 +22,8 @@ namespace FreeSims.Tests
                 check("GPU SHARED SPRITES AND RESOURCE DISPOSAL",()=>SharedSprites(device,paths,effect));
                 check("CONTAINED SLOT GEOMETRY AND SAVED POSITIONS",()=>ContainedSlots(paths));
                 check("GPU SLOT DEPTH AND RESOURCE REUSE",()=>SlotGpu(device,paths,effect));
+                check("ROOM LIGHTING SAVED CONTRIBUTIONS AND MIDNIGHT",()=>LightingRooms(paths));
+                check("GPU DAY NIGHT DEPTH AND RESOURCE REUSE",()=>LightingGpu(device,paths,effect));
                 check("POINTER FOUR ANGLES ZOOMS AND FLOOR HEIGHTS",()=>PointerProjection());
                 check("THREE WALL MODES HOVER AND STORY BOUNDARIES",()=>WallModes(paths));
                 check("TIMED WALL RESTORE STATIONARY POINTER AND GPU",()=>TimedWallRestore(device,paths,effect));
@@ -78,6 +80,142 @@ namespace FreeSims.Tests
                 });
             }finally{VM.UseWorld=oldWorld;}
             return result;
+        }
+        private static void LightingRooms(GamePaths paths)
+        {
+            var night=VMArchitecture.OutsideLightAt(0);
+            if(night!=new Color(75,105,183)||VMArchitecture.OutsideLightAt(.5)!=Color.White ||
+                VMArchitecture.OutsideLightAt(.75)!=new Color(217,109,0) ||
+                VMArchitecture.OutsideLightAt(1)!=night||VMArchitecture.OutsideLightAt(-1)!=night)
+                throw new InvalidOperationException("Shared time palette/24-hour wrapping changed.");
+            if(Vector3.Distance(VMArchitecture.OutsideLightAt(1-1e-7).ToVector3(),night.ToVector3())>.02f)
+                throw new InvalidOperationException("Midnight light is discontinuous.");
+            bool rejected=false;try{VMArchitecture.OutsideLightAt(double.NaN);}catch(ArgumentOutOfRangeException){rejected=true;}
+            if(!rejected)throw new InvalidOperationException("Non-finite lighting time accepted.");
+            var dark=new RoomLighting();
+            var lit=new RoomLighting{AmbientLight=100};
+            var window=new RoomLighting{OutsideLight=100};
+            if(dark.ColorAt(Color.White,false)!=new Color(86,86,86) ||
+                lit.ColorAt(night,false)!=Color.White||window.ColorAt(night,false)!=night ||
+                dark.ColorAt(night,true)!=night || dark.ColorAt(night,false).B<=dark.ColorAt(night,false).R)
+                throw new InvalidOperationException("Room daylight/electric/minimum ambient classification failed.");
+            foreach(int house in new[]{2,28}) {
+                var iff=new FSO.Files.Formats.IFF.IffFile(new FSO.Common.Platform.NeighborhoodStore(paths,0).GetReadPath("Houses/House"+house.ToString("00")+".iff"));
+                using(var saved=FSO.SimAntics.TS1LotObjectSession.Load(iff,new FSO.Content.TS1.TS1ObjectProvider(paths)))
+                using(var lot=new TS1LotRenderData(paths,house)){
+                    var view=lot.Build(2,0,3);var rooms=saved.VM.Context.RoomInfo;
+                    if(view.Lighting.Length!=rooms.Length||!view.OutsideRooms.Any(x=>x)||!view.OutsideRooms.Any(x=>!x))
+                        throw new InvalidOperationException("Missing indoor/outdoor room snapshot.");
+                    for(int i=0;i<rooms.Length;i++){
+                        if(ReferenceEquals(rooms[i].Light,view.Lighting[i]) ||
+                            rooms[i].Light.AmbientLight!=view.Lighting[i].AmbientLight ||
+                            rooms[i].Light.OutsideLight!=view.Lighting[i].OutsideLight ||
+                            rooms[i].Room.IsOutside!=view.OutsideRooms[i])
+                            throw new InvalidOperationException("Light snapshot retains or changes VM room data.");
+                    }
+                    foreach(var sprite in view.Sprites){
+                        var entity=saved.VM.GetObjectById(sprite.ObjectID);var root=entity;
+                        while(root.Container!=null)root=root.Container;
+                        var flags=(FSO.SimAntics.VMEntityFlags2)entity.GetValue(FSO.SimAntics.Model.VMStackObjectVariable.FlagField2);
+                        bool emits=(flags&FSO.SimAntics.VMEntityFlags2.GeneratesLight)!=0 &&
+                            (flags&(FSO.SimAntics.VMEntityFlags2.ArchitectualWindow|FSO.SimAntics.VMEntityFlags2.ArchitectualDoor))==0 &&
+                            entity.GetValue(FSO.SimAntics.Model.VMStackObjectVariable.LightingContribution)>0;
+                        if(sprite.LightRoom!=(emits?65535:saved.VM.Context.GetObjectRoom(root)))
+                            throw new InvalidOperationException("Sprite/SLOT lighting did not follow saved room or light source.");
+                    }
+                    if(view.TerrainMaterials.Concat(view.RoofMaterials).Any(s=>s.LightRooms.Any(r=>r!=TS1LotRenderData.ExteriorLightRoom)))
+                        throw new InvalidOperationException("Exterior geometry uses a room-zero ambient fallback.");
+                    foreach(var surface in view.FloorMaterials.Concat(view.WallMaterials).Concat(view.TerrainMaterials).Concat(view.RoofMaterials))
+                        if(surface.LightRooms.Count!=surface.Vertices.Count||surface.LightRooms.Any(r=>r>=rooms.Length&&r!=TS1LotRenderData.ExteriorLightRoom))
+                            throw new InvalidOperationException("Surface lighting metadata mismatches geometry.");
+                    if(!view.FloorMaterials.Any(s=>s.LightRooms.Any(r=>!view.OutsideRooms[r])) ||
+                        !view.FloorMaterials.Any(s=>s.LightRooms.Any(r=>view.OutsideRooms[r])) ||
+                        !view.WallSections.Any(s=>!view.OutsideRooms[s.LightRoom]) ||
+                        !view.WallSections.Any(s=>view.OutsideRooms[s.LightRoom]))
+                        throw new InvalidOperationException("Floors/wall faces lack their independent interior/exterior rooms.");
+                }
+            }
+        }
+        private static void LightingGpu(GraphicsDevice device,GamePaths paths,byte[] effect)
+        {
+            LightingBands(device,effect);
+            var previous=device.GetRenderTargets();var viewport=device.Viewport;
+            try {
+                foreach(int house in new[]{2,28})using(var lot=new TS1LotRenderData(paths,house))
+                for(int rotation=0;rotation<4;rotation++)foreach(int zoom in new[]{1,2,3}) {
+                    var view=lot.Build(zoom,rotation,2);
+                    var camera=TS1LotRenderer.Camera(lot.Size,zoom,rotation,640,360,Vector2.Zero);
+                    lot.UpdateWalls(view,TS1WallMode.Up,null,camera,640,360);
+                    var originals=view.WallMaterials.SelectMany(s=>s.Vertices).ToArray();
+                    using(var renderer=new TS1LotRenderer(device,view,effect))
+                    using(var target=new RenderTarget2D(device,640,360,false,SurfaceFormat.Color,DepthFormat.Depth24)) {
+                        Func<bool,Color[]> draw=reverse=>{
+                            device.SetRenderTarget(target);device.Clear(ClearOptions.Target|ClearOptions.DepthBuffer,Color.Transparent,1,0);
+                            renderer.Draw(camera,view.WallMode,reverse);
+                            device.SetRenderTargets(previous);device.Viewport=viewport;
+                            var pixels=new Color[640*360];target.GetData(pixels);return pixels;
+                        };
+                        var original=draw(false);var reverseOriginal=draw(true);
+                        int textures=renderer.TextureCount,capacity=renderer.WallGeometryCapacity;
+                        long bytes=renderer.TextureBytes;
+                        renderer.UpdateLighting(12);var day=draw(false);
+                        renderer.UpdateLighting(0);var night=draw(false);
+                        var reverseNight=draw(true);
+                        // Authored coplanar DGRP layers can already tie in the unlit
+                        // baseline. Lighting must introduce no new depth/order ties.
+                        if(day.SequenceEqual(night)||night.Count(p=>p.A>0)!=day.Count(p=>p.A>0) ||
+                            night.Where((p,i)=>p!=reverseNight[i]&&original[i]==reverseOriginal[i]).Any())
+                            throw new InvalidOperationException("Lighting changed coverage/depth ordering at house="+house+" r="+rotation+" zoom="+zoom);
+                        renderer.UpdateLighting(6);draw(false);renderer.UpdateLighting(18);draw(false);
+                        renderer.UpdateLighting(24);
+                        if(!night.SequenceEqual(draw(false))||renderer.UpdateLighting(0))
+                            throw new InvalidOperationException("Cycle/midnight does not restore exact night pixels.");
+                        renderer.UpdateLighting(12);
+                        if(!day.SequenceEqual(draw(false)))throw new InvalidOperationException("Day restoration accumulates tint.");
+                        var hover=FindWallHover(lot,view,camera,640,360);
+                        lot.UpdateWalls(view,TS1WallMode.Cutaway,hover,camera,640,360,1);
+                        renderer.UpdateLighting(0);draw(false);
+                        lot.UpdateWalls(view,TS1WallMode.Up,null,camera,640,360,2);
+                        if(!night.SequenceEqual(draw(false)))throw new InvalidOperationException("Night wall caps/attachments failed restoration.");
+                        renderer.UpdateLighting(12,false);
+                        if(!original.SequenceEqual(draw(false)))throw new InvalidOperationException("Unlit baseline changed after light/wall cycles.");
+                        if(textures!=renderer.TextureCount||bytes!=renderer.TextureBytes||capacity!=renderer.WallGeometryCapacity ||
+                            !originals.SequenceEqual(view.WallMaterials.SelectMany(s=>s.Vertices)))
+                            throw new InvalidOperationException("Relighting uploads resources or mutates source geometry.");
+                    }
+                }
+            }finally{device.SetRenderTargets(previous);device.Viewport=viewport;}
+        }
+        // Independent white-texture bands distinguish exterior, electric interior,
+        // unlit interior and emissive light on GPU (not just CPU color formulas).
+        private static void LightingBands(GraphicsDevice device,byte[] effect)
+        {
+            var view=new TS1LotRenderData.View{
+                Lighting=new[]{new RoomLighting(),new RoomLighting{AmbientLight=100},new RoomLighting()},
+                OutsideRooms=new[]{false,false,false}};
+            var surface=new TS1LotRenderData.Surface{Material=new FSO.Content.TS1.TS1MaterialProvider.Material{
+                Width=1,Height=1,Pixels=new[]{Color.White}}};
+            ushort[] rooms={TS1LotRenderData.ExteriorLightRoom,1,2,TS1LotRenderData.EmissiveLightRoom};
+            for(int band=0;band<4;band++)foreach(var source in Quad(0,Color.White)){
+                var vertex=source;vertex.Position.X=band*16+vertex.Position.X/4;
+                surface.Vertices.Add(vertex);surface.LightRooms.Add(rooms[band]);
+            }
+            view.FloorMaterials.Add(surface);
+            var previous=device.GetRenderTargets();var viewport=device.Viewport;
+            using(var renderer=new TS1LotRenderer(device,view,effect))
+            using(var target=new RenderTarget2D(device,64,64,false,SurfaceFormat.Color,DepthFormat.Depth24)){
+                try{
+                    renderer.UpdateLighting(0);
+                    device.SetRenderTarget(target);device.Clear(ClearOptions.Target|ClearOptions.DepthBuffer,Color.Transparent,1,0);
+                    renderer.Draw(Matrix.CreateOrthographicOffCenter(0,64,64,0,-128,128),true);
+                    device.SetRenderTargets(previous);device.Viewport=viewport;
+                    var pixels=new Color[4096];target.GetData(pixels);
+                    Expect(pixels[32*64+8],new Color(75,105,183));
+                    Expect(pixels[32*64+24],Color.White);
+                    Expect(pixels[32*64+40],new Color(50,70,123));
+                    Expect(pixels[32*64+56],Color.White);
+                }finally{device.SetRenderTargets(previous);device.Viewport=viewport;}
+            }
         }
         private static void PointerProjection()
         {

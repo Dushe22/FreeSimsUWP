@@ -77,3 +77,20 @@ SLOT offset. Horizontal units are 1/16 tile; vertical units are 1/5 tile, using
 standard surface heights or the custom Z field. Preserve saved placement and
 child direction, inherit root cutaway hosting and ancestor hidden state. Bound
 invalid chains; compute only during view builds and share existing frame arrays.
+
+## Room lighting and time preview
+- Snapshot saved room contributions/outside flags into each view, never retain
+  room entity lists or VM objects. Geometry triangles/visible wall faces and
+  sprite container roots use the architecture room map, independent of cutaway.
+- Share VMArchitecture.OutsideLightAt and RoomLighting.ColorAt with the engine;
+  wrap finite time inputs through midnight. Emissive saved objects stay untinted
+  only when the engine GeneratesLight/contribution flags permit it.
+- Preserve base vertex colors, authored alpha and SPR2 depth. Relight existing
+  vertex arrays from the base on palette changes; no compounded tint, texture
+  edits/uploads, new lighting targets or shader/depth calibration changes.
+- Clock belongs to the viewer and pauses across inactive/disconnected updates.
+  Quantize to five preview minutes and invalidate only changed colors; retain
+  static redraw behavior. Changing time must not run behaviors or write saves.
+- Run Test-LotRendering.ps1 -LightingQa for day/night room/depth/resource gates
+  and dynamic captures. Run OfflineCompatibility when changing shared engine
+  lighting. Signed native/hardware validation remains separate.

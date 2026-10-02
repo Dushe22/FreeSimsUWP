@@ -1,38 +1,44 @@
-# Contained SLOT objects 0.14.0.0
+# Room lighting and day/night 0.15.0.0
 
-Update the existing Offline Probe; keep the already uploaded game files.
-Menu runs the optional suite: expect 29/29 PASS. No extra assets are needed.
+Update the Offline Probe and keep the already uploaded game files.
+Menu runs the optional suite: expect 31/31 PASS. No extra assets are needed.
 
-Controls: left-stick click toggles pointer/camera; left stick moves pointer or
-pans, right stick pans, Y cycles UP/DOWN/CUTAWAY, A rotates, X switches lots,
-LB zooms, RB selects floor/roof, View centers, Menu tests, B exits.
+New controls:
+- D-pad left/right: change time by three hours and pause the preview.
+- Right-stick click: toggle automatic cycle (four real minutes per day).
+- Initial time: 12:00, paused. The viewer clock does not change the saved lot.
 
-House 28 checks, all four angles and three zooms:
-- Floor 1: five red tabletop slot machines on the arcade counter, registers
-  and gift displays on the shop counters, and the lamp on the dressing-room
-  counter. Objects must sit on their surface rather than float or sink.
-- Expected: SLOTTED 11, HELD 0, UNSUPPORTED 0; DRAWN 398 on floor 1 and
-  508 on floor 2/roof at zooms 1 and 3. Zoom 2 has different authored frames.
-- Objects behind counters, walls or upstairs floors remain depth-occluded.
-  Cutting/restoring walls must preserve contained objects and their hosts.
-- House 2 remains SLOTTED 0. Its original brown stair landing tile is preserved.
-- Alternate lots/floors/zooms, run Menu twice, Home/return, B exit and relaunch.
-  Return proof.log and any screenshots with placement or occlusion defects.
+Existing controls: LS click pointer/camera; LS moves pointer or pans; RS pans;
+Y UP/DOWN/CUTAWAY, A rotate, X lots, LB zoom, RB floor/roof, View center,
+Menu tests, B exit.
 
-Shared implementation: SLOT standard/custom heights, parent rotation and
-nested container offsets. Rendering does not move VM objects, rewrite saves,
-run placement callbacks or enable simulation. Invalid slot chains produce
-controlled object diagnostics; avatar bone slots await the Sims milestone.
+Hardware checks on both lots, all four angles and three zooms:
+1. At 12:00, inspect floor 1, floor 2 and roof. Window/door openings, stair
+   landing materials, fences and SLOT objects retain geometry/depth.
+2. Step through 15:00, 18:00, 21:00, 00:00, 03:00, 06:00, 09:00 and noon.
+   Ground, water and roof change exterior tint; each room follows its saved
+   daylight/electric contributions. Saved lights do not run new behavior.
+3. Lit interiors stay brighter than unlit rooms at night; luminous objects
+   with saved GeneratesLight flags remain visible. Frames and translucent
+   edges must retain openings, without black rectangles or new occlusion.
+4. Cut/restore walls at night, including a stationary pointer after leaving
+   a wall (~0.75 s). Relighting must preserve caps/reveals and SLOT placement.
+5. Enable automatic time for two full cycles. No accumulating tint or memory
+   growth; pause with RS click and confirm the scene stops changing.
+6. Alternate lots/levels/zooms, run Menu twice, Home/return, exit and relaunch.
+   Return proof.log and day/night screenshots, reporting any visual defect.
 
-Local evidence: 29 render checks, including real contained children at all
-angles/zooms, independent nested layout, malformed/cyclic slots, counter depth,
-draw order, shared frames, resource disposal and previous rendering regressions.
-Captures: artifacts/architecture-qa. Native/hardware evidence is separate.
+Expect House 28 SLOTTED 11, HELD 0, UNSUPPORTED 0. House 2 has no contained
+children and preserves its original brown stair landing tile.
+LIGHT logs include hour/cycle/room count, texture count and upload bytes.
+Changing time/cutaway must not allocate or upload replacement textures.
+Memory usage must remain below the app budget; desktop tests do not certify
+Xbox performance or memory.
 
-Memory/rendering contract: docs/RENDERING_CONTRACT.md. Slot placement is computed
-only during view construction, with no new long-lived VM cache. Existing frame
-pixel/depth sharing and GPU texture ownership remain unchanged.
-
-Accepted roof, two-tile cutaway radius and 0.75 s restoration remain unchanged.
-Terrain is flat, water static, viewer admits two test lots and simulation is off.
-Next after hardware validation: lighting, then controlled simulation/rendering.
+Local evidence: 31 render checks, shared engine offline compatibility, and
+96 dynamic captures in artifacts/lighting-qa. Native/hardware checks separate.
+Generic room rules apply to every loaded footprint; the current viewer admits
+two test lots. Per-room ambient/electric lighting is implemented; point-light
+falloff/cast shadows and behavior-driven lamp switching remain later work.
+Terrain remains flat and water static. Simulation remains off.
+Next after the hardware gate: controlled simulation/rendering.

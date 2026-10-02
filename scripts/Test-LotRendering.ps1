@@ -1,5 +1,5 @@
 [CmdletBinding()]
-param([string]$GameRoot,[switch]$RebuildShader,[switch]$ArchitectureQa)
+param([string]$GameRoot,[switch]$RebuildShader,[switch]$ArchitectureQa,[switch]$LightingQa)
 $ErrorActionPreference='Stop'
 $repo=Split-Path $PSScriptRoot -Parent
 Push-Location $repo
@@ -20,6 +20,7 @@ try {
     if($LASTEXITCODE -ne 0){throw 'Render harness engine compilation failed'}
     $renderArgs=@([IO.Path]::GetFullPath($GameRoot))
     if($ArchitectureQa){$renderArgs+='--architecture-qa'}
+    if($LightingQa){$renderArgs+='--lighting-qa'}
     & dotnet run --project experiments/DesktopLotRenderCheck -c Release -- @renderArgs
     if($LASTEXITCODE -ne 0){throw 'Lot GPU checks failed'}
 }finally{Pop-Location}

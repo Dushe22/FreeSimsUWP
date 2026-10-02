@@ -65,7 +65,7 @@ namespace FSO.SimAntics
 
         private bool Redraw;
 
-        private Color[] m_TimeColors = new Color[]
+        private static readonly Color[] m_TimeColors = new Color[]
         {
             new Color(50, 70, 122)*1.5f,
             new Color(50, 70, 122)*1.5f,
@@ -140,13 +140,19 @@ namespace FSO.SimAntics
             Redraw = true;
         }
 
+        // Shared palette for simulation and the static viewer. Twelve two-hour keys
+        // wrap through midnight; endpoint inputs never index beyond the palette.
+        public static Color OutsideLightAt(double time)
+        {
+            if(double.IsNaN(time)||double.IsInfinity(time))throw new ArgumentOutOfRangeException("time");
+            double key=(time-Math.Floor(time))*m_TimeColors.Length;
+            int first=(int)key;
+            return Color.Lerp(m_TimeColors[first],m_TimeColors[(first+1)%m_TimeColors.Length],(float)(key-first));
+        }
         public void SetTimeOfDay(double time)
         {
-            Color col1 = m_TimeColors[(int)Math.Floor(time * (m_TimeColors.Length - 1))]; //first colour
-            Color col2 = m_TimeColors[(int)Math.Floor(time * (m_TimeColors.Length - 1)) + 1]; //second colour
-            double Progress = (time * (m_TimeColors.Length - 1)) % 1; //interpolation progress (mod 1)
-
-            if (VM.UseWorld) WorldUI.OutsideColor = Color.Lerp(col1, col2, (float)Progress); //linearly interpolate between the two colours for this specific time.
+            var color=OutsideLightAt(time);
+            if (VM.UseWorld) WorldUI.OutsideColor=color;
         }
 
         public void SetObjectSupported(short x, short y, sbyte level, bool support)

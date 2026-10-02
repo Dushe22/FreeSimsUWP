@@ -1,6 +1,6 @@
 # Next session
 
-Branch: xbox-uwp-port. Milestone: Xbox 0.14.0 contained SLOT objects; hardware validation pending.
+Branch: xbox-uwp-port. Milestone: Xbox 0.15.0 room lighting/day-night preview; hardware validation pending.
 
 User confirmed the inclined stair handrail fix works normally on Xbox.
 0.11 evidence (UWP Screenshots/0.11): 13/13 PASS, both houses with roofs at all
@@ -94,3 +94,31 @@ after hardware placement/depth and memory validation.
 or OOM in its session, peak sampled app usage 339.48 MiB / 1024 MiB. Cutaway uses
 a two-tile radius and independent 0.75 s restoration. Preserve original House 2
 brown stair tile (24,24), as explicitly requested after saved-material diagnosis.
+0.14 hardware confirmed 2026-10-02: commit 9a3112a31d29, 29/29 PASS,
+17 logged view builds with no failure/OOM. Four House 28 angles show slotted=11,
+held=0, unsupported=0 and correct counter placement. Peak app usage 459.48 MiB
+against 1024 MiB, pressure Low. SLOT rendering gate closed.
+
+Current 0.15.0 connects saved VM room lighting to the static renderer. Geometry
+triangles and sprite roots use the architecture room map; camera-facing wall
+faces/caps/reveals sample the visible side. Exterior ground/water/roof uses
+the existing engine palette. Saved electric/window contributions and emissive
+sprite flags follow engine rules. Room snapshots retain no VM entities.
+The palette is shared with simulation, uses twelve two-hour keys and wraps
+continuously through midnight. No lamp behaviors or VM clock/save edits.
+
+D-pad left/right changes preview time by three hours and pauses it; right-stick
+click toggles a four-real-minute day. Starts paused at noon. Update light colors
+in existing vertex arrays at five-minute steps; redraw only on changed palette
+colors/visibility. No new textures/shader changes or per-frame light decoding.
+LIGHT logs include hour, cycle, room count and unchanged resource totals.
+31 render checks cover room contributions, luminous sprites, SLOT root rooms,
+all angles/zooms, day/night coverage/depth, midnight, exact restoration and
+resource reuse; existing ownership/cutaway/opening/roof/pool gates remain.
+Tests: artifacts/lighting-tests-final.log; 96 captures: artifacts/lighting-qa.
+Offline compatibility: artifacts/lighting-offline-tests.log.
+Native handoff: artifacts/offline-lighting-0150-final, artifacts/xbox-lighting-*.zip.
+Use experiments/XboxOfflineProbe/TESTING.md. Confirm lighting and memory on Xbox
+before controlled simulation/rendering, then Sims, interaction and full saves.
+Lighting is per-room ambient/electric; point-light falloff/cast shadows and
+behavior-driven lamp switching are outside this static rendering milestone.

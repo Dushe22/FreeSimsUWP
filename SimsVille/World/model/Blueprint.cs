@@ -91,23 +91,8 @@ namespace FSO.LotView.Model
 
         public void GenerateRoomLights()
         {
-            var minOut = OutsideColor * (float)(150 / Math.Sqrt(OutsideColor.R * OutsideColor.R + OutsideColor.G * OutsideColor.G + OutsideColor.B * OutsideColor.B));
-
             for (int i=0; i<Light.Length; i++)
-            {
-                var outside = OutsideColor * (Light[i].OutsideLight / 100f);
-                var ambient = Color.White * (Light[i].AmbientLight / 100f);
-
-                outside.R = Math.Max(minOut.R, outside.R);
-                outside.G = Math.Max(minOut.G, outside.G);
-                outside.B = Math.Max(minOut.B, outside.B);
-
-                RoomColors[i] = new Color(
-                    Math.Min(255, outside.R + ambient.R),
-                    Math.Min(255, outside.G + ambient.G),
-                    Math.Min(255, outside.B + ambient.B),
-                    255);
-            }
+                RoomColors[i]=Light[i].ColorAt(OutsideColor,false);
             RoomColors[65535] = Color.White;
         }
 

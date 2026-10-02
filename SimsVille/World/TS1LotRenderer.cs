@@ -12,7 +12,7 @@ namespace FSO.LotView
         {
             public Texture2D Color,Depth; public VertexPositionColorTexture[] Vertices;
             public float Nearness; public short ID; public bool HasOpaque, HasAlpha, Hidden;
-            public string[] WallHosts;
+            public string[] WallHosts; public ushort LightRoom;
             // Textures are owned once by the renderer, not by individual instances.
         }
         private sealed class MaterialItem
@@ -34,6 +34,39 @@ namespace FSO.LotView
         // At most 4 MiB of colored GPU-batch vertices per scene.
         public const int WallGeometryVertexBudget=262144;
         public int WallGeometryCapacity {get {return caps==null?0:caps.Length;}}
+        private readonly Color[] roomColors;
+        private bool lightingEnabled;
+        private Color outsideColor=Color.White;
+        public double LightingHour {get;private set;}
+        public int LightingRevision {get;private set;}
+        public Color OutsideColor {get {return outsideColor;}}
+        private Color RoomColor(ushort room) {
+            return !lightingEnabled||room==TS1LotRenderData.EmissiveLightRoom?Color.White:room<roomColors.Length?roomColors[room]:outsideColor;
+        }
+        private static Color Tint(Color original,Color light) {
+            return new Color(original.R*light.R/255,original.G*light.G/255,original.B*light.B/255,(int)original.A);
+        }
+        // Relight cached vertices, never pixels/textures, SPR2 depth or saved state.
+        // Return false when quantized palette colors are unchanged (including midday).
+        public bool UpdateLighting(double hour,bool enabled=true)
+        {
+            if(double.IsNaN(hour)||double.IsInfinity(hour))throw new ArgumentOutOfRangeException("hour");
+            LightingHour=hour-Math.Floor(hour/24)*24;
+            var outside=enabled?FSO.SimAntics.VMArchitecture.OutsideLightAt(LightingHour/24):Color.White;
+            if(lightingEnabled==enabled&&outside==outsideColor)return false;
+            lightingEnabled=enabled;outsideColor=outside;LightingRevision++;
+            for(int i=0;i<roomColors.Length;i++)
+                roomColors[i]=i<Data.Lighting.Length?Data.Lighting[i].ColorAt(outside,Data.OutsideRooms[i]):outside;
+            foreach(var item in materialItems)for(int i=0;i<item.Vertices.Length;i++)
+                item.Vertices[i].Color=Tint(item.Source.Vertices[i].Color,RoomColor(
+                    i<item.Source.LightRooms.Count?item.Source.LightRooms[i]:(ushort)0));
+
+            foreach(var item in items)for(int i=0;i<item.Vertices.Length;i++)item.Vertices[i].Color=RoomColor(item.LightRoom);
+            for(int i=0;i<ground.Length;i++)ground[i].Color=Tint(Data.Ground[i].Color,outside);
+            for(int i=0;i<walls.Length;i++)walls[i].Color=Tint(Data.Walls[i].Color,outside);
+            preparedRevision=int.MinValue;
+            return true;
+        }
         private readonly BasicEffect surfaces;
         private readonly AlphaTestEffect materials;
         private readonly Effect sprites;
@@ -47,6 +80,8 @@ namespace FSO.LotView
         public TS1LotRenderer(GraphicsDevice device,TS1LotRenderData.View data,byte[] effect)
         {
             this.device=device;Data=data;
+            if(data.Lighting.Length!=data.OutsideRooms.Length)throw new ArgumentException("Mismatched room lighting snapshot.");
+            roomColors=new Color[Math.Max(1,data.Lighting.Length)];
             try {
                 surfaces=new BasicEffect(device) {VertexColorEnabled=true};sprites=new Effect(device,effect);
                 materials=new AlphaTestEffect(device) {VertexColorEnabled=true,ReferenceAlpha=128,AlphaFunction=CompareFunction.GreaterEqual};
@@ -68,7 +103,7 @@ namespace FSO.LotView
                     item.Texture=colorTexture(source.Material.Width,source.Material.Height,source.Material.Pixels);
                 }
                 foreach(var source in data.Sprites) {
-                    var layer=source.Layer;var item=new Item {Nearness=source.BackNearness,ID=source.ObjectID,WallHosts=source.WallHosts};items.Add(item);
+                    var layer=source.Layer;var item=new Item {Nearness=source.BackNearness,ID=source.ObjectID,WallHosts=source.WallHosts,LightRoom=source.LightRoom};items.Add(item);
                     item.Color=colorTexture(layer.Width,layer.Height,layer.Pixels);
                     Texture2D depth;
                     if(!depths.TryGetValue(layer.Depth,out depth)) {
@@ -106,11 +141,11 @@ namespace FSO.LotView
         {
             DrawCore(projection,showWalls,reverseOpaque,false);
         }
-        public void Draw(Matrix projection,TS1WallMode mode)
+        public void Draw(Matrix projection,TS1WallMode mode,bool reverseOpaque=false)
         {
             if(Data.WallMode!=mode)throw new InvalidOperationException("Update wall visibility before drawing.");
             PrepareWalls();
-            DrawCore(projection,true,false,true);
+            DrawCore(projection,true,reverseOpaque,true);
         }
         private void PrepareWalls()
         {
@@ -123,14 +158,20 @@ namespace FSO.LotView
             }
             foreach(var pair in wallItems){Array.Copy(pair.Value.Vertices,pair.Value.Active,pair.Value.Vertices.Length);}
             foreach(var section in Data.WallSections) {
-                if(section.Cut)Array.Copy(section.Low,0,wallItems[section.Surface].Active,section.Offset,6);
-                AddCap(section.Cut?section.LowTop:section.Top);
-                AddCap(section.Cut?section.LowReveals:section.Reveals);
+                if(section.Cut){
+                    var active=wallItems[section.Surface].Active;
+                    for(int i=0;i<6;i++){
+                        active[section.Offset+i]=section.Low[i];
+                        active[section.Offset+i].Color=Tint(section.Low[i].Color,RoomColor(section.LightRoom));
+                    }
+                }
+                AddCap(section.LightRoom,section.Cut?section.LowTop:section.Top);
+                AddCap(section.LightRoom,section.Cut?section.LowReveals:section.Reveals);
                 // Only expose full ends at a physical end or a transition to low walls.
                 if(section.Cut?allEnds[section.EndA]==1:fullEnds[section.EndA]==1)
-                    AddCap(section.Cut?section.LowEndA:section.EndFaceA);
+                    AddCap(section.LightRoom,section.Cut?section.LowEndA:section.EndFaceA);
                 if(section.Cut?allEnds[section.EndB]==1:fullEnds[section.EndB]==1)
-                    AddCap(section.Cut?section.LowEndB:section.EndFaceB);
+                    AddCap(section.LightRoom,section.Cut?section.LowEndB:section.EndFaceB);
             }
             foreach(var item in items) {
                 item.Hidden=item.WallHosts!=null&&item.WallHosts.Length>0;
@@ -142,9 +183,12 @@ namespace FSO.LotView
         {
             int count;map.TryGetValue(key,out count);map[key]=count+1;
         }
-        private void AddCap(VertexPositionColor[] vertices)
+        private void AddCap(ushort room,VertexPositionColor[] vertices)
         {
-            Array.Copy(vertices,0,caps,capCount,vertices.Length);capCount+=vertices.Length;
+            var light=RoomColor(room);
+            for(int i=0;i<vertices.Length;i++){
+                caps[capCount]=vertices[i];caps[capCount].Color=Tint(vertices[i].Color,light);capCount++;
+            }
         }
         private void DrawCore(Matrix projection,bool showWalls,bool reverseOpaque,bool dynamicWalls)
         {
