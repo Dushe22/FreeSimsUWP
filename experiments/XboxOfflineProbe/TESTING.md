@@ -1,7 +1,7 @@
-# Pointer and wall modes 0.13.0.0
+# Expiring pointer wall cuts 0.13.1.0
 
 Update the existing Offline Probe; keep the already uploaded game files.
-Menu runs the optional suite: expect 23/23 PASS.
+Menu runs the optional suite: expect 24/24 PASS.
 
 Controls:
 - Click the left stick to toggle POINTER / CAMERA.
@@ -17,21 +17,24 @@ Check both lots, four angles and three zooms:
 2. DOWN: the selected story becomes low textured wall stubs. Lower stories
    and persistent fences/banisters remain full. Hosted doors/windows and
    wall objects marked HideForCutaway disappear with their host walls.
-3. CUTAWAY: enable the pointer and move over rooms and directly over walls.
-   The game room/rectangle cut logic retains up to three recently hovered
-   indoor rooms. Direct wall hover also cuts the hit wall; authored openings
-   allow picking through. Move outside and select UP to restore every wall.
+3. CUTAWAY: enable the pointer and point at an opaque wall segment to cut it.
+   Move off it and wait: it must restore after 0.75 seconds, even with the
+   pointer still. No room history is retained. Pointing at another wall must
+   let the first restore independently. Re-enter before expiry: the current
+   wall stays cut. Authored openings allow picking through their holes.
 4. Repeat on floor 2: the cuts must stay on floor 2. ROOF keeps the complete
    building, regardless of the wall mode; use RB to return to a room view.
 5. Pan with the right stick while pointing, then rotate/zoom. The cursor
    and wall hit must stay aligned. Leave the pointer still: the lot should
-   not rebuild or upload textures. Toggle the pointer off and pan normally.
+   not rebuild or upload textures except for a pending cut restoration.
+   Toggle the pointer off: previous cuts restore after 0.75 s. Pan normally.
 6. Alternate houses, run Menu twice, Home/return and relaunch. Return proof.log
    plus screenshots of any wrong cut, cap, opening or stair occlusion.
 
-Local evidence: 23 render checks pass, including projection round trips,
-story/roof boundaries, GPU restoration after mode cycles and 160 moving
-hover draws without texture reallocations. Visual captures are under
+Local evidence: 24 render checks pass, including timed restoration with a
+stationary pointer, re-entry, switching walls and mode changes on both lots,
+four angles and two floors. Expired walls/caps/attachments restore identical
+GPU pixels without texture reallocations. Visual captures are under
 artifacts/wall-pointer-qa. Xbox controller behavior still needs hardware validation.
 
 0.12.2 hardware proof.log has two launches, 46 view changes and 20/20 PASS,

@@ -1815,3 +1815,24 @@ is in experiments/XboxOfflineProbe/TESTING.md.
 The user's latest 0.12.2 proof.log confirms two launches, 46 view changes and
 20/20 PASS without logged errors/OOM; highest logged app usage 425.48 MiB
 against a 1024 MiB budget. This is logged memory evidence, not a measured FPS.
+
+## 0.13.1: expiring wall hover cuts
+
+The user reported that cut walls stayed hidden after leaving them. The room
+history in 0.13.0 retained three rooms indefinitely, and cached pointer updates
+could not process time-based restoration. Cutaway now requests only the opaque
+wall segment currently under the pointer. Each departed segment has its own
+0.75-second grace period, measured from leaving it, with no room/rectangle history.
+A new wall cannot retain the previous wall through a shared room.
+
+Expiry is evaluated even when pointer/camera coordinates do not change. Returning
+to the same wall cancels its old deadline; disabling the pointer also releases
+cuts. UP restores immediately, DOWN remains down, lower stories/roof remain
+unchanged. The viewer passes monotonic game time on update and redraw; deadlines
+reuse existing vertex arrays/textures and only changed cuts redraw the scene.
+
+The 24-check suite includes both lots, four angles and two floors: stationary
+expiry, continued hover, re-entry, switching walls, pointer disable and mode
+changes, plus exact GPU restoration of walls/caps/attachments without texture
+allocation. Hardware confirmation: leave a hovered wall and wait ~0.75 s without
+moving the pointer; then move between different walls and repeat on floor 2.

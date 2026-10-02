@@ -25,6 +25,7 @@ namespace FreeSims.Xbox.Proof
         private bool pointerMode,redraw,reset;
         private Vector2 pointer=new Vector2(640,353);
         private int memoryPressure;
+        private double wallTime;
         private Vector2 pan; private string error; private Rectangle lastViewport;
         public OfflineProbeGame()
         {
@@ -115,11 +116,12 @@ namespace FreeSims.Xbox.Proof
         private void Render(TS1LotRenderer scene,RenderTarget2D target,int size)
         {
             var old=GraphicsDevice.GetRenderTargets();var viewport=GraphicsDevice.Viewport;
-            try{GraphicsDevice.SetRenderTarget(target);GraphicsDevice.Clear(ClearOptions.Target|ClearOptions.DepthBuffer,new Color(16,24,39),1,0);var camera=TS1LotRenderer.Camera(size,zoom,rotation,target.Width,target.Height,pan);lot.UpdateWalls(scene.Data,walls,pointerMode?(Vector2?)(pointer-new Vector2(0,88)):null,camera,target.Width,target.Height);scene.Draw(camera,walls);}
+            try{GraphicsDevice.SetRenderTarget(target);GraphicsDevice.Clear(ClearOptions.Target|ClearOptions.DepthBuffer,new Color(16,24,39),1,0);var camera=TS1LotRenderer.Camera(size,zoom,rotation,target.Width,target.Height,pan);lot.UpdateWalls(scene.Data,walls,pointerMode?(Vector2?)(pointer-new Vector2(0,88)):null,camera,target.Width,target.Height,wallTime);scene.Draw(camera,walls);}
             finally{GraphicsDevice.SetRenderTargets(old);GraphicsDevice.Viewport=viewport;}
         }
         protected override void Update(GameTime time)
         {
+            wallTime=time.TotalGameTime.TotalSeconds;
             if(System.Threading.Interlocked.Exchange(ref memoryPressure,0)!=0) {
                 CollectReleasedMemory();LogMemory("pressure");
             }
@@ -147,7 +149,7 @@ namespace FreeSims.Xbox.Proof
             try {
             if(!rebuild&&lot!=null&&renderer!=null&&image!=null) {
                 var camera=TS1LotRenderer.Camera(lot.Size,zoom,rotation,image.Width,image.Height,pan);
-                if(lot.UpdateWalls(renderer.Data,walls,pointerMode?(Vector2?)(pointer-new Vector2(0,88)):null,camera,image.Width,image.Height))redraw=true;
+                if(lot.UpdateWalls(renderer.Data,walls,pointerMode?(Vector2?)(pointer-new Vector2(0,88)):null,camera,image.Width,image.Height,wallTime))redraw=true;
             }
             if(rebuild&&lot!=null){TryRebuild();redraw=false;}if(redraw&&renderer!=null&&image!=null){Render(renderer,image,lot.Size);redraw=false;}
             }

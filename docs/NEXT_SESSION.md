@@ -1,6 +1,6 @@
 # Next session
 
-Branch: xbox-uwp-port. Milestone: Xbox 0.13.0 pointer and three wall modes.
+Branch: xbox-uwp-port. Milestone: Xbox 0.13.1 expiring wall hover cuts.
 
 User confirmed the inclined stair handrail fix works normally on Xbox.
 0.11 evidence (UWP Screenshots/0.11): 13/13 PASS, both houses with roofs at all
@@ -14,17 +14,20 @@ adjacency with the camera and composes concave pool corners around islands.
 Ground remains flat, water static; no broader simulation or new lighting.
 No extra game assets are needed beyond the 0.11 upload.
 
-Local suite: 23 checks pass, including all 256 adjacency masks, four rotations,
+Local suite: 24 checks pass, including all 256 adjacency masks, four rotations,
 three zooms, deterministic saved grass, GPU pool coverage and existing architecture/
 stair regressions. Full renders: artifacts/lot-render-check (48 views).
-Logs: artifacts/wall-pointer-tests.log; visual QA: artifacts/wall-pointer-qa.
-Native build/audit: artifacts/offline-walls-final.
-Handoff: artifacts/xbox-wall-pointer-*.zip. Use XboxOfflineProbe/TESTING.md.
+Logs: artifacts/wall-restore-tests.log; previous cap QA: artifacts/wall-pointer-qa.
+Native build/audit: artifacts/offline-wall-restore-final.
+Handoff: artifacts/xbox-wall-restore-*.zip. Use XboxOfflineProbe/TESTING.md.
 0.13 adds left-stick-click pointer, right-stick pan and Y down/cutaway/up.
 The selected story gets low wall stubs and brown thickness caps; persistent
-railings remain. Hover uses game room cuts plus opaque wall hit testing.
-GPU geometry is updated only when cuts change; textures are reused.
-Next gate: Xbox pointer alignment, wall transitions and cap/opening appearance.
+railings remain. User reported that 0.13.0 retained hovered cuts indefinitely.
+0.13.1 removes room history and cuts only the pointed opaque segment. Each
+segment restores 0.75 s after leaving it, even with a stationary/disabled
+pointer. Re-entry cancels expiry; switching targets does not retain the old wall.
+UP restores immediately; DOWN remains down. Textures/geometry buffers are reused.
+Next gate: Xbox timed restoration on both floors, pointer alignment and caps.
 The user's 0.12 PNG shows 17/17 PASS and clipped House 28 window/door trim.
 0.12.1 keeps a separate authored opening mask for each wall face and applies a
 bounded eight-sample SPR2 depth bias only to the camera-facing architectural

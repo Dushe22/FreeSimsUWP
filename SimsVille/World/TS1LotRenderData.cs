@@ -9,7 +9,6 @@ using FSO.Files.Formats.IFF.Chunks;
 using FSO.LotView.Model;
 using FSO.SimAntics;
 using FSO.SimAntics.Model;
-using FSO.SimAntics.Utils;
 using Microsoft.Xna.Framework;
 using Microsoft.Xna.Framework.Graphics;
 
@@ -229,7 +228,8 @@ namespace FSO.LotView
             public string Key, EndA, EndB;
             public Surface Surface;
             public int Offset, Story, TileX, TileY;
-            public bool Cut;
+            public bool Cut, RequestedCut;
+            public double RestoreAt;
             public VertexPositionColorTexture[] Low;
             public Vector3[] Full;
             public VertexPositionColor[] Top, LowTop, EndFaceA, EndFaceB, LowEndA, LowEndB;
@@ -244,11 +244,8 @@ namespace FSO.LotView
             public readonly List<Surface> RoofMaterials = new List<Surface>();
             public readonly List<Sprite> Sprites = new List<Sprite>();
             public readonly List<WallSection> WallSections = new List<WallSection>();
-            public readonly HashSet<uint> CutRooms = new HashSet<uint>();
-            public readonly Queue<uint> CutRoomOrder = new Queue<uint>();
             public int Zoom, Rotation, Level, WallRevision;
             public TS1WallMode WallMode = (TS1WallMode)(-1);
-            public Point? LastHover, LastCutOrigin;
             public Vector2? LastPointer;
             public Matrix LastCamera;
             public string LastWall;
@@ -431,46 +428,39 @@ namespace FSO.LotView
             }
             return nearest;
         }
-        public bool UpdateWalls(View view,TS1WallMode mode,Vector2? pointer,Matrix camera,int width,int height)
+        public const double WallRestoreDelaySeconds=.75;
+        public bool UpdateWalls(View view,TS1WallMode mode,Vector2? pointer,Matrix camera,int width,int height,double timeSeconds=0)
         {
             if(mode<TS1WallMode.Down||mode>TS1WallMode.Up)throw new ArgumentOutOfRangeException("mode");
-            if(view.WallMode==mode&&view.LastPointer==pointer&&view.LastCamera==camera)return false;
-            view.LastPointer=pointer;view.LastCamera=camera;
-            int floor=Math.Min(view.Level,2);
-            Vector2? tile=pointer.HasValue?(Vector2?)TileAtPointer(pointer.Value,camera,width,height,view.Zoom,view.Rotation,view.Level):null;
-            Point? hover=tile.HasValue?(Point?)new Point((int)Math.Floor(tile.Value.X),(int)Math.Floor(tile.Value.Y)):null;
-            var hit=mode==TS1WallMode.Cutaway&&pointer.HasValue&&view.Level!=3?PickWall(view,pointer.Value,camera,width,height):null;
-            string hitKey=hit==null?null:hit.Key;
-            var dir=VMArchitectureTools.CutCheckDir[view.Rotation];
-            Point? cutOrigin=tile.HasValue?(Point?)new Point((int)(tile.Value.X-2.5f)-dir[0]*2,(int)(tile.Value.Y-2.5f)-dir[1]*2):null;
-            if(view.WallMode==mode&&view.LastHover==hover&&view.LastWall==hitKey&&view.LastCutOrigin==cutOrigin)return false;
-            view.WallMode=mode;view.LastHover=hover;view.LastWall=hitKey;view.LastCutOrigin=cutOrigin;
-            bool[] cuts=null;
-            if(mode==TS1WallMode.Cutaway && view.Level!=3) {
-                var arch=session.VM.Context.Architecture;
-                if(hover.HasValue && hover.Value.X>=0&&hover.Value.Y>=0&&hover.Value.X<Size&&hover.Value.Y<Size) {
-                    uint room=session.VM.Context.GetRoomAt(LotTilePos.FromBigTile((short)hover.Value.X,(short)hover.Value.Y,(sbyte)floor));
-                    if(!session.VM.Context.RoomInfo[(int)room].Room.IsOutside&&view.CutRooms.Add(room)) {
-                        view.CutRoomOrder.Enqueue(room);
-                        if(view.CutRoomOrder.Count>3)view.CutRooms.Remove(view.CutRoomOrder.Dequeue());
-                    }
+            if(double.IsNaN(timeSeconds)||double.IsInfinity(timeSeconds)||timeSeconds<0)throw new ArgumentOutOfRangeException("timeSeconds");
+            bool modeChanged=view.WallMode!=mode;
+            if(modeChanged||view.LastPointer!=pointer||view.LastCamera!=camera) {
+                view.LastPointer=pointer;view.LastCamera=camera;
+                var hit=mode==TS1WallMode.Cutaway&&pointer.HasValue&&view.Level!=3?PickWall(view,pointer.Value,camera,width,height):null;
+                // Pick the full face even while cut, avoiding visibility feedback/flicker.
+                // Only the pointed wall requests a cut; a room must not keep previous walls hidden.
+                view.LastWall=hit==null?null:hit.Key;
+                foreach(var section in view.WallSections) {
+                    bool requested=ReferenceEquals(section,hit);
+                    if(modeChanged) {section.RequestedCut=false;section.RestoreAt=0;}
+                    // Start once on leaving the target. Stationary updates cannot extend it.
+                    if(section.RequestedCut&&!requested)section.RestoreAt=timeSeconds+WallRestoreDelaySeconds;
+                    if(requested)section.RestoreAt=0;
+                    section.RequestedCut=requested;
                 }
-                cuts=VMArchitectureTools.GenerateRoomCut(arch,(sbyte)floor,(WorldRotation)view.Rotation,view.CutRooms);
-                if(tile.HasValue) {
-                    VMArchitectureTools.ApplyCutRectangle(arch,(sbyte)floor,cuts,new Rectangle(cutOrigin.Value.X,cutOrigin.Value.Y,5,5));
-                }
-                // Direct wall hover also cuts that segment, including outer walls.
-                if(hit!=null)cuts[hit.TileY*Size+hit.TileX]=true;
+                view.WallMode=mode;
             }
+            // Deadlines run even with a stationary/disabled pointer and unchanged camera.
             bool changed=false;
             foreach(var section in view.WallSections) {
-                bool cut=view.Level!=3&&section.Story==floor-1&&(mode==TS1WallMode.Down ||
-                    (mode==TS1WallMode.Cutaway&&cuts[section.TileY*Size+section.TileX]));
+                bool cut=view.Level!=3&&section.Story==Math.Min(view.Level,2)-1&&(mode==TS1WallMode.Down ||
+                    (mode==TS1WallMode.Cutaway&&(section.RequestedCut || timeSeconds<section.RestoreAt)));
                 if(cut!=section.Cut){section.Cut=cut;changed=true;}
             }
             if(changed)view.WallRevision++;
             return changed;
         }
+
         public static byte WaterNeighbors(FloorTile[] floors,int size,int x,int y,ushort pattern)
         {
             if(floors==null||size<1||floors.Length!=size*size||x<0||y<0||x>=size||y>=size || (pattern!=65534&&pattern!=65535))
