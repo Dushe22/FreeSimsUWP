@@ -1,4 +1,4 @@
-﻿/*
+/*
  * This Source Code Form is subject to the terms of the Mozilla Public License, v. 2.0.
  * If a copy of the MPL was not distributed with this file, You can obtain one at
  * http://mozilla.org/MPL/2.0/. 
@@ -72,6 +72,14 @@ namespace FSO.Files.Utils
         }
 
         public long Position => Stream.Position;
+        // Allocation counts in TS1 avatar files must fit both policy and remaining input.
+        public int ReadBoundedCount(int maximum, int minimumBytes = 1)
+        {
+            int value=ReadInt32();
+            if(value<0||value>maximum||(long)value*minimumBytes>Stream.Length-Stream.Position)
+                throw new InvalidDataException("Avatar count exceeds bounds: "+value+" maximum="+maximum+" at="+Stream.Position);
+            return value;
+        }
 
 
         /// <summary>
@@ -266,7 +274,9 @@ namespace FSO.Files.Utils
         public string ReadPascalString()
         {
             var length = ReadByte();
-            return Encoding.ASCII.GetString(Reader.ReadBytes(length));
+            var bytes=Reader.ReadBytes(length);
+            if(bytes.Length!=length)throw new EndOfStreamException("Truncated Pascal string.");
+            return Encoding.ASCII.GetString(bytes);
         }
 
         /// <summary>
@@ -277,6 +287,7 @@ namespace FSO.Files.Utils
         public virtual unsafe float ReadFloat()
         {
             var m_buffer = Reader.ReadBytes(4);
+            if(m_buffer.Length!=4)throw new EndOfStreamException("Truncated floating-point field.");
             uint tmpBuffer = (uint)(m_buffer[0] | m_buffer[1] << 8 | m_buffer[2] << 16 | m_buffer[3] << 24);
 
             var result = *((float*)&tmpBuffer);

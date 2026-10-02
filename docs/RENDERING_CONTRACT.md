@@ -125,3 +125,21 @@ invalid chains; compute only during view builds and share existing frame arrays.
   Check exact initial static pixels, live changes, all angles/zooms, bounded
   ticks, resource reuse and weak-reference release. Inspect before/after captures.
   Hardware SIM/MEMORY timings and pressure remain the performance gate.
+
+## Initial saved-Sim visual gate
+- Parse person appearance explicitly from bounded OBJM records. Resolve original
+  character resources only through opt-in character indexing; no synthetic Sims,
+  lot-specific appearances or missing-texture substitutes.
+- Keep visual snapshots outside executable person state. No saved-stack/routing/
+  queue/motive restoration or implicit behavior start; source saves are immutable.
+- Per-lot avatar catalogs/caches own CPU resources. Clone skeletons and bake mesh
+  poses without modifying cached prototypes; views contain no VM or global Content.
+  Enforce 32 people, 262144 triangle vertices, 16 MiB Sim pixels, 16 MiB/resource
+  and 32768 catalog names. Reject malformed/truncated BCF/BMF/CFP input explicitly.
+- Share uploaded texture arrays across mesh parts and reuse them on relight.
+  Submit opaque Sim geometry between opaque and partial-alpha sprite passes,
+  using the same projection/depth buffer. No per-tick decoding/uploads.
+- Use Test-LotRendering -SimInspect for the CPU diagnostic, -SimsQa for eight
+  captures, and the full 39-check suite for GPU/release regression coverage.
+  Original-game deltas remain private, separate from Git/APPX. Xbox validation
+  precedes controlled Sim animation/movement and complete save support.

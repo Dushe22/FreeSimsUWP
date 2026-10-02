@@ -1,4 +1,4 @@
-﻿/*
+/*
  * This Source Code Form is subject to the terms of the Mozilla Public License, v. 2.0.
  * If a copy of the MPL was not distributed with this file, You can obtain one at
  * http://mozilla.org/MPL/2.0/. 
@@ -66,7 +66,7 @@ namespace FSO.Vitaboy
         /// <param name="stream">A Stream instance holding a skeleton.</param>
         public void Read(Stream stream, bool bcf)
         {
-            using (var io = IoBuffer.FromStream(stream))
+            using (var io = IoBuffer.FromStream(stream, bcf ? ByteOrder.LITTLE_ENDIAN : ByteOrder.BIG_ENDIAN))
             {
                
                 if (!bcf)
@@ -75,7 +75,7 @@ namespace FSO.Vitaboy
                 }
                 Name = io.ReadPascalString();
 
-                var boneCount = io.ReadInt16();
+                var boneCount = bcf?io.ReadBoundedCount(256):io.ReadInt16();if(boneCount<1||boneCount>256)throw new InvalidDataException("Invalid avatar bone count.");
 
                 Bones = new Bone[boneCount];
                 for (var i = 0; i < boneCount; i++)
@@ -91,6 +91,16 @@ namespace FSO.Vitaboy
                     bone.Children = Bones.Where(x => x.ParentName == bone.Name).ToArray();
                 }
                 RootBone = Bones.FirstOrDefault(x => x.ParentName == "NULL");
+                if(RootBone==null||Bones.Count(x=>x.ParentName=="NULL")!=1||Bones.Select(x=>x.Name).Distinct().Count()!=Bones.Length)
+                    throw new InvalidDataException("Invalid avatar skeleton roots/names.");
+                foreach(var bone in Bones) {
+                    var current=bone;var seen=new HashSet<string>();
+                    while(current.ParentName!="NULL") {
+                        if(!seen.Add(current.Name))throw new InvalidDataException("Cyclic avatar skeleton.");
+                        current=Bones.FirstOrDefault(x=>x.Name==current.ParentName);
+                        if(current==null)throw new InvalidDataException("Missing avatar parent bone.");
+                    }
+                }
                 ComputeBonePositions(RootBone, Matrix.Identity);
             }
         }
@@ -106,16 +116,17 @@ namespace FSO.Vitaboy
             if (!bcf) bone.Unknown = reader.ReadInt32();
             bone.Name = reader.ReadPascalString();
             bone.ParentName = reader.ReadPascalString();
-            bone.HasProps = reader.ReadByte();
-            if (bcf && bone.Name == "") return null;
+            int bcfProps=bcf?reader.ReadBoundedCount(256):0;
+            bone.HasProps = bcf?(byte)(bcfProps>0?1:0):reader.ReadByte();
+            if (bcf && bone.Name == "") throw new InvalidDataException("Empty avatar bone name.");
             if (bone.HasProps != 0)
             {
-                var propertyCount = reader.ReadInt32();
+                var propertyCount = bcf?bcfProps:reader.ReadBoundedCount(256);
                 var property = new PropertyListItem();
 
                 for (var i = 0; i < propertyCount; i++)
                 {
-                    var pairCount = reader.ReadInt32();
+                    var pairCount = reader.ReadBoundedCount(256);
                     for (var x = 0; x < pairCount; x++)
                     {
                         property.KeyPairs.Add(new KeyValuePair<string, string>(

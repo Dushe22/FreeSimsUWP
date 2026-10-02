@@ -13,18 +13,20 @@ namespace FSO.Files.Formats.IFF.Chunks
         public OBJD OBJD;
         public OBJTEntry OBJT;
     }
-    // Placement and scalar state prefixes only; saved execution stacks are not decoded.
+    // Placement/scalar prefixes plus explicit, bounded visual-person snapshots.
 
     public class OBJM : IffChunk
     {
-        // Placement and scalar state prefixes only; saved execution stacks are not decoded.
+        // Saved execution stacks are never restored or run by this decoder.
 
         public ushort[] IDToOBJT;
 
         public Dictionary<int, MappedObject> ObjectData;
+        public uint Version;
+        private byte[] encoded;
 
-        // Read the placement prefix only. Stack, relationships, slots and person state
-        // remain unparsed; this is not a complete simulation/save-state decoder.
+        // Read placement first; ReadPersonVisual can separately recover appearance.
+        // Saved execution/relationships/motives remain outside this decoder's contract.
         // Format reference: FreeSO tso.files/Formats/IFF/Chunks/OBJM.cs.
         public override void Read(IffFile iff, Stream stream)
         {
@@ -35,7 +37,7 @@ namespace FSO.Files.Formats.IFF.Chunks
             using (var reader = new BinaryReader(input))
             {
                 reader.ReadUInt32();
-                reader.ReadUInt32(); // save version; placement prefix is shared by supported TS1 versions
+                Version = reader.ReadUInt32();
                 if (reader.ReadUInt32() != 0x4f626a4d) throw new InvalidDataException("Invalid OBJM signature.");
                 const int offsetBase = 12;
                 if (reader.ReadByte() != 1) throw new InvalidDataException("Unsupported OBJM compression.");
@@ -76,12 +78,14 @@ namespace FSO.Files.Formats.IFF.Chunks
                     objects.Add(id, new MappedObject {
                         ObjectID = id, Direction = data[1], ContainerID = data[2],
                         ContainerSlot = data[3], ParentID = data[26], Data = data, Attributes = attributeValues, TempRegisters = temps,
-                        SavedX = x, SavedY = y, SavedLevel = level
+                        SavedX = x, SavedY = y, SavedLevel = level,
+                        SuffixPosition = fields.position, SuffixBit = fields.bit, RecordEnd = (int)end
                     });
                     input.Position = end; // skip the unsupported simulation-state suffix
                 }
                 IDToOBJT = table.ToArray();
                 ObjectData = objects;
+                encoded = bytes;
             }
         }
 
@@ -93,7 +97,7 @@ namespace FSO.Files.Formats.IFF.Chunks
             private static readonly int[] IntWidths = { 6, 11, 21, 32 };
             private readonly byte[] bytes;
             private readonly int end;
-            private int position, bit;
+            internal int position, bit;
             public int AlignedPosition { get { return position + (bit == 0 ? 0 : 1); } }
             public PlacementFields(byte[] bytes, int start, int end)
             {
@@ -121,6 +125,20 @@ namespace FSO.Files.Formats.IFF.Chunks
             }
             public short Short() { return (short)Value(false); }
             public int Int() { return Value(true); }
+            public int Count(int maximum) { int n=Int(); if(n<0||n>maximum)throw new InvalidDataException("OBJM count exceeds visual import bounds.");return n; }
+            public int Byte() {
+                if(Bits(1)==0)return 0;
+                int width=2+2*(int)Bits(2);return (int)Bits(width);
+            }
+            public string String() {
+                position=AlignedPosition;bit=0;
+                int start=position;
+                while(position<end&&bytes[position]!=0) { if(position-start>=1024)throw new InvalidDataException("OBJM visual string exceeds bounds.");position++; }
+                if(position>=end)throw new InvalidDataException("Truncated OBJM visual string.");
+                string s=Encoding.ASCII.GetString(bytes,start,position-start);position++;
+                if((position&1)!=0)position++;
+                if(position>end)throw new InvalidDataException("Truncated OBJM string padding.");return s;
+            }
         }
         /// <summary>Resolve the OBJM object-ID/type-ID pairs using OBJT's explicit type IDs.</summary>
         public void ResolveTypes(OBJT types)
@@ -158,9 +176,49 @@ namespace FSO.Files.Formats.IFF.Chunks
             {
                 ObjectData[pair.Key].GUID = pair.Value.GUID;
                 ObjectData[pair.Key].Name = pair.Value.Name;
+                ObjectData[pair.Key].Type = pair.Value.OBJDType;
             }
         }
+        // Bounded visual snapshot, deliberately separate from executable VM person state.
+        // Format reference: https://github.com/riperiperi/FreeSO/blob/master/TSOClient/tso.files/Formats/IFF/Chunks/OBJM.cs
+        public PersonVisual ReadPersonVisual(MappedObject person)
+        {
+            if(person==null||person.Type!=OBJDType.Person||encoded==null||!ObjectData.ContainsValue(person))
+                throw new InvalidDataException("Expected a resolved saved person record.");
+            var f=new PlacementFields(encoded,person.SuffixPosition,person.RecordEnd);f.bit=person.SuffixBit;
+            int frames=f.Count(256);f.Int();
+            for(int i=0;i<frames;i++) {
+                f.Short();f.Short();f.Short();int locals=f.Byte(),parameters=f.Byte();
+                for(int j=0;j<locals+parameters;j++)f.Short();f.Int();f.Short();
+            }
+            if(f.Int()>=0)throw new InvalidDataException("Unsupported OBJM relationship encoding.");
+            int relationships=f.Count(4096);
+            for(int i=0;i<relationships;i++) {
+                if(f.Int()==0)throw new InvalidDataException("Invalid OBJM relationship.");
+                f.Int();int values=f.Count(256);for(int j=0;j<values;j++)f.Int();
+            }
+            int slots=f.Short();if(slots<0||slots>4096)throw new InvalidDataException("Invalid OBJM slots.");
+            for(int i=0;i<slots;i++){f.Short();f.Short();}
+            int flags=f.Short();if(flags<0||flags>4096)throw new InvalidDataException("Invalid OBJM dynamic flags.");
+            for(int i=0;i<flags;i++)f.Short();
+            if(string.IsNullOrEmpty(person.Name))throw new InvalidDataException("Multitile person is unsupported.");
+            f.Int();int engaged=f.Int();if(engaged<0||engaged>1)throw new InvalidDataException("Invalid saved person state.");
+            var v=new PersonVisual { Body=f.String(),BodyTexture=f.String() };f.String();f.String();
+            v.LeftHand=f.String();v.LeftHandTexture=f.String();v.RightHand=f.String();v.RightHandTexture=f.String();
+            v.Head=f.String();v.HeadTexture=f.String();
+            int accessories=f.Count(32);v.Accessories=new string[accessories];
+            for(int i=0;i<accessories;i++){v.Accessories[i]=f.String();if(f.String().Length!=0)throw new NotSupportedException("Saved accessory binding is unsupported.");}
+            v.Animation=f.String();v.CarryAnimation=f.String();v.BaseAnimation=f.String();
+            return v;
+        }
+        public sealed class PersonVisual {
+            public string Body,BodyTexture,Head,HeadTexture,LeftHand,LeftHandTexture,RightHand,RightHandTexture;
+            public string Animation,CarryAnimation,BaseAnimation;
+            public string[] Accessories;
+        }
         public class MappedObject {
+            internal int SuffixPosition,SuffixBit,RecordEnd;
+            public OBJDType Type;
             public string Name;
             public uint GUID;
             public int ObjectID;

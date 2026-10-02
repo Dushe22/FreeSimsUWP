@@ -1937,3 +1937,26 @@ The trial still ends after 6000 ticks (200 sim minutes); stall/focus/pause bound
 and GPU/frame ownership remain intact. Test whole-day boundaries and actual
 live VM advancement, not only the displayed clock. Hardware cadence remains
 pending for this build; the next milestone is Sims import/rendering.
+
+## 0.17: initial saved-Sim visuals
+
+The user confirmed nominal clock operation and authorized the next milestone.
+The isolated importer now reads bounded OBJM visual-person suffixes and original
+character definitions. House5 displays its authored three Sims and 13 mesh parts;
+houses 2/28 contain no saved people. Names, appearance, pose and placement come
+from saved data; this is shared importer logic, not identity-specific corrections.
+Detached snapshots do not execute person threads, routes, motives or queues.
+Controlled Sim animation/movement follows the initial Xbox visual gate.
+
+Auditing the local SimsInspect failure exposed TS1/TSO layout confusion in BCF
+skeletons/animations, plus blend-vertex and truncated-field assumptions. Readers
+now honor TS1 layouts and reject malformed bounded input. No source assets are
+changed. Sim caches belong to each lot; views contain baked vertices/materials,
+share textures and use the existing depth and lighting path without tick uploads.
+
+Menu has 39 render checks, including malformed records, detached pose/release,
+four angles/three zooms and relight resource reuse. Eight desktop captures verify
+initial visuals. House5 retains one existing non-person missing DGRP view; all
+three persons load. Hardware memory/performance/visual validation remains pending.
+Native 0.17 handoff and private seven-file game-data delta are separate; APPX/Git
+contain no licensed game data. See experiments/XboxOfflineProbe/TESTING.md.

@@ -106,7 +106,7 @@ namespace FreeSims.Xbox.Proof
                 var data=source.Build(zoom,rotation,level);candidate=new TS1LotRenderer(GraphicsDevice,data,effect);candidate.UpdateLighting((int)(LightingHour*12)/12.0);
                 target=new RenderTarget2D(GraphicsDevice,1280,530,false,SurfaceFormat.Color,DepthFormat.Depth24);Render(candidate,target,source.Size);
                 if(renderer!=null)renderer.Dispose();if(image!=null)image.Dispose();renderer=candidate;candidate=null;image=target;target=null;error=source.SimulationFault==null?null:"SIM STOPPED - X LOAD FRESH LOT";
-                ProofLog.Write("LOT VIEW house="+house+" rotation="+rotation+" zoom="+zoom+" level="+level+" walls="+walls+" rendered="+data.Rendered+" hidden="+data.Hidden+" slotted="+data.SlottedRendered+" contained="+data.Contained+" unsupported="+data.Unsupported+" floors="+data.FloorTiles+" wallEdges="+data.WallEdges+" floorMaterials="+data.FloorMaterials.Count+" wallMaterials="+data.WallMaterials.Count+" openings="+data.OpeningEdges+" joints="+data.StoryJoints+" roofTriangles="+data.RoofTriangles+" terrain="+data.TerrainTiles+" pools="+data.PoolTiles+" water="+data.WaterTiles+" poolAttachments="+data.PoolAttachmentAdjustments);
+                ProofLog.Write("LOT VIEW house="+house+" rotation="+rotation+" zoom="+zoom+" level="+level+" walls="+walls+" rendered="+data.Rendered+" hidden="+data.Hidden+" slotted="+data.SlottedRendered+" contained="+data.Contained+" sims="+data.SimsRendered+" simParts="+data.SimMaterials.Count+" unsupported="+data.Unsupported+" floors="+data.FloorTiles+" wallEdges="+data.WallEdges+" floorMaterials="+data.FloorMaterials.Count+" wallMaterials="+data.WallMaterials.Count+" openings="+data.OpeningEdges+" joints="+data.StoryJoints+" roofTriangles="+data.RoofTriangles+" terrain="+data.TerrainTiles+" pools="+data.PoolTiles+" water="+data.WaterTiles+" poolAttachments="+data.PoolAttachmentAdjustments);
                 foreach(var issue in data.Issues)ProofLog.Write(issue);
                 ProofLog.Write("VIEW COST ms="+timer.ElapsedMilliseconds+" textures="+renderer.TextureCount+" uploadBytes="+renderer.TextureBytes+" wallGeometryVertices="+renderer.WallCapVertexCount+" wallGeometryCapacity="+renderer.WallGeometryCapacity+" wallGeometryBatchBytes="+((long)renderer.WallGeometryCapacity*VertexPositionColor.VertexDeclaration.VertexStride));
                 LogLighting();LogMemory("view-end");
@@ -146,7 +146,7 @@ namespace FreeSims.Xbox.Proof
             if(pressed(Buttons.B)){ProofLog.Write("EXIT REQUESTED");Exit();return;}
             if(pressed(Buttons.Start))RunTests();
             bool rebuild=reset;reset=false;if(rebuild)pixel.SetData(new[]{Color.White});
-            if(pressed(Buttons.X)){house=house==2?28:2;zoom=1;level=1;rotation=0;pan=Vector2.Zero;LoadLot();rebuild=false;}
+            if(pressed(Buttons.X)){house=house==2?28:house==28?5:2;zoom=1;level=1;rotation=0;pan=Vector2.Zero;LoadLot();rebuild=false;}
             if(pressed(Buttons.A)){rotation=(rotation+1)%4;rebuild=true;}
             if(pressed(Buttons.LeftShoulder)){zoom=zoom%3+1;rebuild=true;}
             if(pressed(Buttons.RightShoulder)){level=level%3+1;rebuild=true;}
@@ -223,7 +223,7 @@ namespace FreeSims.Xbox.Proof
             }
             Text("A ROTATE - X HOUSE - Y WALLS - LB ZOOM - RB FLOOR/ROOF",32,653,2,Color.White);
             Text("LS POINTER - RS PAN/CLICK PAUSE - DPAD SPEED - VIEW CENTER - MENU TESTS - B EXIT",32,681,1,Color.LightGray);
-            if(renderer!=null)Text("DRAWN "+renderer.Data.Rendered+" - SLOTTED "+renderer.Data.SlottedRendered+" - HELD "+renderer.Data.Contained+" - UNSUPPORTED "+renderer.Data.Unsupported+" - RUN "+runs,32,76,1,Color.LightGray);
+            if(renderer!=null)Text("DRAWN "+renderer.Data.Rendered+" - SLOTTED "+renderer.Data.SlottedRendered+" - HELD "+renderer.Data.Contained+" - SIMS "+renderer.Data.SimsRendered+" - UNSUPPORTED "+renderer.Data.Unsupported+" - RUN "+runs,32,76,1,Color.LightGray);
             if(error!=null)Text(error,32,596,2,Color.OrangeRed);
             batch.End();base.Draw(time);
         }

@@ -1,4 +1,5 @@
 using System;
+using System.IO;
 using System.Collections.Generic;
 using System.Linq;
 using FSO.Common.Platform;
@@ -12,12 +13,15 @@ namespace FreeSims.Tests
 {
     public static class LotRenderTests
     {
-        public const int Count=36;
+        public const int Count=39;
         public static List<string> Run(GraphicsDevice device,GamePaths paths,byte[] effect,Action<string> log)
         {
             var result=new List<string>();bool oldWorld=VM.UseWorld;VM.UseWorld=false;
             Action<string,Action> check=(name,action)=>{try{action();result.Add("PASS "+name);}catch(Exception ex){result.Add("FAIL "+name);log(ex.ToString());}log(result.Last());};
             try {
+                check("TS1 AVATAR BCF LAYOUT AND MALFORMED COUNTS",()=>AvatarFormats());
+                check("SAVED SIM IDENTITY APPEARANCE AND DETACHED POSE",()=>SavedSims(paths));
+                check("GPU SIMS FOUR ANGLES THREE ZOOMS AND LIGHTING REUSE",()=>SimGpu(device,paths,effect));
                 check("DISPOSED LOTS RELEASE VM AND CONTENT",()=>ReleasedLots(paths));
                 check("GPU SHARED SPRITES AND RESOURCE DISPOSAL",()=>SharedSprites(device,paths,effect));
                 check("CONTAINED SLOT GEOMETRY AND SAVED POSITIONS",()=>ContainedSlots(paths));
@@ -1211,6 +1215,75 @@ namespace FreeSims.Tests
         {
             if(Math.Abs(actual.R-expected.R)>2||Math.Abs(actual.G-expected.G)>2||Math.Abs(actual.B-expected.B)>2||actual.A!=255)
                 throw new InvalidOperationException("GPU depth/alpha expected "+expected+" got "+actual);
+        }
+        private static void Pascal(BinaryWriter writer,string value) {writer.Write((byte)value.Length);writer.Write(System.Text.Encoding.ASCII.GetBytes(value));}
+        private static void AvatarFormats() {
+            byte[] bytes;
+            using(var stream=new MemoryStream()) {
+                var w=new BinaryWriter(stream);w.Write(0);w.Write(0);w.Write(1);
+                Pascal(w,"fixture");Pascal(w,"xskill-fixture");w.Write(100f);w.Write(0f);w.Write(0);w.Write(2);w.Write(2);w.Write(1);
+                Pascal(w,"ROOT");w.Write(2);w.Write(100f);w.Write(1);w.Write(1);w.Write(0);w.Write(0);
+                w.Write(1);w.Write(1);Pascal(w,"fixture-key");Pascal(w,"fixture-value");
+                w.Write(1);w.Write(1);w.Write(30);w.Write(1);Pascal(w,"xevt");Pascal(w,"101");bytes=stream.ToArray();
+            }
+            using(var stream=new MemoryStream(bytes)) {
+                var b=new FSO.Vitaboy.BCF(stream);var a=b.Animations.Single();
+                if(a.Name!="fixture"||a.TranslationCount!=2||a.RotationCount!=2||a.NumFrames!=2||a.Motions[0].Properties[0].Items[0].KeyPairs[0].Value!="fixture-value"||a.Motions[0].TimeProperties[0].Items[0].ID!=30||stream.Position!=stream.Length)
+                    throw new InvalidOperationException("TS1 BCF record alignment differs from authored fixture.");
+            }
+            for(int n=0;n<bytes.Length;n++) {
+                bool rejected=false;try{using(var stream=new MemoryStream(bytes,0,n))new FSO.Vitaboy.BCF(stream);}catch(EndOfStreamException){rejected=true;}catch(InvalidDataException){rejected=true;}
+                if(!rejected)throw new InvalidOperationException("Truncated BCF accepted at "+n);
+            }
+            using(var stream=new MemoryStream(new byte[]{255,255,255,127})) {
+                bool rejected=false;try{new FSO.Vitaboy.BCF(stream);}catch(InvalidDataException){rejected=true;}
+                if(!rejected)throw new InvalidOperationException("Unbounded BCF allocation accepted.");
+            }
+        }
+        private static void SavedSims(GamePaths paths) {
+            using(var lot=new TS1LotRenderData(paths,5,true)) {
+                if(lot.SimCount!=3)throw new InvalidOperationException("House05 should contain three authored Sims.");
+                var view=lot.Build(3,0,1);
+                if(view.SimsRendered!=3||view.SimMaterials.Count!=13)throw new InvalidOperationException("Saved body/head/hands were not recovered.");
+                var positions=view.SimMaterials.Select(x=>x.Vertices.ToArray()).ToArray();
+                lot.AdvanceSimulation(75,view);
+                if(view.SimMaterials.Where((x,i)=>!x.Vertices.SequenceEqual(positions[i])).Any())throw new InvalidOperationException("Visual Sim snapshot executed behavior or moved.");
+                if(!view.Issues.Any(x=>x.Contains("Mortimer"))||!view.Issues.Any(x=>x.Contains("Bella"))||!view.Issues.Any(x=>x.Contains("Cassandra")))throw new InvalidOperationException("Saved identity missing.");
+            }
+            var references=DisposedSims(paths);GC.Collect();GC.WaitForPendingFinalizers();GC.Collect();
+            if(references.Any(x=>x.IsAlive))throw new InvalidOperationException("Disposed Sim view or appearance retained by process-wide roots.");
+        }
+        [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.NoInlining)]
+        private static WeakReference[] DisposedSims(GamePaths paths) {
+            using(var lot=new TS1LotRenderData(paths,5)) {
+                var view=lot.Build(1,0,1);var material=view.SimMaterials.First();
+                return new[]{new WeakReference(lot),new WeakReference(view),new WeakReference(material.Vertices),new WeakReference(material.Material.Pixels)};
+            }
+        }
+        private static void SimGpu(GraphicsDevice device,GamePaths paths,byte[] effect) {
+            var previous=device.GetRenderTargets();var viewport=device.Viewport;
+            try {using(var lot=new TS1LotRenderData(paths,5))using(var target=new RenderTarget2D(device,512,512,false,SurfaceFormat.Color,DepthFormat.Depth24))
+                for(int zoom=1;zoom<=3;zoom++)for(int rotation=0;rotation<4;rotation++) {
+                    var view=lot.Build(zoom,rotation,1);var parts=view.SimMaterials.ToArray();
+                    var camera=TS1LotRenderer.Camera(lot.Size,zoom,rotation,512,512,Vector2.Zero);
+                    lot.UpdateWalls(view,TS1WallMode.Down,null,camera,512,512);
+                    Color[] with,without;
+                    using(var renderer=new TS1LotRenderer(device,view,effect)) {
+                        int count=renderer.TextureCount;long bytes=renderer.TextureBytes;renderer.UpdateLighting(12);
+                        device.SetRenderTarget(target);device.Clear(ClearOptions.Target|ClearOptions.DepthBuffer,Color.CornflowerBlue,1,0);renderer.Draw(camera,TS1WallMode.Down);
+                        device.SetRenderTarget(null);with=new Color[512*512];target.GetData(with);
+                        renderer.UpdateLighting(0);renderer.UpdateLighting(12);
+                        if(count!=renderer.TextureCount||bytes!=renderer.TextureBytes)throw new InvalidOperationException("Sim relighting uploaded resources.");
+                    }
+                    view.SimMaterials.Clear();
+                    using(var renderer=new TS1LotRenderer(device,view,effect)) {
+                        renderer.UpdateLighting(12);device.SetRenderTarget(target);device.Clear(ClearOptions.Target|ClearOptions.DepthBuffer,Color.CornflowerBlue,1,0);renderer.Draw(camera,TS1WallMode.Down);
+                        device.SetRenderTarget(null);without=new Color[512*512];target.GetData(without);
+                    }
+                    if(with.SequenceEqual(without))throw new InvalidOperationException("Saved Sims invisible at zoom/angle "+zoom+"/"+rotation);
+                    view.SimMaterials.AddRange(parts);
+                }
+            }finally{device.SetRenderTargets(previous);device.Viewport=viewport;}
         }
     }
 }

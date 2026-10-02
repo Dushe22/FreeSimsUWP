@@ -5,6 +5,7 @@
     <Compile Include="$(MSBuildThisFileDirectory)World\TS1LotRenderData.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)World\TS1RoofMesh.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)World\TS1LotRenderer.cs" />
+<Compile Include="$(MSBuildThisFileDirectory)World\TS1SimVisuals.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)ContentManager\TS1MaterialProvider.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)ContentManager\Audio.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)ContentManager\AvatarAnimationProvider.cs" />

@@ -1,4 +1,4 @@
-﻿using FSO.Files.Utils;
+using FSO.Files.Utils;
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -18,19 +18,19 @@ namespace FSO.Vitaboy
         {
             using (var io = IoBuffer.FromStream(stream, ByteOrder.LITTLE_ENDIAN))
             {
-                Skeletons = new Skeleton[io.ReadInt32()];
+                Skeletons = new Skeleton[io.ReadBoundedCount(32)];
                 for (int i = 0; i < Skeletons.Length; i++)
                 {
                     Skeletons[i] = new Skeleton();
                     Skeletons[i].Read(stream, true);
                 }
-                Appearances = new Appearance[io.ReadInt32()];
+                Appearances = new Appearance[io.ReadBoundedCount(4096)];
                 for (int i = 0; i < Appearances.Length; i++)
                 {
                     Appearances[i] = new Appearance();
                     Appearances[i].ReadBCF(stream);
                 }
-                Animations = new Animation[io.ReadInt32()];
+                Animations = new Animation[io.ReadBoundedCount(4096)];
                 for (int i = 0; i < Animations.Length; i++)
                 {
                     Animations[i] = new Animation();

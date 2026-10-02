@@ -87,17 +87,19 @@ namespace FSO.Content.TS1
             return entries.TryGetValue(guid, out source) ? source.RelativePath : null;
         }
 
-        public TS1ObjectProvider(GamePaths paths, bool includeExpansionContent = true, int neighborhood = 0)
+        public TS1ObjectProvider(GamePaths paths, bool includeExpansionContent = true, int neighborhood = 0, bool includeCharacters = false)
         {
             if (paths == null) throw new ArgumentNullException("paths");
             this.paths = paths;
             this.neighborhood = neighborhood;
             IndexArchive("GameData/Global/Global.far");
             IndexArchive("GameData/Objects/Objects.far");
-            if (!includeExpansionContent) return; // Stable base-game regression fixture.
-            IndexRoot("GameData/Objects", true);
-            foreach (var root in new[] { "Deluxe", "ExpansionShared", "ExpansionPack", "ExpansionPack2", "ExpansionPack3", "ExpansionPack4", "ExpansionPack5", "ExpansionPack6", "ExpansionPack7", "Downloads" })
-                IndexRoot(root, false);
+            if (includeExpansionContent) {
+                IndexRoot("GameData/Objects", true);
+                foreach (var root in new[] { "Deluxe", "ExpansionShared", "ExpansionPack", "ExpansionPack2", "ExpansionPack3", "ExpansionPack4", "ExpansionPack5", "ExpansionPack6", "ExpansionPack7", "Downloads" })
+                    IndexRoot(root, false);
+            }
+            if(includeCharacters)IndexRoot(neighborhood==0?"UserData/Characters":"UserData"+(neighborhood+1)+"/Characters",true);
         }
 
         // Do not follow junctions/symlinks outside the selected game tree.
@@ -147,6 +149,8 @@ namespace FSO.Content.TS1
             foreach (var def in iff.List<OBJD>() ?? new List<OBJD>()) {
                 if (def.GUID == 0) continue;
                 if (!localGuids.Add(def.GUID)) throw new InvalidDataException("Duplicate GUID within " + source.RelativePath + ": " + def.GUID.ToString("X8"));
+                if(source.RelativePath.IndexOf("/Characters/",StringComparison.OrdinalIgnoreCase)>=0&&entries.ContainsKey(def.GUID))
+                    throw new InvalidDataException("Saved character GUID conflicts with another definition: "+def.GUID.ToString("X8"));
                 if (entries.ContainsKey(def.GUID)) OverrideCount++;
                 entries[def.GUID] = source;
             }

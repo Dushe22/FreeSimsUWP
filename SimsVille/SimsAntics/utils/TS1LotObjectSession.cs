@@ -30,7 +30,7 @@ namespace FSO.SimAntics
         public int ContainedCount { get; private set; }
         private TS1LotObjectSession(VM vm, VMOfflineDriver driver) { VM = vm; this.driver = driver; }
 
-        public static TS1LotObjectSession Load(IffFile iff, TS1ObjectProvider content)
+        public static TS1LotObjectSession Load(IffFile iff, TS1ObjectProvider content, bool visualPersons = false)
         {
             if (VM.UseWorld) throw new InvalidOperationException("Saved object import currently requires a headless VM.");
             if (iff == null || content == null) throw new ArgumentNullException();
@@ -53,7 +53,16 @@ namespace FSO.SimAntics
                     throw new InvalidDataException("Dangling saved object link: " + pair.Key);
                 var def = content.GetObject(saved.GUID, true);
                 if (def == null) throw new FileNotFoundException("Missing TS1 GUID " + saved.GUID.ToString("X8") + " for saved object " + pair.Key);
-                if (def.OBJ.ObjectType == OBJDType.Person) throw new NotSupportedException("Saved Sim/person state is not supported: " + pair.Key);
+                if (def.OBJ.ObjectType == OBJDType.Person) {
+                    if(!visualPersons)throw new NotSupportedException("Saved Sim/person state is not supported: " + pair.Key);
+                    // Visual people are detached snapshots, not runnable VM avatars.
+                    if(saved.Type!=OBJDType.Person||saved.ContainerID!=0||saved.ParentID!=0||saved.SavedX<0)
+                        throw new NotSupportedException("Visual Sim requires a saved free-standing placement: "+pair.Key);
+                    continue;
+                }
+                if((saved.ContainerID!=0&&map.ObjectData[saved.ContainerID].Type==OBJDType.Person)||
+                    (saved.ParentID!=0&&map.ObjectData[saved.ParentID].Type==OBJDType.Person))
+                    throw new NotSupportedException("Objects carried by saved Sims require full person state import.");
                 defs.Add(pair.Key, def);
                 var seen = new HashSet<int>();
                 var current = saved;
@@ -81,6 +90,7 @@ namespace FSO.SimAntics
                 vm.Context.Architecture.Tick();
                 var groups = new Dictionary<string, VMMultitileGroup>();
                 foreach (var saved in map.ObjectData.Values.OrderBy(x => x.ObjectID)) {
+                    if(visualPersons&&saved.Type==OBJDType.Person)continue;
                     var def = defs[saved.ObjectID];
                     var entity = new VMGameObject(def, null);
                     Array.Copy(saved.Data, entity.ObjectData, saved.Data.Length);

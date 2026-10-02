@@ -16,6 +16,25 @@ var paths=new GamePaths(Path.Combine(output,"Content"),Path.GetFullPath(args.Len
 VM.UseWorld=false;
 using(var c=new Control()) using(var d=new GraphicsDevice(GraphicsAdapter.DefaultAdapter,GraphicsProfile.HiDef,new PresentationParameters {BackBufferWidth=1280,BackBufferHeight=720,DeviceWindowHandle=c.Handle})) {
 var effect=File.ReadAllBytes("experiments/XboxOfflineProbe/Effects/TS1SpriteDepth.mgfxo");
+if(args.Contains("--sims-qa")) {
+var qa=Path.GetFullPath("artifacts/sims-qa");Directory.CreateDirectory(qa);
+using(var lot=new TS1LotRenderData(paths,5)) {
+foreach(var file in lot.SimSourceFiles)Console.WriteLine("SIM SOURCE "+file);
+for(int rotation=0;rotation<4;rotation++)foreach(var mode in new[]{TS1WallMode.Down,TS1WallMode.Up}) {
+var data=lot.Build(3,rotation,1);
+using(var renderer=new TS1LotRenderer(d,data,effect))using(var target=new RenderTarget2D(d,1280,720,false,SurfaceFormat.Color,DepthFormat.Depth24)) {
+var point=TS1SpriteLayer.Project(new Vector3(27,24,0),3,rotation);
+var camera=Matrix.CreateTranslation(640-point.X,430-point.Y,0)*Matrix.CreateOrthographicOffCenter(0,1280,720,0,-128,128);
+lot.UpdateWalls(data,mode,null,camera,1280,720);renderer.UpdateLighting(12);
+d.SetRenderTarget(target);d.Clear(ClearOptions.Target|ClearOptions.DepthBuffer,new Microsoft.Xna.Framework.Color(16,24,39),1,0);renderer.Draw(camera,mode);d.SetRenderTarget(null);
+var pixels=new Microsoft.Xna.Framework.Color[1280*720];target.GetData(pixels);
+SavePixels(pixels,1280,720,Path.Combine(qa,"house5-r"+rotation+"-"+mode+".png"));
+Console.WriteLine("SIM QA r="+rotation+" walls="+mode+" sims="+data.SimsRendered+" parts="+data.SimMaterials.Count+" unsupported="+data.Unsupported+" textures="+renderer.TextureCount+" bytes="+renderer.TextureBytes);
+}
+}
+}
+return 0;
+}
 if(!FreeSims.Tests.LotRenderTests.Run(d,paths,effect,Console.WriteLine).All(x=>x.StartsWith("PASS "))) return 1;
 if(args.Contains("--simulation-qa")) {
 var qa=Path.GetFullPath("artifacts/simulation-qa");Directory.CreateDirectory(qa);

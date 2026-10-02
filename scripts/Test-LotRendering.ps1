@@ -1,5 +1,5 @@
 [CmdletBinding()]
-param([string]$GameRoot,[switch]$RebuildShader,[switch]$ArchitectureQa,[switch]$LightingQa,[switch]$SimulationQa)
+param([string]$GameRoot,[switch]$RebuildShader,[switch]$ArchitectureQa,[switch]$LightingQa,[switch]$SimulationQa,[switch]$SimsQa,[switch]$SimInspect)
 $ErrorActionPreference='Stop'
 $repo=Split-Path $PSScriptRoot -Parent
 Push-Location $repo
@@ -18,10 +18,16 @@ try {
     $refs=Join-Path ([IO.Path]::GetTempPath()) 'freesims-net45-references/Microsoft.NETFramework.ReferenceAssemblies.net45.1.0.3/build'
     & $msbuild SimsVille/SimsVille.csproj /p:Configuration=Release /p:Platform=x86 /p:PlatformTarget=AnyCPU /p:AllowUnsafeBlocks=true /p:Prefer32Bit=false /p:OutputType=Library /p:StartupObject= "/p:OutputPath=$repo\artifacts\lot-check-engine\" "/p:TargetFrameworkRootPath=$refs\" /verbosity:minimal
     if($LASTEXITCODE -ne 0){throw 'Render harness engine compilation failed'}
+    if($SimInspect){
+        & dotnet run --project experiments/SimInspect -c Release -- ([IO.Path]::GetFullPath($GameRoot))
+        if($LASTEXITCODE -ne 0){throw 'Sim import audit failed; see SIM INSPECT FAILED context above.'}
+        return
+    }
     $renderArgs=@([IO.Path]::GetFullPath($GameRoot))
     if($ArchitectureQa){$renderArgs+='--architecture-qa'}
     if($LightingQa){$renderArgs+='--lighting-qa'}
     if($SimulationQa){$renderArgs+='--simulation-qa'}
+    if($SimsQa){$renderArgs+='--sims-qa'}
     & dotnet run --project experiments/DesktopLotRenderCheck -c Release -- @renderArgs
     if($LASTEXITCODE -ne 0){throw 'Lot GPU checks failed'}
 }finally{Pop-Location}

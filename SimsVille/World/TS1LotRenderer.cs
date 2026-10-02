@@ -18,7 +18,7 @@ namespace FSO.LotView
         }
         private sealed class MaterialItem
         {
-            public Texture2D Texture; public VertexPositionColorTexture[] Vertices, Active; public bool Wall, Roof;
+            public Texture2D Texture; public VertexPositionColorTexture[] Vertices, Active; public bool Wall, Roof, Sim;
             public TS1LotRenderData.Surface Source;
         }
         private readonly List<MaterialItem> materialItems=new List<MaterialItem>();
@@ -100,8 +100,8 @@ namespace FSO.LotView
                     }
                     return texture;
                 };
-                foreach(var source in data.TerrainMaterials.Concat(data.FloorMaterials).Concat(data.WallMaterials).Concat(data.RoofMaterials)) {
-                    var item=new MaterialItem {Wall=data.WallMaterials.Contains(source) && !source.KeepWhenWallsHidden,Roof=data.RoofMaterials.Contains(source),Source=source,Vertices=source.Vertices.ToArray()};materialItems.Add(item);
+                foreach(var source in data.TerrainMaterials.Concat(data.FloorMaterials).Concat(data.WallMaterials).Concat(data.RoofMaterials).Concat(data.SimMaterials)) {
+                    var item=new MaterialItem {Wall=data.WallMaterials.Contains(source) && !source.KeepWhenWallsHidden,Roof=data.RoofMaterials.Contains(source),Sim=data.SimMaterials.Contains(source),Source=source,Vertices=source.Vertices.ToArray()};materialItems.Add(item);
                     if(item.Wall){item.Active=new VertexPositionColorTexture[item.Vertices.Length];wallItems.Add(source,item);}
                     item.Texture=colorTexture(source.Material.Width,source.Material.Height,source.Material.Pixels);
                 }
@@ -212,6 +212,7 @@ namespace FSO.LotView
             foreach(var pass in surfaces.CurrentTechnique.Passes) {pass.Apply();DrawSurface(ground);if(showWalls)DrawSurface(walls);if(dynamicWalls)DrawSurface(caps,capCount);}
             materials.World=Matrix.Identity;materials.View=Matrix.Identity;materials.Projection=projection;device.SamplerStates[0]=SamplerState.PointClamp;
             foreach(var item in materialItems) {
+                if(item.Sim)continue;
                 if(item.Wall&&!showWalls)continue;
                 device.SamplerStates[0]=item.Roof?SamplerState.PointWrap:SamplerState.PointClamp;
                 materials.Texture=item.Texture;
@@ -225,6 +226,12 @@ namespace FSO.LotView
             sprites.Parameters["AlphaPass"].SetValue(0f);
             var opaque=reverseOpaque?items.AsEnumerable().Reverse():items;
             foreach(var item in opaque) if(item.Source.Visible&&item.HasOpaque&&(!dynamicWalls||!item.Hidden))DrawItem(item);
+            // Meshes share architecture/SPR2 depth and write only opaque pixels.
+            device.SamplerStates[0]=SamplerState.LinearClamp;
+            foreach(var item in materialItems.Where(x=>x.Sim)) {
+                materials.Texture=item.Texture;
+                foreach(var pass in materials.CurrentTechnique.Passes){pass.Apply();for(int offset=0;offset<item.Vertices.Length;offset+=18000)device.DrawUserPrimitives(PrimitiveType.TriangleList,item.Vertices,offset,Math.Min(18000,item.Vertices.Length-offset)/3);}
+            }
             // Opaque texels write depth; partial alpha edges only read it, avoiding
             // invisible depth writes. Intersecting translucent surfaces are not OIT.
             device.BlendState=BlendState.AlphaBlend;device.DepthStencilState=DepthStencilState.DepthRead;

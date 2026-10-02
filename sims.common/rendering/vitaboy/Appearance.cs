@@ -1,4 +1,4 @@
-﻿/*
+/*
  * This Source Code Form is subject to the terms of the Mozilla Public License, v. 2.0.
  * If a copy of the MPL was not distributed with this file, You can obtain one at
  * http://mozilla.org/MPL/2.0/. 
@@ -45,7 +45,7 @@ namespace FSO.Vitaboy
                 var type = io.ReadInt32();
                 var zero = io.ReadInt32();
 
-                var numBindings = io.ReadUInt32();
+                var numBindings = io.ReadBoundedCount(256);
                 Bindings = new AppearanceBinding[numBindings];
 
                 for (var i = 0; i < numBindings; i++)
@@ -77,7 +77,7 @@ namespace FSO.Vitaboy
                 ThumbnailFileID = io.ReadUInt32();
                 ThumbnailTypeID = io.ReadUInt32();
 
-                var numBindings = io.ReadUInt32();
+                var numBindings = io.ReadBoundedCount(256);
                 Bindings = new AppearanceBinding[numBindings];
 
                 for (var i = 0; i < numBindings; i++)

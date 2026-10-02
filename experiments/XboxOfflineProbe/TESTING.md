@@ -1,13 +1,23 @@
-# Controlled simulation/rendering 0.16.1.0
+# Saved-Sim visual import 0.17.0.0
 
 Update the Offline Probe and retain the existing uploaded game files.
-Menu runs the optional suite: expect 36/36 PASS. No new assets are needed.
+Upload the PRIVATE artifacts/sim-probe-upload.zip GameData tree alongside your
+existing LocalState/GameData files, preserving subfolders. The seven originals
+are separate from APPX; do not distribute them. Menu expects 39/39 PASS and
+requires House05, its three Characters and the referenced avatar archives.
+
+X cycles House 2 -> 28 -> 5 -> 2. House 5 renders the saved Mortimer, Bella and
+Cassandra with their original appearance and pose. These are stationary visual
+snapshots; Sim behavior, movement and full saved execution remain later work.
+Shared import logic applies to compatible future lots. Houses 2/28 contain no
+saved people. One existing House5 object (203) lacks a DGRP view, so expect
+UNSUPPORTED 1 there; SIMS must be 3. No substitute graphics are invented.
 
 This milestone connects selected object Main routines to the displayed lot.
 House 2 starts 134 flower/shrub objects; House 28 starts 80 chair/table/sink/
 hanging-plant/light/aquarium objects. Other saved threads remain held.
 The resource compatibility gate is shared with the headless controller and
-applies to future lots using the same object families. Sims, interaction,
+applies to future lots using the same object families. Sim behavior, interaction,
 saved stack resumption, object creation/movement and full saves remain later work.
 Automatic turbo was cancelled by the user and has not been implemented.
 
@@ -31,12 +41,12 @@ texture uploads or clock advancement outside the VM is introduced.
 
 Each fresh lot trial stops at 6000 ticks (200 sim minutes):
 about 200 / 100 / 50 active real seconds at Normal / Fast / Ultra, excluding
-loading/focus-loss intervals. X twice reloads the same lot for another trial.
+loading/focus-loss intervals. X three times reloads the same lot for another trial.
 A script/render-state fault stops simulation and logs actionable context.
 Camera, wall modes and paused snapshots remain available. No saves are written.
 
 Hardware gate:
-1. Run Menu and return proof.log showing 36/36. Then switch to House 28.
+1. Run Menu and return proof.log showing 39/39. Then switch to House 28.
 2. Use Normal to observe the aquarium from angle 2, floor 2, walls down;
    compare lamps before/after behaviors initialize. Other idle objects may
    execute without visibly changing. Confirm counters still show 11 SLOT children.
@@ -52,7 +62,12 @@ Hardware gate:
    Report responsiveness, crashes or visual defects. 0.16 hardware passed
    36/36 with no reported visual defects and working aquarium animation.
    Its scoped log peaked at 523.03 MiB of a 1024 MiB limit; one view rebuild sample was Medium, otherwise Low.
-   New clock rates still need this hardware check; full Xbox FPS is not measured.
+   The user has since confirmed nominal clock operation; full Xbox FPS is not measured.
+7. Switch to House 5, floor 1. Check all three Sims at each angle/zoom, with walls
+   Down/Cutaway/Up: walls, fences and furniture must occlude bodies correctly.
+   Change clock/lighting and camera; body textures must remain complete and stable.
+   Sims remain stationary even while selected object routines and clock advance.
+   Cycle all three lots repeatedly and return MEMORY/LOT VIEW logs and captures.
 
 SIM logs include active count, completed ticks, peak update/redraw milliseconds,
 sprite/light revisions and texture bytes/count. Tick updates must retain
@@ -69,4 +84,9 @@ now stops at the authored height and still rejects truncated row payloads.
 0.16.1 local evidence: artifacts/clock-render-tests.log and artifacts/clock-offline-tests.log.
 These cover complete days at four frame rates, exact speeds and preserved import
 phase, plus actual VM trials and GPU resource stability.
-Next after the Xbox gate: loading/rendering Sims and their saved state.
+0.17 local evidence: artifacts/sim-render-tests-release.log (39 checks),
+artifacts/sims-qa.log and eight captures in artifacts/sims-qa. All three Sims use
+13 mesh parts; GPU resources remain constant on relight, and disposed Sim views
+and pixel/vertex arrays are released. Invalid/truncated BCF input fails explicitly.
+Next after this Xbox visual/memory gate: controlled Sim animation/movement,
+then interaction and full saved execution. No automatic turbo.

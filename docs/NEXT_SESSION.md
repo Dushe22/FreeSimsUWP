@@ -1,6 +1,6 @@
 # Next session
 
-Branch: xbox-uwp-port. Milestone: Xbox 0.16.1 clock correction; new cadence hardware validation pending.
+Branch: xbox-uwp-port. Milestone: Xbox 0.16.1 clock operation confirmed by the user; next is Sims import/rendering.
 
 User confirmed the inclined stair handrail fix works normally on Xbox.
 0.11 evidence (UWP Screenshots/0.11): 13/13 PASS, both houses with roofs at all
@@ -219,3 +219,52 @@ Next after clock hardware validation: Sims import/render and saved state,
 then interaction and full saves. Preserve all accepted rendering and memory rules.
 
 0.16.1 final local gate: 36/36 render checks, OfflineCompatibility 8/8 plus behavior/controller/checkpoint checks; both live lots complete 6000 ticks, frame/texture totals fixed, all 91 original game-file hashes unchanged. New cadence hardware validation remains pending.
+
+User now confirms nominal clock operation on Xbox. This supersedes the pending
+clock-operation gate above; no new timing measurements or proof.log were supplied.
+Next roadmap step: import and render Sims from saved person/neighborhood data,
+with correct appearance, placement, depth, lighting and bounded resource ownership.
+Validate initial rendering before controlled animation/movement, then interactions
+and full saves. The user authorized this next step. Automatic turbo remains cancelled.
+
+0.17: initial saved-Sim visual gate (authorized next roadmap step).
+House 5 adds the authored Mortimer, Bella and Cassandra; houses 2/28 have no saved
+persons. Shared OBJM appearance extraction, original character definitions and
+Vitaboy assets recover body/head/hands/accessories, pose, position and direction.
+Do not create placeholder Sims or hardcode person identity/materials into imports.
+Detached CPU visual snapshots are deliberately not executable VMAvatar instances:
+no saved stacks, routing, motives, queues, movement or save writes are restored.
+Validate initial visuals on Xbox before controlled Sim animation/movement;
+then interactions and complete save-state support. Clock behavior remains accepted.
+
+SimsInspect audit: inherited TS1 BCF readers incorrectly consumed TSO version/
+boolean/count layouts, breaking record alignment. Corrected BCF skeleton,
+animation/property layouts and real+blend mesh counts, preserved TSO branches,
+bounded resource/field counts, checked truncated floats/Pascal strings/CFP repeats,
+and baked poses without mutating cached meshes. The ignored diagnostic now catches
+and reports import exceptions; this was a diagnostic failure, not evidence of a
+new Xbox game crash. Source game assets are never rewritten.
+
+Sim sources/CPU caches are per-lot, disposed on failure/replacement; views have
+only vertices/pixels/scalars. Scene limits: 32 people, 262144 triangle vertices,
+16 MiB shared Sim pixels, 16 MiB/resource, 32768 catalog names. Shared GPU textures
+reuse existing depth/lighting ownership; draw opaque Sims after opaque sprites
+and before partial-alpha sprites. No global Content, per-tick decoding/uploads,
+new shaders or automatic turbo. Character indexing is explicitly opt-in.
+
+0.17 handoff: artifacts/offline-sims-017-final and artifacts/xbox-sims-*.zip.
+PRIVATE original-game delta: artifacts/sim-probe-upload.zip, seven byte-identical
+files adding House05, three Characters and required Animation/Textures/Deluxe
+archives alongside the existing LocalState/GameData tree. This data must never
+enter APPX, Git or public distribution. Prepare-SimProbeData.ps1 derives sources
+from the successful eight-view QA log; defaults skip files already in baseline.
+Viewer X now cycles 2 -> 28 -> 5 -> 2, initial state paused; Sims stay in saved pose.
+House5 has one existing non-person missing DGRP view (object 203); all three Sims
+load. Report this explicitly rather than treating the whole lot as fully supported.
+39 local render checks include malformed BCF records, original saved appearance,
+all four angles/three zooms, texture reuse on relight, detached behavior and release.
+Evidence: artifacts/sim-render-tests-release.log, artifacts/sims-qa.log and
+artifacts/sims-qa (eight captures). Xbox visual/memory/performance gate pending;
+no hardware FPS claim. Keep accepted roofs and original brown stair tile.
+Reproducible CPU diagnostic: scripts/Test-LotRendering.ps1 -SimInspect; source experiments/SimInspect. artifacts/sim-inspect-release.log confirms 3 people/13 parts, and artifacts/sim-inspect-rejected.log confirms controlled exit 1 for missing input.
+0.17 final local gate: 39/39 render checks, 8/8 OfflineCompatibility plus behavior/controller/checkpoint checks; both existing live lots reach 6000 ticks without script errors. All 865 source SHA256 hashes unchanged. Native signature/package audit and Xbox hardware gate are separate.

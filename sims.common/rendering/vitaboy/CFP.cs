@@ -1,4 +1,4 @@
-﻿using FSO.Files.Utils;
+using FSO.Files.Utils;
 using Microsoft.Xna.Framework;
 using System;
 using System.Collections.Generic;
@@ -69,6 +69,7 @@ namespace FSO.Vitaboy
                     case 0xFE:
                         //repeat count
                         var repeats = io.ReadUInt16();
+                        if(repeats>=floats-i)throw new InvalidDataException("CFP repeat exceeds channel bounds.");
                         for (int j=0; j<repeats; j++)
                         {
                             output(i++, lastValue);

@@ -21,6 +21,9 @@ namespace FSO.LotView
     {
         private readonly TS1LotObjectSession session;
         private readonly TS1MaterialProvider materials;
+        private readonly TS1SimVisuals simVisuals;
+        public int SimCount {get{return simVisuals==null?0:simVisuals.People.Count;}}
+        public IEnumerable<string> SimSourceFiles {get{return simVisuals==null?new string[0]:simVisuals.UsedFiles;}}
         private readonly byte[] floorFlags, grass;
         private readonly string roofName;
         private readonly VMRoomMap[] roofRooms = new VMRoomMap[2];
@@ -53,7 +56,7 @@ namespace FSO.LotView
 
         public TS1LotRenderData(GamePaths paths, int house,bool live=false)
         {
-            if (house != 2 && house != 28) throw new ArgumentOutOfRangeException("house");
+            if (house != 2 && house != 28 && house != 5) throw new ArgumentOutOfRangeException("house");
             if (VM.UseWorld) throw new InvalidOperationException("Static lot renderer requires a headless VM.");
             var store = new NeighborhoodStore(paths, 0);
             var iff = new IffFile(store.GetReadPath("Houses/House"+house.ToString("00")+".iff"));
@@ -67,8 +70,12 @@ namespace FSO.LotView
             var savedGrass=iff.Get<ARRY>(6);
             if(savedGrass==null || savedGrass.Width!=64 || savedGrass.Height!=64 || savedGrass.ByteSize()!=1)throw new InvalidDataException("Missing saved grass map.");
             grass=savedGrass.TransposeData;
-            session = TS1LotObjectSession.Load(iff,new TS1ObjectProvider(paths));
+            var objectMap=iff.Get<OBJM>(1);objectMap.ResolveTypes(iff.Get<OBJT>(0));
+            bool people=objectMap.ObjectData.Values.Any(x=>x.Type==OBJDType.Person);
+            var content=new TS1ObjectProvider(paths,includeCharacters:people);
+            session = TS1LotObjectSession.Load(iff,content,people);
             try {
+                simVisuals=new TS1SimVisuals(paths,objectMap,content);
                 // OBJM loading holds behaviors and does not reconstruct dynamic sprite
                 // flags. Refresh only the known TS1 stair upper-stub visual callbacks;
                 // never run Init/Main or placement callbacks on saved objects.
@@ -97,7 +104,7 @@ namespace FSO.LotView
                     roofRooms[story] = new VMRoomMap();
                     roofRooms[story].GenerateMap(session.VM.Context.Architecture.Walls[story], new FloorTile[Size * Size], Size, Size, roofRoomData);
                 }
-            } catch {session.Dispose();throw;}
+            } catch {if(simVisuals!=null)simVisuals.Dispose();session.Dispose();throw;}
         }
         private void LoadPoolAttachments()
         {
@@ -281,6 +288,8 @@ namespace FSO.LotView
             public readonly List<Surface> WallMaterials = new List<Surface>();
             public readonly List<Surface> RoofMaterials = new List<Surface>();
             public readonly List<Sprite> Sprites = new List<Sprite>();
+            public readonly List<Surface> SimMaterials = new List<Surface>();
+            public int SimsRendered;
             public readonly List<WallSection> WallSections = new List<WallSection>();
             public RoomLighting[] Lighting = new RoomLighting[0];
             public bool[] OutsideRooms = new bool[0];
@@ -462,6 +471,28 @@ namespace FSO.LotView
                     if(!(ex is NotSupportedException) && !(ex is InvalidDataException)) throw;
                     view.Unsupported++;view.Issues.Add("OBJECT "+entity.ObjectID+" GUID="+entity.Object.OBJ.GUID.ToString("X8")+" "+ex.Message);
                 }
+            }
+            foreach(var person in simVisuals.People) {
+                if(person.Position.Z>(level-1)*StoryHeight)continue;
+                var floor=(int)Math.Round(person.Position.Z/StoryHeight);
+                int tile=(int)person.Position.Y*Size+(int)person.Position.X;
+                ushort room=(ushort)(session.VM.Context.Architecture.Rooms[floor].Map[tile]&0xffff);
+                var rotationMatrix=Matrix.CreateRotationY((float)Math.PI-person.Direction*(float)Math.PI/4);
+                foreach(var part in person.Parts) {
+                    var surface=new Surface {Material=part.Texture};
+                    foreach(var v in part.Vertices) {
+                        var p=Vector3.Transform(v.Position,rotationMatrix)/3f;
+                        var normal=Vector3.TransformNormal(v.Normal,rotationMatrix);
+                        if(normal.LengthSquared()<.00001f)throw new InvalidDataException("Invalid Sim vertex normal.");
+                        float shade=.65f+.35f*Math.Max(0,Vector3.Dot(Vector3.Normalize(normal),Vector3.Normalize(new Vector3(-1,2,-1))));
+                        var world=person.Position+new Vector3(p.X,p.Z,p.Y);
+                        surface.Vertices.Add(new VertexPositionColorTexture(TS1SpriteLayer.ProjectWithDepth(world,zoom,rotation),new Color(shade,shade,shade),v.TextureCoordinate));
+                        surface.LightRooms.Add(room);
+                    }
+                    view.SimMaterials.Add(surface);
+                }
+                view.SimsRendered++;
+                view.Issues.Add("SIM VISUAL id="+person.ID+" guid="+person.GUID.ToString("X8")+" name="+person.Name+" kind="+person.Kind+" parts="+person.Parts.Count);
             }
             if(view.Sprites.Count>LiveSpriteBudget)throw new InvalidDataException("Live sprite instance budget exceeded.");
             long pixelBytes=0;
@@ -769,6 +800,6 @@ namespace FSO.LotView
             var pd=new VertexPositionColor(TS1SpriteLayer.ProjectWithDepth(d,zoom,rotation),color);
             target.Add(pa);target.Add(pb);target.Add(pc);target.Add(pa);target.Add(pc);target.Add(pd);
         }
-        public void Dispose() {if(disposed)return;disposed=true;wallProfiles.Clear();liveIDs.Clear();placements.Clear();session.Dispose();}
+        public void Dispose() {if(disposed)return;disposed=true;wallProfiles.Clear();liveIDs.Clear();placements.Clear();if(simVisuals!=null)simVisuals.Dispose();session.Dispose();}
     }
 }

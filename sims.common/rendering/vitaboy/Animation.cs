@@ -1,4 +1,4 @@
-﻿/*
+/*
  * This Source Code Form is subject to the terms of the Mozilla Public License, v. 2.0.
  * If a copy of the MPL was not distributed with this file, You can obtain one at
  * http://mozilla.org/MPL/2.0/. 
@@ -56,7 +56,7 @@ namespace FSO.Vitaboy
         {
             using (var io = IoBuffer.FromStream(stream, bcf ? ByteOrder.LITTLE_ENDIAN : ByteOrder.BIG_ENDIAN))
             {
-                var version = io.ReadUInt32();
+                if(!bcf)io.ReadUInt32();
 
                 if (bcf)
                 {
@@ -68,9 +68,9 @@ namespace FSO.Vitaboy
 
                 Duration = io.ReadFloat();
                 Distance = io.ReadFloat();
-                IsMoving = io.ReadByte();
+                IsMoving = bcf?(byte)io.ReadInt32():io.ReadByte();
 
-                TranslationCount = io.ReadUInt32();
+                TranslationCount = (uint)io.ReadBoundedCount(262144, bcf ? 0 : 12);
                 if (!bcf)
                 {
                     Translations = new Vector3[TranslationCount];
@@ -85,7 +85,7 @@ namespace FSO.Vitaboy
                     }
                 }
 
-                RotationCount = io.ReadUInt32();
+                RotationCount = (uint)io.ReadBoundedCount(262144, bcf ? 0 : 16);
                 if (!bcf)
                 {
                     Rotations = new Quaternion[RotationCount];
@@ -101,47 +101,45 @@ namespace FSO.Vitaboy
                     }
                 }
 
-                var motionCount = io.ReadUInt32();
+                var motionCount = io.ReadBoundedCount(4096);
                 Motions = new AnimationMotion[motionCount];
                 for (var i = 0; i < motionCount; i++){
                     var motion = new AnimationMotion();
-                    var unknown = io.ReadUInt32();
+                    if(!bcf)io.ReadUInt32();
                     motion.BoneName = io.ReadPascalString();
                     motion.FrameCount = io.ReadUInt32();
                     motion.Duration = io.ReadFloat();
-                    motion.HasTranslation = (io.ReadByte() == 1);
-                    motion.HasRotation = (io.ReadByte() == 1);
+                    motion.HasTranslation = ((bcf?io.ReadInt32():io.ReadByte()) == 1);
+                    motion.HasRotation = ((bcf?io.ReadInt32():io.ReadByte()) == 1);
                     motion.FirstTranslationIndex = io.ReadUInt32();
                     motion.FirstRotationIndex = io.ReadUInt32();
 
-                    var hasPropsList = io.ReadByte() == 1;
-                    if (hasPropsList)
+                    var propListCount = bcf?io.ReadBoundedCount(4096):(io.ReadByte()==1?io.ReadBoundedCount(4096):0);
+                    if (propListCount>0)
                     {
-                        var propListCount = io.ReadUInt32();
                         var props = new PropertyList[propListCount];
                         for (var x = 0; x < propListCount; x++){
-                            props[x] = ReadPropertyList(io);
+                            props[x] = ReadPropertyList(io,bcf);
                         }
                         motion.Properties = props;
                     }
 
-                    var hasTimeProps = io.ReadByte() == 1;
-                    if (hasTimeProps)
+                    var timePropsListCount = bcf?io.ReadBoundedCount(4096):(io.ReadByte()==1?io.ReadBoundedCount(4096):0);
+                    if (timePropsListCount>0)
                     {
-                        var timePropsListCount = io.ReadUInt32();
                         var timePropsList = new TimePropertyList[timePropsListCount];
 
                         for (var x = 0; x < timePropsListCount; x++)
                         {
                             var list = new TimePropertyList();
-                            var timePropsCount = io.ReadUInt32();
+                            var timePropsCount = io.ReadBoundedCount(4096);
                             list.Items = new TimePropertyListItem[timePropsCount];
                             for (var y = 0; y < timePropsCount; y++)
                             {
                                 var id = io.ReadUInt32();
                                 list.Items[y] = new TimePropertyListItem {
                                     ID = id,
-                                    Properties = ReadPropertyList(io)
+                                    Properties = ReadPropertyList(io,bcf)
                                 };
                             }
                             timePropsList[x] = list;
@@ -159,15 +157,15 @@ namespace FSO.Vitaboy
         /// </summary>
         /// <param name="io">IOBuffer instance used to read an animation.</param>
         /// <returns>A PropertyList instance.</returns>
-        private PropertyList ReadPropertyList(IoBuffer io)
+        private PropertyList ReadPropertyList(IoBuffer io,bool bcf)
         {
-            var propsCount = io.ReadUInt32();
+            var propsCount = bcf?1:io.ReadBoundedCount(4096);
             var result = new PropertyListItem[propsCount];
 
             for (var y = 0; y < propsCount; y++)
             {
                 var item = new PropertyListItem();
-                var pairsCount = io.ReadUInt32();
+                var pairsCount = io.ReadBoundedCount(4096);
                 for (var z = 0; z < pairsCount; z++)
                 {
                     item.KeyPairs.Add(new KeyValuePair<string, string>(
