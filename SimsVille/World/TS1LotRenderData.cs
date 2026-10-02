@@ -108,33 +108,37 @@ namespace FSO.LotView
             var rooms = roofRoomData;
             return room > 0 && room < rooms.Count && !rooms[(int)room].IsOutside;
         }
+        private bool Roofable(int halfX, int halfY, int story)
+        {
+            int x=halfX/2,y=halfY/2,dx=halfX%2==1?1:-1,dy=halfY%2==1?1:-1;
+            if(x<=0||y<=0||x>=Size-1||y>=Size-1)return false;
+            bool overhang=!Indoors(x,y,story);
+            if(overhang && !Indoors(x+dx,y,story) && !Indoors(x,y+dy,story) && !Indoors(x+dx,y+dy,story))return false;
+            // Retain the half-tile eaves of the existing roof model. Upper rooms
+            // and balcony floors suppress lower roofs, including their eaves.
+            if(story==1)return true;
+            var floors=session.VM.Context.Architecture.Floors[1];
+            Func<int,int,bool> blocked=(xx,yy)=>Indoors(xx,yy,1)||floors[yy*Size+xx].Pattern!=0;
+            if(blocked(x,y))return false;
+            return !overhang || (!blocked(x+dx,y)&&!blocked(x,y+dy)&&!blocked(x+dx,y+dy));
+        }
         private void BuildRoofs(View view, int zoom, int rotation)
         {
             var arch = session.VM.Context.Architecture;
             for (int story = 0; story < 2; story++) {
-                var footprint = new List<Vector2[]>();
-                for (int y = 0; y < Size; y++) for (int x = 0; x < Size; x++) {
-                    int offset = y * Size + x;
-                    if (story == 0 && (Indoors(x, y, 1) || arch.Floors[1][offset].Pattern != 0)) continue;
-                    uint room = roofRooms[story].Map[offset]; var wall = arch.Walls[story][offset];
-                    var p = new[] {new Vector2(x, y), new Vector2(x + 1, y), new Vector2(x + 1, y + 1), new Vector2(x, y + 1)};
-                    int[] first, second;
-                    if ((wall.Segments & WallSegments.HorizontalDiag) != 0) { first = new[] {0, 1, 3}; second = new[] {1, 2, 3}; }
-                    else if ((wall.Segments & WallSegments.VerticalDiag) != 0) { first = new[] {0, 1, 2}; second = new[] {0, 2, 3}; }
-                    else { first = new[] {0, 1, 2}; second = new[] {0, 2, 3}; }
-                    if (RoomInside(room & 65535)) footprint.Add(first.Select(i => p[i]).ToArray());
-                    // The flood-fill seed has only the low room ID on a regular tile.
-                    uint secondRoom = (wall.Segments & WallSegments.AnyDiag) == 0 ? room & 65535 : room >> 16;
-                    if (RoomInside(secondRoom)) footprint.Add(second.Select(i => p[i]).ToArray());
-                }
-                if (footprint.Count == 0) continue;
-                var mesh = TS1RoofMesh.Build(footprint, (story + 1) * 2.95f, arch.RoofPitch);
+                int width=Size*2; var footprint=new bool[width*width];
+                for(int y=0;y<width;y++)for(int x=0;x<width;x++)footprint[y*width+x]=Roofable(x,y,story);
+                var mesh = TS1RoofMesh.Build(footprint,width,width,(story + 1) * 2.95f,arch.RoofPitch);
+                if(mesh.Count==0)continue;
                 var material = materials.Roof(roofName);
                 foreach (var triangle in mesh) {
                     var normal = Vector3.Normalize(Vector3.Cross(triangle[1] - triangle[0], triangle[2] - triangle[0]));
                     if (normal.Z < 0) normal = -normal;
-                    float shade = MathHelper.Clamp(.8f + .18f * Vector3.Dot(normal, Vector3.Normalize(new Vector3(-1, -1, 2))), .6f, 1);
-                    var uv = triangle.Select(p => new Vector2(p.X / 2, p.Y / 2)).ToArray();
+                    float shade = MathHelper.Clamp(.75f + .3f * Vector3.Dot(normal, Vector3.Normalize(new Vector3(-1, 1, 1.5f))), .55f, 1);
+                    // RoofComponent uses 2x3 repeats/tile; rotate UVs per face
+                    // rather than stretching the authored roof tiles.
+                    bool alongX=Math.Abs(normal.Y)>=Math.Abs(normal.X);
+                    var uv = triangle.Select(p => alongX?new Vector2(p.X*2,p.Y*3):new Vector2(p.Y*2,p.X*3)).ToArray();
                     Textured(view.RoofMaterials, material, triangle, uv, new[] {0, 1, 2}, new Color(shade, shade, shade), zoom, rotation);
                 }
                 view.RoofTriangles += mesh.Count;

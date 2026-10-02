@@ -16,7 +16,7 @@ Check both houses at all angles and zooms:
   Check House 2's arched windows and House 28's large shop windows.
 - Between floors: no orange/white gaps through adjoining walls; check House 2
   angle 1, level 2, zoom 3. Texture changes/baseboards can remain visible.
-- ROOF: pitched textured surfaces follow diagonal walls and avoid balconies,
+- ROOF: pitched textured surfaces have straight ridges and half-tile eaves, avoiding balconies,
   open courtyards, pools and the island in House 2's pool. No triangular holes.
 - Stair regression: the real staircase opening stays open; the repaired blue
   carpet stays complete. Stairwell banisters and inclined handrails still render.
@@ -25,8 +25,9 @@ Rerun tests, Home/return, exit/relaunch. Send proof.log and original Device Port
 PNGs of floor 2 and ROOF for both houses. Xbox validation of 0.11 is pending.
 
 Still static: flat checker terrain/blue water, no lighting or simulation;
-contained objects remain held. Roof shape is a continuous hip/valley approximation
-at the saved pitch, not the original game's exact ridge/eave construction.
+contained objects remain held. Roof shape uses the existing half-tile rectangular hip model at the saved pitch.
+Roof tiles use the existing renderer's face-relative texture scale. Pixel-identical
+TS1 shading/filtering is not yet reproduced.
 Authored near-view materials/masks are sampled onto geometry. Architectural
 opening mapping currently covers cardinal placements in these two test lots.
 Camera/test counters reset on a fresh launch.

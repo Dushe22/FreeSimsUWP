@@ -133,26 +133,21 @@ namespace FreeSims.Tests
         }
         private static void RoofGeometry(GamePaths paths)
         {
-            Func<int,int,Vector2[]> tri=(x,y)=>new[]{new Vector2(x,y),new Vector2(x+1,y),new Vector2(x+1,y+1)};
-            Func<int,int,Vector2[]> other=(x,y)=>new[]{new Vector2(x,y),new Vector2(x+1,y+1),new Vector2(x,y+1)};
-            var footprint=new List<Vector2[]>();
-            for(int y=0;y<2;y++)for(int x=0;x<4;x++){footprint.Add(tri(x,y));footprint.Add(other(x,y));}
-            var rectangle=TS1RoofMesh.Build(footprint,5.9f,.66f);
-            if(Math.Abs(rectangle.SelectMany(t=>t).Max(p=>p.Z)-6.56f)>.001f)throw new InvalidOperationException("Incorrect rectangular hip height.");
-            footprint.Clear();
-            for(int y=0;y<4;y++)for(int x=0;x<4;x++)if(x==0||y==0||x==3||y==3){footprint.Add(tri(x,y));footprint.Add(other(x,y));}
-            var courtyard=TS1RoofMesh.Build(footprint,5.9f,.66f);
-            float area=0;
-            var shared=new Dictionary<Vector2,float>();
-            foreach(var t in courtyard){
+            var rectangle=TS1RoofMesh.Build(Enumerable.Repeat(true,32).ToArray(),8,4,5.9f,.66f);
+            if(rectangle.Count!=6 || Math.Abs(rectangle.SelectMany(t=>t).Max(p=>p.Z)-6.56f)>.001f)
+                throw new InvalidOperationException("Rectangular roof must have a straight ridge and planar hips.");
+            foreach(var t in rectangle) {
+                var n=Vector3.Normalize(Vector3.Cross(t[1]-t[0],t[2]-t[0]));
+                if(Math.Min(Math.Abs(n.X),Math.Abs(n.Y))>.0001f)throw new InvalidOperationException("Rectangular roof has a twisted face.");
+            }
+            var footprint=new bool[64];
+            for(int y=0;y<8;y++)for(int x=0;x<8;x++)footprint[y*8+x]=x<2||y<2||x>=6||y>=6;
+            var courtyard=TS1RoofMesh.Build(footprint,8,8,5.9f,.66f);
+            foreach(var t in courtyard) {
                 var center=(t[0]+t[1]+t[2])/3;
                 if(center.X>1&&center.X<3&&center.Y>1&&center.Y<3)throw new InvalidOperationException("Roof covers open courtyard.");
-                area+=Math.Abs((t[1].X-t[0].X)*(t[2].Y-t[0].Y)-(t[1].Y-t[0].Y)*(t[2].X-t[0].X))/2;
-                foreach(var p in t){float previous;var xy=new Vector2(p.X,p.Y);if(shared.TryGetValue(xy,out previous)&&previous!=p.Z)throw new InvalidOperationException("Roof height crack.");shared[xy]=p.Z;}
             }
-            if(Math.Abs(area-12)>.001f)throw new InvalidOperationException("Roof footprint area changed.");
-            var diagonal=TS1RoofMesh.Build(new[]{new[]{Vector2.Zero,Vector2.UnitX,Vector2.UnitY}},5.9f,.66f);
-            if(diagonal.SelectMany(t=>t).Any(p=>p.X+p.Y>1.001f))throw new InvalidOperationException("Diagonal roof corner was filled.");
+            if(courtyard.Count==0)throw new InvalidOperationException("Courtyard roof is missing.");
             using(var lot=new TS1LotRenderData(paths,2)) {
                 var px=TS1SpriteLayer.ProjectWithDepth(Vector3.UnitX,3,0);
                 var py=TS1SpriteLayer.ProjectWithDepth(Vector3.UnitY,3,0);
@@ -171,7 +166,7 @@ namespace FreeSims.Tests
                 };
                 if(!covers(17.2f,17.8f))throw new InvalidOperationException("Room seed left a triangular roof hole.");
                 if(covers(35.5f,15.5f))throw new InvalidOperationException("Pool island was mistaken for an enclosed room.");
-                if(!covers(23.2f,22.8f) || covers(23.8f,22.2f))throw new InvalidOperationException("Saved diagonal roof half is reversed.");
+                if(!covers(23.2f,22.8f) || !covers(15.75f,30.25f) || covers(15.25f,30.25f))throw new InvalidOperationException("Saved roof/eave coverage is incorrect.");
             }
         }
         private static void StairHandrails(GamePaths paths)
