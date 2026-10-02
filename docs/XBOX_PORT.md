@@ -1790,3 +1790,28 @@ Disposed managed footprint after four loads drops from 234 MiB to below 1 MiB.
 Uploaded bytes are reduced 34-40% across the stress views. All 48 regenerated
 whole-lot images match the previous build byte-for-byte. Hardware verification
 remains pending; these memory/timing figures are desktop measurements.
+
+## 0.13.0: controller pointer and three wall modes
+
+Left-stick click toggles a virtual pointer within the existing 1280x530 scene.
+Its position shares the letterboxed UI transform; left stick moves it and
+right stick pans. Y selects down, cutaway or up. The cutaway uses the existing
+VMArchitectureTools room/rectangle logic (last three indoor rooms), plus an
+opaque wall-face hit test so directly hovering a wall cuts it. Pointer-to-tile
+projection accounts for rotation, zoom, pan and selected story height.
+
+Solid walls have narrow brown top caps, exposed full ends, and proportionally
+textured low stubs. Only the selected story cuts; lower stories, fences and
+banisters remain. Roof view keeps the whole building. Saved opening masks and
+sprite depth calibration remain unchanged; attachments disappear with their
+host, including saved HideForCutaway wall lamps/art.
+
+Wall visibility reuses uploaded textures and preallocated vertex arrays.
+Stationary hover/unchanged cut sets do not redraw the scene. The new drawing
+overload preserves the legacy bool wall toggle for pixel regression fixtures.
+23 render checks and visual capture inspection pass; controller/hardware gate
+is in experiments/XboxOfflineProbe/TESTING.md.
+
+The user's latest 0.12.2 proof.log confirms two launches, 46 view changes and
+20/20 PASS without logged errors/OOM; highest logged app usage 425.48 MiB
+against a 1024 MiB budget. This is logged memory evidence, not a measured FPS.

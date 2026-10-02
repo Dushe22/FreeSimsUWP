@@ -9,11 +9,14 @@ using FSO.Files.Formats.IFF.Chunks;
 using FSO.LotView.Model;
 using FSO.SimAntics;
 using FSO.SimAntics.Model;
+using FSO.SimAntics.Utils;
 using Microsoft.Xna.Framework;
 using Microsoft.Xna.Framework.Graphics;
 
 namespace FSO.LotView
 {
+    public enum TS1WallMode { Down, Cutaway, Up }
+
     // Static saved architecture with authored TS1 opening masks and roof textures.
     public sealed class TS1LotRenderData : IDisposable
     {
@@ -25,6 +28,7 @@ namespace FSO.LotView
         private readonly List<VMRoom> roofRoomData = new List<VMRoom> {new VMRoom {IsOutside = true}};
         private readonly Dictionary<short, Vector2> poolAttachmentOffsets = new Dictionary<short, Vector2>();
         private readonly Dictionary<short, Vector2> openingNormals = new Dictionary<short, Vector2>();
+        private readonly Dictionary<short, List<string>> attachmentEdges = new Dictionary<short, List<string>>();
         private readonly Dictionary<string, Opening> openings = new Dictionary<string, Opening>();
         public int Size { get { return session.VM.Context.Architecture.Width; } }
         public int ObjectCount { get { return session.SavedObjectCount; } }
@@ -55,6 +59,7 @@ namespace FSO.LotView
                         throw new InvalidDataException("Unsupported stair visual callback: "+stub.ObjectID);
                 }
                 LoadOpenings();
+                LoadCutawayAttachments();
                 LoadPoolAttachments();
                 // Water separates simulation room regions; it must not enclose a roof.
                 for (int story = 0; story < 2; story++) {
@@ -128,9 +133,34 @@ namespace FSO.LotView
                     string key = (side == 0 ? EdgeKey(story,x,y,x+1,y) : side == 1 ? EdgeKey(story,x+1,y,x+1,y+1) : side == 2 ? EdgeKey(story,x,y+1,x+1,y+1) : EdgeKey(story,x,y,x,y+1)) + ":face:" + (side == 0 || side == 3);
                     Opening existing;
                     if (openings.TryGetValue(key, out existing) && existing.Identity != identity) throw new InvalidDataException("Conflicting wall openings at " + key);
+                    List<string> hosts;
+                    if(!attachmentEdges.TryGetValue(entity.ObjectID,out hosts))attachmentEdges.Add(entity.ObjectID,hosts=new List<string>());
+                    hosts.Add(key.Substring(0,key.IndexOf(":face:",StringComparison.Ordinal)));
                     openings[key] = new Opening {Mask = mask, Identity = identity};
                     openingNormals[entity.ObjectID] = new[]{Vector2.UnitY,-Vector2.UnitX,-Vector2.UnitY,Vector2.UnitX}[side];
                 }
+            }
+        }
+        private void LoadCutawayAttachments()
+        {
+            // Saved wall lamps/art also carry the game's HideForCutaway flag.
+            foreach(var entity in session.VM.Entities) {
+                if(attachmentEdges.ContainsKey(entity.ObjectID)||entity.Container!=null ||
+                    (((VMEntityFlags)entity.GetValue(VMStackObjectVariable.Flags))&VMEntityFlags.HideForCutaway)==0)continue;
+                int x=entity.Position.TileX,y=entity.Position.TileY,story=entity.Position.Level-1;
+                if(x<0||y<0||x>=Size||y>=Size||story<0||story>1)continue;
+                int direction=entity.Direction==Direction.NORTH?0:entity.Direction==Direction.EAST?1:entity.Direction==Direction.SOUTH?2:entity.Direction==Direction.WEST?3:-1;
+                if(direction<0)continue;
+                int required=entity.GetValue(VMStackObjectVariable.WallPlacementFlags)&15;
+                var hosts=new List<string>();var wall=session.VM.Context.Architecture.Walls[story][y*Size+x];
+                for(int relative=0;relative<4;relative++) {
+                    if((required&(1<<relative))==0)continue;
+                    int side=(direction+relative)%4;
+                    var flag=new[]{WallSegments.TopRight,WallSegments.BottomRight,WallSegments.BottomLeft,WallSegments.TopLeft}[side];
+                    if((wall.Segments&flag)==0)continue;
+                    hosts.Add(side==0?EdgeKey(story,x,y,x+1,y):side==1?EdgeKey(story,x+1,y,x+1,y+1):side==2?EdgeKey(story,x,y+1,x+1,y+1):EdgeKey(story,x,y,x,y+1));
+                }
+                if(hosts.Count>0)attachmentEdges.Add(entity.ObjectID,hosts);
             }
         }
         private bool Indoors(int x, int y, int story)
@@ -186,12 +216,23 @@ namespace FSO.LotView
             public Vector2 Position;
             public float BackNearness;
             public short ObjectID;
+            public string[] WallHosts;
         }
         public sealed class Surface
         {
             public TS1MaterialProvider.Material Material;
             public bool KeepWhenWallsHidden;
             public readonly List<VertexPositionColorTexture> Vertices = new List<VertexPositionColorTexture>();
+        }
+        public sealed class WallSection
+        {
+            public string Key, EndA, EndB;
+            public Surface Surface;
+            public int Offset, Story, TileX, TileY;
+            public bool Cut;
+            public VertexPositionColorTexture[] Low;
+            public Vector3[] Full;
+            public VertexPositionColor[] Top, LowTop, EndFaceA, EndFaceB, LowEndA, LowEndB;
         }
         public sealed class View
         {
@@ -202,6 +243,15 @@ namespace FSO.LotView
             public readonly List<Surface> WallMaterials = new List<Surface>();
             public readonly List<Surface> RoofMaterials = new List<Surface>();
             public readonly List<Sprite> Sprites = new List<Sprite>();
+            public readonly List<WallSection> WallSections = new List<WallSection>();
+            public readonly HashSet<uint> CutRooms = new HashSet<uint>();
+            public readonly Queue<uint> CutRoomOrder = new Queue<uint>();
+            public int Zoom, Rotation, Level, WallRevision;
+            public TS1WallMode WallMode = (TS1WallMode)(-1);
+            public Point? LastHover, LastCutOrigin;
+            public Vector2? LastPointer;
+            public Matrix LastCamera;
+            public string LastWall;
             public int OpeningEdges, StoryJoints, RoofTriangles;
             public int TerrainTiles, PoolTiles, WaterTiles, PoolAttachmentAdjustments;
             public int Rendered, Hidden, OutOfWorld, Contained, NoGraphic, Unsupported, AboveLevel, FloorTiles, WallEdges;
@@ -211,7 +261,7 @@ namespace FSO.LotView
         {
             if (level < 1 || level > 3) throw new ArgumentOutOfRangeException("level");
             TS1SpriteLayer.Project(Vector3.Zero,zoom,rotation); // validate before allocating
-            var view=new View {PoolAttachmentAdjustments=poolAttachmentOffsets.Count/3}; var arch=session.VM.Context.Architecture;
+            var view=new View {Zoom=zoom,Rotation=rotation,Level=level,PoolAttachmentAdjustments=poolAttachmentOffsets.Count/3}; var arch=session.VM.Context.Architecture;
             var spriteFrames=new Dictionary<SPR2Frame,TS1SpriteLayer>();
             var terrain=materials.Terrain(grass,Size);
             for(int y=0;y<Size;y++)for(int x=0;x<Size;x++) {
@@ -265,7 +315,27 @@ namespace FSO.LotView
                             material=materials.WithOpening(material,opening.Mask,frame,delta.X<0,opening.Identity);
                             view.OpeningEdges++;
                         }
-                        Textured(view.WallMaterials,material,points,new[]{Vector2.UnitY,Vector2.One,Vector2.UnitX,Vector2.Zero},new[]{0,1,2,0,2,3},color,zoom,rotation,persistent);
+                        var faceUV=new[]{Vector2.UnitY,Vector2.One,Vector2.UnitX,Vector2.Zero};
+                        var surface=Textured(view.WallMaterials,material,points,faceUV,new[]{0,1,2,0,2,3},color,zoom,rotation,persistent);
+                        if(!persistent) {
+                            var lowPoints=(Vector3[])points.Clone();lowPoints[2].Z=lowPoints[3].Z=z+.22f;
+                            var lowUV=(Vector2[])faceUV.Clone();lowUV[2].Y=lowUV[3].Y=1-(z+.22f-bottom)/(top-bottom);
+                            var lowSurface=new List<Surface>();
+                            var low=Textured(lowSurface,material,lowPoints,lowUV,new[]{0,1,2,0,2,3},color,zoom,rotation).Vertices.ToArray();
+                            // Extrude away from the visible plane, keeping authored opening depths intact.
+                            var direction=Vector2.Normalize(new Vector2(bx-ax,by-ay));
+                            var normal=new Vector2(-direction.Y,direction.X)*.09f;
+                            if(Vector2.Dot(normal,camera)>0)normal=-normal;
+                            var thickness=new Vector3(normal,0);
+                            view.WallSections.Add(new WallSection {
+                                Key=EdgeKey(story,ax,ay,bx,by),EndA=story+":"+ax+":"+ay,EndB=story+":"+bx+":"+by,
+                                Story=story,TileX=x,TileY=y,Surface=surface,Offset=surface.Vertices.Count-6,Low=low,
+                                Full=points.Select(p=>TS1SpriteLayer.ProjectWithDepth(p,zoom,rotation)).ToArray(),
+                                Top=WallCap(points[3],points[2],thickness,zoom,rotation),LowTop=WallCap(lowPoints[3],lowPoints[2],thickness,zoom,rotation),
+                                EndFaceA=WallCap(points[0],points[3],thickness,zoom,rotation),EndFaceB=WallCap(points[2],points[1],thickness,zoom,rotation),
+                                LowEndA=WallCap(lowPoints[0],lowPoints[3],thickness,zoom,rotation),LowEndB=WallCap(lowPoints[2],lowPoints[1],thickness,zoom,rotation)
+                            });
+                        }
                         view.WallEdges++;
                     };
                     edge(WallSegments.TopLeft,x,y,x,y+1,camera.X>0?wall.TopLeftPattern:wallAt(x-1,y).BottomRightPattern,wall.TopLeftStyle);
@@ -296,6 +366,7 @@ namespace FSO.LotView
                     float attachmentBias=openingNormals.TryGetValue(entity.ObjectID,out openingNormal) && Vector2.Dot(openingNormal,camera)>0 ? (float)Math.Sqrt(1.5)/.4f*8/255 : 0;
                     foreach(var layer in layers) view.Sprites.Add(new Sprite {
                         Layer=layer,Position=point+layer.Offset,ObjectID=entity.ObjectID,
+                        WallHosts=attachmentEdges.ContainsKey(entity.ObjectID)?attachmentEdges[entity.ObjectID].ToArray():null,
                         BackNearness=TS1SpriteLayer.ProjectWithDepth(world-new Vector3(0.5f,0.5f,0)+backOffsets[rotation]+layer.WorldOffset,zoom,rotation).Z+attachmentBias
                     });
                     view.Rendered++;
@@ -306,6 +377,99 @@ namespace FSO.LotView
             }
             if(level==3)BuildRoofs(view,zoom,rotation);
             return view;
+        }
+        private static VertexPositionColor[] WallCap(Vector3 a,Vector3 b,Vector3 thickness,int zoom,int rotation)
+        {
+            var target=new List<VertexPositionColor>();
+            Quad(target,a,b,b+thickness,a+thickness,new Color(153,120,83),zoom,rotation);
+            return target.ToArray();
+        }
+        // Pointer coordinates are local to the scene target, before the UI letterbox transform.
+        public static Vector2 TileAtPointer(Vector2 pointer,Matrix camera,int width,int height,int zoom,int rotation,int level)
+        {
+            if(width<=0||height<=0||level<1||level>3)throw new ArgumentOutOfRangeException("level");
+            TS1SpriteLayer.Project(Vector3.Zero,zoom,rotation);
+            var clip=new Vector3(pointer.X*2/width-1,1-pointer.Y*2/height,0);
+            var screen=Vector3.Transform(clip,Matrix.Invert(camera));
+            float w=16*(1<<(zoom-1)),sum=2*(screen.Y+(Math.Min(level,2)-1)*2.95f*w*(float)Math.Sqrt(1.5))/w;
+            float diff=screen.X/w,x=(sum+diff)/2,y=(sum-diff)/2;
+            switch(rotation) {case 1:return new Vector2(y,-x);case 2:return new Vector2(-x,-y);case 3:return new Vector2(-y,x);default:return new Vector2(x,y);}
+        }
+        public static Vector2 PointerAtTile(Vector3 tile,Matrix camera,int width,int height,int zoom,int rotation)
+        {
+            var clip=Vector3.Transform(TS1SpriteLayer.ProjectWithDepth(tile,zoom,rotation),camera);
+            return new Vector2((clip.X+1)*width/2,(1-clip.Y)*height/2);
+        }
+        private static bool TriangleHit(Vector2 p,Vector3 a,Vector3 b,Vector3 c,out Vector3 weights)
+        {
+            float divisor=(b.Y-c.Y)*(a.X-c.X)+(c.X-b.X)*(a.Y-c.Y);
+            if(Math.Abs(divisor)<.0001f){weights=Vector3.Zero;return false;}
+            float u=((b.Y-c.Y)*(p.X-c.X)+(c.X-b.X)*(p.Y-c.Y))/divisor;
+            float v=((c.Y-a.Y)*(p.X-c.X)+(a.X-c.X)*(p.Y-c.Y))/divisor;
+            weights=new Vector3(u,v,1-u-v);return u>=0&&v>=0&&u+v<=1;
+        }
+        private static WallSection PickWall(View view,Vector2 pointer,Matrix camera,int width,int height)
+        {
+            var clip=new Vector3(pointer.X*2/width-1,1-pointer.Y*2/height,0);
+            var p=Vector3.Transform(clip,Matrix.Invert(camera));var point=new Vector2(p.X,p.Y);
+            WallSection nearest=null;float near=float.MinValue;
+            foreach(var section in view.WallSections) {
+                if(section.Story!=Math.Min(view.Level,2)-1)continue;
+                // Use the full wall even while cut, so its hover region does not flicker.
+                var q=section.Full;Vector3 weights;float depth,u,v;
+                if(TriangleHit(point,q[0],q[1],q[2],out weights)) {
+                    depth=q[0].Z*weights.X+q[1].Z*weights.Y+q[2].Z*weights.Z;
+                    u=weights.Y+weights.Z;v=1-weights.Z;
+                } else if(TriangleHit(point,q[0],q[2],q[3],out weights)) {
+                    depth=q[0].Z*weights.X+q[2].Z*weights.Y+q[3].Z*weights.Z;
+                    u=weights.Y;v=weights.X;
+                } else continue;
+                var m=section.Surface.Material;
+                int xx=Math.Min(m.Width-1,Math.Max(0,(int)(u*m.Width))),yy=Math.Min(m.Height-1,Math.Max(0,(int)(v*m.Height)));
+                if(m.Pixels[yy*m.Width+xx].A<128)continue; // pick through authored openings
+                if(depth>near){near=depth;nearest=section;}
+            }
+            return nearest;
+        }
+        public bool UpdateWalls(View view,TS1WallMode mode,Vector2? pointer,Matrix camera,int width,int height)
+        {
+            if(mode<TS1WallMode.Down||mode>TS1WallMode.Up)throw new ArgumentOutOfRangeException("mode");
+            if(view.WallMode==mode&&view.LastPointer==pointer&&view.LastCamera==camera)return false;
+            view.LastPointer=pointer;view.LastCamera=camera;
+            int floor=Math.Min(view.Level,2);
+            Vector2? tile=pointer.HasValue?(Vector2?)TileAtPointer(pointer.Value,camera,width,height,view.Zoom,view.Rotation,view.Level):null;
+            Point? hover=tile.HasValue?(Point?)new Point((int)Math.Floor(tile.Value.X),(int)Math.Floor(tile.Value.Y)):null;
+            var hit=mode==TS1WallMode.Cutaway&&pointer.HasValue&&view.Level!=3?PickWall(view,pointer.Value,camera,width,height):null;
+            string hitKey=hit==null?null:hit.Key;
+            var dir=VMArchitectureTools.CutCheckDir[view.Rotation];
+            Point? cutOrigin=tile.HasValue?(Point?)new Point((int)(tile.Value.X-2.5f)-dir[0]*2,(int)(tile.Value.Y-2.5f)-dir[1]*2):null;
+            if(view.WallMode==mode&&view.LastHover==hover&&view.LastWall==hitKey&&view.LastCutOrigin==cutOrigin)return false;
+            view.WallMode=mode;view.LastHover=hover;view.LastWall=hitKey;view.LastCutOrigin=cutOrigin;
+            bool[] cuts=null;
+            if(mode==TS1WallMode.Cutaway && view.Level!=3) {
+                var arch=session.VM.Context.Architecture;
+                if(hover.HasValue && hover.Value.X>=0&&hover.Value.Y>=0&&hover.Value.X<Size&&hover.Value.Y<Size) {
+                    uint room=session.VM.Context.GetRoomAt(LotTilePos.FromBigTile((short)hover.Value.X,(short)hover.Value.Y,(sbyte)floor));
+                    if(!session.VM.Context.RoomInfo[(int)room].Room.IsOutside&&view.CutRooms.Add(room)) {
+                        view.CutRoomOrder.Enqueue(room);
+                        if(view.CutRoomOrder.Count>3)view.CutRooms.Remove(view.CutRoomOrder.Dequeue());
+                    }
+                }
+                cuts=VMArchitectureTools.GenerateRoomCut(arch,(sbyte)floor,(WorldRotation)view.Rotation,view.CutRooms);
+                if(tile.HasValue) {
+                    VMArchitectureTools.ApplyCutRectangle(arch,(sbyte)floor,cuts,new Rectangle(cutOrigin.Value.X,cutOrigin.Value.Y,5,5));
+                }
+                // Direct wall hover also cuts that segment, including outer walls.
+                if(hit!=null)cuts[hit.TileY*Size+hit.TileX]=true;
+            }
+            bool changed=false;
+            foreach(var section in view.WallSections) {
+                bool cut=view.Level!=3&&section.Story==floor-1&&(mode==TS1WallMode.Down ||
+                    (mode==TS1WallMode.Cutaway&&cuts[section.TileY*Size+section.TileX]));
+                if(cut!=section.Cut){section.Cut=cut;changed=true;}
+            }
+            if(changed)view.WallRevision++;
+            return changed;
         }
         public static byte WaterNeighbors(FloorTile[] floors,int size,int x,int y,ushort pattern)
         {
@@ -318,11 +482,12 @@ namespace FSO.LotView
             }
             return (byte)result;
         }
-        private static void Textured(List<Surface> surfaces,TS1MaterialProvider.Material material,Vector3[] corners,Vector2[] uv,int[] indices,Color color,int zoom,int rotation,bool keepWhenWallsHidden=false)
+        private static Surface Textured(List<Surface> surfaces,TS1MaterialProvider.Material material,Vector3[] corners,Vector2[] uv,int[] indices,Color color,int zoom,int rotation,bool keepWhenWallsHidden=false)
         {
             var surface=surfaces.FirstOrDefault(x=>ReferenceEquals(x.Material,material) && x.KeepWhenWallsHidden==keepWhenWallsHidden);
             if(surface==null){surface=new Surface{Material=material,KeepWhenWallsHidden=keepWhenWallsHidden};surfaces.Add(surface);}
             foreach(int i in indices)surface.Vertices.Add(new VertexPositionColorTexture(TS1SpriteLayer.ProjectWithDepth(corners[i],zoom,rotation),color,uv[i]));
+            return surface;
         }
         private static void TriangleSurface(List<VertexPositionColor> vertices,Vector3[] corners,int[] indices,Color color,int zoom,int rotation)
         {

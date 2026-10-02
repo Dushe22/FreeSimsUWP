@@ -12,7 +12,7 @@ namespace FreeSims.Tests
 {
     public static class LotRenderTests
     {
-        public const int Count=20;
+        public const int Count=23;
         public static List<string> Run(GraphicsDevice device,GamePaths paths,byte[] effect,Action<string> log)
         {
             var result=new List<string>();bool oldWorld=VM.UseWorld;VM.UseWorld=false;
@@ -20,6 +20,9 @@ namespace FreeSims.Tests
             try {
                 check("DISPOSED LOTS RELEASE VM AND CONTENT",()=>ReleasedLots(paths));
                 check("GPU SHARED SPRITES AND RESOURCE DISPOSAL",()=>SharedSprites(device,paths,effect));
+                check("POINTER FOUR ANGLES ZOOMS AND FLOOR HEIGHTS",()=>PointerProjection());
+                check("THREE WALL MODES HOVER AND STORY BOUNDARIES",()=>WallModes(paths));
+                check("GPU WALL CAPS CUT ATTACHMENTS AND HOVER REUSE",()=>WallModeGpu(device,paths,effect));
                 check("CAMERA DEPTH AND WALL HEIGHT",()=>{if(!LotProjectionTests.Run())throw new InvalidOperationException("Projection checks failed.");});
                 check("GPU DEPTH HOLES AND ALPHA",()=>DepthFixture(device,effect));
                 check("TS1 MATERIAL MAPPING AND FENCE ALPHA",()=>MaterialMapping(paths));
@@ -70,6 +73,82 @@ namespace FreeSims.Tests
             }finally{VM.UseWorld=oldWorld;}
             return result;
         }
+        private static void PointerProjection()
+        {
+            foreach(int zoom in new[]{1,2,3})for(int r=0;r<4;r++)for(int level=1;level<=2;level++)
+            foreach(var dimensions in new[]{new Point(1280,530),new Point(640,360)}) {
+                var camera=TS1LotRenderer.Camera(64,zoom,r,dimensions.X,dimensions.Y,new Vector2(123,-67));
+                var tile=new Vector3(21.25f,32.75f,(level-1)*2.95f);
+                var pointer=TS1LotRenderData.PointerAtTile(tile,camera,dimensions.X,dimensions.Y,zoom,r);
+                var restored=TS1LotRenderData.TileAtPointer(pointer,camera,dimensions.X,dimensions.Y,zoom,r,level);
+                if(Vector2.Distance(restored,new Vector2(tile.X,tile.Y))>.001f)throw new InvalidOperationException("Pointer failed rotated/panned floor projection.");
+            }
+        }
+        private static void WallModes(GamePaths paths)
+        {
+            foreach(int house in new[]{2,28})using(var lot=new TS1LotRenderData(paths,house))
+            for(int r=0;r<4;r++)for(int level=1;level<=3;level++) {
+                var view=lot.Build(1,r,level);
+                var camera=TS1LotRenderer.Camera(lot.Size,1,r,640,360,Vector2.Zero);
+                lot.UpdateWalls(view,TS1WallMode.Down,null,camera,640,360);
+                if(view.WallSections.Any(s=>s.Cut!=(level!=3&&s.Story==level-1)))throw new InvalidOperationException("Cut crossed story/roof boundary.");
+                foreach(var section in view.WallSections) {
+                    if(section.Low.Length!=6||section.Top.Length!=6||section.LowTop.Length!=6)throw new InvalidOperationException("Missing wall thickness/stub.");
+                    if(!section.Top.Any(v=>Math.Abs(v.Position.Z-section.Top[0].Position.Z)>.001f))throw new InvalidOperationException("Wall cap has no thickness.");
+                    if(section.Low[2].TextureCoordinate.Y<=0.8f)throw new InvalidOperationException("Low wall texture stretched.");
+                }
+                lot.UpdateWalls(view,TS1WallMode.Up,null,camera,640,360);
+                if(view.WallSections.Any(s=>s.Cut))throw new InvalidOperationException("Up did not restore walls.");
+                if(level==3)continue;
+                var picked=view.WallSections.First(s=>s.Story==level-1);
+                var point=(picked.Full[3]+picked.Full[2])*.475f+(picked.Full[0]+picked.Full[1])*.025f;
+                var clip=Vector3.Transform(point,camera);
+                var hover=new Vector2((clip.X+1)*320,(1-clip.Y)*180);
+                lot.UpdateWalls(view,TS1WallMode.Cutaway,hover,camera,640,360);
+                if(!view.WallSections.Any(s=>s.Cut))throw new InvalidOperationException("Wall hover did not cut.");
+                int revision=view.WallRevision;
+                if(lot.UpdateWalls(view,TS1WallMode.Cutaway,hover,camera,640,360)||view.WallRevision!=revision)throw new InvalidOperationException("Stationary hover rebuilt wall geometry.");
+                if(view.WallSections.Any(s=>s.Cut&&s.Story!=level-1))throw new InvalidOperationException("Hover cut lower story.");
+            }
+        }
+        private static void WallModeGpu(GraphicsDevice device,GamePaths paths,byte[] effect)
+        {
+            var previous=device.GetRenderTargets();var viewport=device.Viewport;
+            try {
+                foreach(int house in new[]{2,28})using(var lot=new TS1LotRenderData(paths,house)) {
+                    var view=lot.Build(2,0,2);var camera=TS1LotRenderer.Camera(lot.Size,2,0,640,360,Vector2.Zero);
+                    using(var renderer=new TS1LotRenderer(device,view,effect))
+                    using(var target=new RenderTarget2D(device,640,360,false,SurfaceFormat.Color,DepthFormat.Depth24)) {
+                        int textures=renderer.TextureCount;long bytes=renderer.TextureBytes;Color[] baseline=null,down=null;
+                        foreach(var mode in new[]{TS1WallMode.Up,TS1WallMode.Down,TS1WallMode.Cutaway,TS1WallMode.Up}) {
+                            lot.UpdateWalls(view,mode,new Vector2(320,180),camera,640,360);
+                            device.SetRenderTarget(target);device.Clear(ClearOptions.Target|ClearOptions.DepthBuffer,new Color(16,24,39),1,0);
+                            renderer.Draw(camera,mode);device.SetRenderTargets(previous);device.Viewport=viewport;
+                            var pixels=new Color[640*360];target.GetData(pixels);
+                            if(mode==TS1WallMode.Up) {
+                                if(baseline==null)baseline=pixels;
+                                else if(!baseline.SequenceEqual(pixels))throw new InvalidOperationException("Restored walls differ after pointer/mode cycle.");
+                                if(renderer.CutWallCount!=0||renderer.HiddenAttachmentCount!=0)throw new InvalidOperationException("Stale cut attachments.");
+                            } else if(mode==TS1WallMode.Down) {
+                                down=pixels;
+                                if(renderer.CutWallCount==0||renderer.HiddenAttachmentCount==0)throw new InvalidOperationException("Walls/windows did not cut.");
+                                if(baseline.SequenceEqual(down))throw new InvalidOperationException("Wall mode did not change GPU output.");
+                            }
+                            if(renderer.WallCapVertexCount==0||renderer.TextureCount!=textures||renderer.TextureBytes!=bytes)throw new InvalidOperationException("Missing caps or textures reallocated on hover.");
+                        }
+                        // Moving the cursor only changes CPU visibility; textures remain owned once.
+                        for(int i=0;i<80;i++) {
+                            lot.UpdateWalls(view,TS1WallMode.Cutaway,new Vector2(100+i*5,100+i%10*12),camera,640,360);
+                            device.SetRenderTarget(target);device.Clear(ClearOptions.Target|ClearOptions.DepthBuffer,Color.Black,1,0);
+                            renderer.Draw(camera,TS1WallMode.Cutaway);
+                            if(renderer.TextureCount!=textures||renderer.TextureBytes!=bytes)throw new InvalidOperationException("Hover allocated GPU textures.");
+                        }
+                        device.SetRenderTargets(previous);device.Viewport=viewport;
+                    }
+                }
+            }finally{device.SetRenderTargets(previous);device.Viewport=viewport;}
+        }
+
         [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.NoInlining)]
         private static WeakReference[] DisposedSessions(GamePaths paths)
         {

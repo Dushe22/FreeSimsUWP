@@ -11,15 +11,23 @@ namespace FSO.LotView
         private sealed class Item
         {
             public Texture2D Color,Depth; public VertexPositionColorTexture[] Vertices;
-            public float Nearness; public short ID; public bool HasOpaque, HasAlpha;
+            public float Nearness; public short ID; public bool HasOpaque, HasAlpha, Hidden;
+            public string[] WallHosts;
             // Textures are owned once by the renderer, not by individual instances.
         }
         private sealed class MaterialItem
         {
-            public Texture2D Texture; public VertexPositionColorTexture[] Vertices; public bool Wall, Roof;
+            public Texture2D Texture; public VertexPositionColorTexture[] Vertices, Active; public bool Wall, Roof;
+            public TS1LotRenderData.Surface Source;
         }
         private readonly List<MaterialItem> materialItems=new List<MaterialItem>();
         private readonly GraphicsDevice device;
+        private readonly Dictionary<TS1LotRenderData.Surface,MaterialItem> wallItems=new Dictionary<TS1LotRenderData.Surface,MaterialItem>();
+        private VertexPositionColor[] caps;
+        private int capCount, preparedRevision=int.MinValue;
+        public int CutWallCount {get;private set;}
+        public int HiddenAttachmentCount {get;private set;}
+        public int WallCapVertexCount {get {return capCount;}}
         private readonly BasicEffect surfaces;
         private readonly AlphaTestEffect materials;
         private readonly Effect sprites;
@@ -49,11 +57,12 @@ namespace FSO.LotView
                     return texture;
                 };
                 foreach(var source in data.TerrainMaterials.Concat(data.FloorMaterials).Concat(data.WallMaterials).Concat(data.RoofMaterials)) {
-                    var item=new MaterialItem {Wall=data.WallMaterials.Contains(source) && !source.KeepWhenWallsHidden,Roof=data.RoofMaterials.Contains(source),Vertices=source.Vertices.ToArray()};materialItems.Add(item);
+                    var item=new MaterialItem {Wall=data.WallMaterials.Contains(source) && !source.KeepWhenWallsHidden,Roof=data.RoofMaterials.Contains(source),Source=source,Vertices=source.Vertices.ToArray()};materialItems.Add(item);
+                    if(item.Wall){item.Active=new VertexPositionColorTexture[item.Vertices.Length];wallItems.Add(source,item);}
                     item.Texture=colorTexture(source.Material.Width,source.Material.Height,source.Material.Pixels);
                 }
                 foreach(var source in data.Sprites) {
-                    var layer=source.Layer;var item=new Item {Nearness=source.BackNearness,ID=source.ObjectID};items.Add(item);
+                    var layer=source.Layer;var item=new Item {Nearness=source.BackNearness,ID=source.ObjectID,WallHosts=source.WallHosts};items.Add(item);
                     item.Color=colorTexture(layer.Width,layer.Height,layer.Pixels);
                     Texture2D depth;
                     if(!depths.TryGetValue(layer.Depth,out depth)) {
@@ -74,21 +83,65 @@ namespace FSO.LotView
                     var d=new VertexPositionColorTexture(new Vector3(p.X,p.Y+layer.Height,z),Color.White,new Vector2(l,1));
                     item.Vertices=new[]{a,b,c,a,c,d};
                 }
+                caps=new VertexPositionColor[data.WallSections.Count*18];
                 alphaItems=items.Where(i=>i.HasAlpha).OrderBy(i=>i.Nearness).ThenBy(i=>i.ID).ToArray();
             } catch {Dispose();throw;}
         }
+        // Keep the original bool overload for legacy rendering and its pixel regressions.
         public void Draw(Matrix projection,bool showWalls,bool reverseOpaque=false)
+        {
+            DrawCore(projection,showWalls,reverseOpaque,false);
+        }
+        public void Draw(Matrix projection,TS1WallMode mode)
+        {
+            if(Data.WallMode!=mode)throw new InvalidOperationException("Update wall visibility before drawing.");
+            PrepareWalls();
+            DrawCore(projection,true,false,true);
+        }
+        private void PrepareWalls()
+        {
+            if(preparedRevision==Data.WallRevision)return;
+            preparedRevision=Data.WallRevision;CutWallCount=0;HiddenAttachmentCount=0;capCount=0;
+            var cutKeys=new HashSet<string>();
+            var fullEnds=new Dictionary<string,int>();var allEnds=new Dictionary<string,int>();
+            Action<Dictionary<string,int>,string> countEnd=(map,key)=>{int count;map.TryGetValue(key,out count);map[key]=count+1;};
+            foreach(var section in Data.WallSections) {
+                if(section.Cut){cutKeys.Add(section.Key);CutWallCount++;}
+                else {countEnd(fullEnds,section.EndA);countEnd(fullEnds,section.EndB);}
+                countEnd(allEnds,section.EndA);countEnd(allEnds,section.EndB);
+            }
+            foreach(var pair in wallItems){Array.Copy(pair.Value.Vertices,pair.Value.Active,pair.Value.Vertices.Length);}
+            foreach(var section in Data.WallSections) {
+                if(section.Cut)Array.Copy(section.Low,0,wallItems[section.Surface].Active,section.Offset,6);
+                AddCap(section.Cut?section.LowTop:section.Top);
+                // Only expose full ends at a physical end or a transition to low walls.
+                if(section.Cut?allEnds[section.EndA]==1:fullEnds[section.EndA]==1)
+                    AddCap(section.Cut?section.LowEndA:section.EndFaceA);
+                if(section.Cut?allEnds[section.EndB]==1:fullEnds[section.EndB]==1)
+                    AddCap(section.Cut?section.LowEndB:section.EndFaceB);
+            }
+            foreach(var item in items) {
+                item.Hidden=item.WallHosts!=null&&item.WallHosts.Length>0&&item.WallHosts.All(cutKeys.Contains);
+                if(item.Hidden)HiddenAttachmentCount++;
+            }
+        }
+        private void AddCap(VertexPositionColor[] vertices)
+        {
+            Array.Copy(vertices,0,caps,capCount,vertices.Length);capCount+=vertices.Length;
+        }
+        private void DrawCore(Matrix projection,bool showWalls,bool reverseOpaque,bool dynamicWalls)
         {
             device.RasterizerState=RasterizerState.CullNone;device.DepthStencilState=DepthStencilState.Default;device.BlendState=BlendState.Opaque;
             surfaces.World=Matrix.Identity;surfaces.View=Matrix.Identity;surfaces.Projection=projection;
             surfaces.TextureEnabled=false;
-            foreach(var pass in surfaces.CurrentTechnique.Passes) {pass.Apply();DrawSurface(ground);if(showWalls)DrawSurface(walls);}
+            foreach(var pass in surfaces.CurrentTechnique.Passes) {pass.Apply();DrawSurface(ground);if(showWalls)DrawSurface(walls);if(dynamicWalls)DrawSurface(caps,capCount);}
             materials.World=Matrix.Identity;materials.View=Matrix.Identity;materials.Projection=projection;device.SamplerStates[0]=SamplerState.PointClamp;
             foreach(var item in materialItems) {
                 if(item.Wall&&!showWalls)continue;
                 device.SamplerStates[0]=item.Roof?SamplerState.PointWrap:SamplerState.PointClamp;
                 materials.Texture=item.Texture;
-                foreach(var pass in materials.CurrentTechnique.Passes) {pass.Apply();for(int offset=0;offset<item.Vertices.Length;offset+=18000)device.DrawUserPrimitives(PrimitiveType.TriangleList,item.Vertices,offset,Math.Min(18000,item.Vertices.Length-offset)/3);}
+                var vertices=dynamicWalls&&item.Wall?item.Active:item.Vertices;
+                foreach(var pass in materials.CurrentTechnique.Passes) {pass.Apply();for(int offset=0;offset<vertices.Length;offset+=18000)device.DrawUserPrimitives(PrimitiveType.TriangleList,vertices,offset,Math.Min(18000,vertices.Length-offset)/3);}
             }
             sprites.Parameters["Projection"].SetValue(projection);
             // Same depth calibration as 2DWorldBatch.fx: a two-tile diagonal span
@@ -96,17 +149,18 @@ namespace FSO.LotView
             sprites.Parameters["DepthSpan"].SetValue((float)Math.Sqrt(1.5)/0.4f/256f);
             sprites.Parameters["AlphaPass"].SetValue(0f);
             var opaque=reverseOpaque?items.AsEnumerable().Reverse():items;
-            foreach(var item in opaque) if(item.HasOpaque)DrawItem(item);
+            foreach(var item in opaque) if(item.HasOpaque&&(!dynamicWalls||!item.Hidden))DrawItem(item);
             // Opaque texels write depth; partial alpha edges only read it, avoiding
             // invisible depth writes. Intersecting translucent surfaces are not OIT.
             device.BlendState=BlendState.AlphaBlend;device.DepthStencilState=DepthStencilState.DepthRead;
             sprites.Parameters["AlphaPass"].SetValue(1f);
-            foreach(var item in alphaItems) DrawItem(item);
+            foreach(var item in alphaItems) if(!dynamicWalls||!item.Hidden)DrawItem(item);
         }
-        private void DrawSurface(VertexPositionColor[] vertices)
+        private void DrawSurface(VertexPositionColor[] vertices) {DrawSurface(vertices,vertices.Length);}
+        private void DrawSurface(VertexPositionColor[] vertices,int count)
         {
             // Bounded batches avoid primitive-count limits on large lots.
-            for(int offset=0;offset<vertices.Length;offset+=18000) device.DrawUserPrimitives(PrimitiveType.TriangleList,vertices,offset,Math.Min(18000,vertices.Length-offset)/3);
+            for(int offset=0;offset<count;offset+=18000) device.DrawUserPrimitives(PrimitiveType.TriangleList,vertices,offset,Math.Min(18000,count-offset)/3);
         }
         private void DrawItem(Item item)
         {
@@ -120,6 +174,6 @@ namespace FSO.LotView
             return Matrix.CreateScale(scale,scale,1)*Matrix.CreateTranslation(width/2f-center.X*scale+pan.X,height/2f-center.Y*scale+pan.Y,0)*
                 Matrix.CreateOrthographicOffCenter(0,width,height,0,-128,128);
         }
-        public void Dispose() {foreach(var texture in textures)texture.Dispose();textures.Clear();materialItems.Clear();items.Clear();alphaItems=null;if(surfaces!=null)surfaces.Dispose();if(materials!=null)materials.Dispose();if(sprites!=null)sprites.Dispose();}
+        public void Dispose() {foreach(var texture in textures)texture.Dispose();textures.Clear();materialItems.Clear();wallItems.Clear();items.Clear();alphaItems=null;caps=null;if(surfaces!=null)surfaces.Dispose();if(materials!=null)materials.Dispose();if(sprites!=null)sprites.Dispose();}
     }
 }

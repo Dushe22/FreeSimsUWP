@@ -1,6 +1,6 @@
 # Next session
 
-Branch: xbox-uwp-port. Milestone: Xbox 0.12.2 memory/stability fix.
+Branch: xbox-uwp-port. Milestone: Xbox 0.13.0 pointer and three wall modes.
 
 User confirmed the inclined stair handrail fix works normally on Xbox.
 0.11 evidence (UWP Screenshots/0.11): 13/13 PASS, both houses with roofs at all
@@ -14,12 +14,17 @@ adjacency with the camera and composes concave pool corners around islands.
 Ground remains flat, water static; no broader simulation or new lighting.
 No extra game assets are needed beyond the 0.11 upload.
 
-Local suite: 20 checks pass, including all 256 adjacency masks, four rotations,
+Local suite: 23 checks pass, including all 256 adjacency masks, four rotations,
 three zooms, deterministic saved grass, GPU pool coverage and existing architecture/
 stair regressions. Full renders: artifacts/lot-render-check (48 views).
-Logs: artifacts/stability-tests.log; close-ups: artifacts/architecture-inspect.
-Native build/audit: artifacts/offline-stability-final.
-Handoff: artifacts/xbox-stability-*.zip. Use XboxOfflineProbe/TESTING.md.
+Logs: artifacts/wall-pointer-tests.log; visual QA: artifacts/wall-pointer-qa.
+Native build/audit: artifacts/offline-walls-final.
+Handoff: artifacts/xbox-wall-pointer-*.zip. Use XboxOfflineProbe/TESTING.md.
+0.13 adds left-stick-click pointer, right-stick pan and Y down/cutaway/up.
+The selected story gets low wall stubs and brown thickness caps; persistent
+railings remain. Hover uses game room cuts plus opaque wall hit testing.
+GPU geometry is updated only when cuts change; textures are reused.
+Next gate: Xbox pointer alignment, wall transitions and cap/opening appearance.
 The user's 0.12 PNG shows 17/17 PASS and clipped House 28 window/door trim.
 0.12.1 keeps a separate authored opening mask for each wall face and applies a
 bounded eight-sample SPR2 depth bias only to the camera-facing architectural
@@ -44,8 +49,9 @@ references now dead). artifacts/stability-stress.log: 144 view rebuilds,
 288 GPU draws, no retained scene/pixel arrays after each lot; shared uploads
 reduce total pixel bytes by 34-40%. This is desktop evidence, not Xbox FPS.
 48 regenerated whole-lot PNGs are byte-identical to the previous render set.
-Offline compatibility suite also passes. Xbox 0.12.2 hardware validation pending;
-follow XboxOfflineProbe/TESTING.md and inspect MEMORY lines in new proof.log.
+Offline compatibility suite also passes. Latest 0.12.2 hardware proof confirms
+20/20 PASS, two launches and 46 view changes without logged failures/OOM;
+peak logged usage 425.48 MiB against a 1024 MiB budget.
 
 After the terrain/pool hardware gate: resolve the 11 held contained objects in
 House 28 using SLOT visual offsets, then lighting. Keep the lot viewer static

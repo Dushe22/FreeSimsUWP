@@ -21,7 +21,9 @@ namespace FreeSims.Xbox.Proof
         private byte[] effect; private GamePadState previous;
         private readonly List<string> results=new List<string>();
         private int house=2,rotation,zoom=1,level=1,runs;
-        private bool walls=true,redraw,reset;
+        private TS1WallMode walls=TS1WallMode.Up;
+        private bool pointerMode,redraw,reset;
+        private Vector2 pointer=new Vector2(640,353);
         private int memoryPressure;
         private Vector2 pan; private string error; private Rectangle lastViewport;
         public OfflineProbeGame()
@@ -113,7 +115,7 @@ namespace FreeSims.Xbox.Proof
         private void Render(TS1LotRenderer scene,RenderTarget2D target,int size)
         {
             var old=GraphicsDevice.GetRenderTargets();var viewport=GraphicsDevice.Viewport;
-            try{GraphicsDevice.SetRenderTarget(target);GraphicsDevice.Clear(ClearOptions.Target|ClearOptions.DepthBuffer,new Color(16,24,39),1,0);scene.Draw(TS1LotRenderer.Camera(size,zoom,rotation,target.Width,target.Height,pan),walls);}
+            try{GraphicsDevice.SetRenderTarget(target);GraphicsDevice.Clear(ClearOptions.Target|ClearOptions.DepthBuffer,new Color(16,24,39),1,0);var camera=TS1LotRenderer.Camera(size,zoom,rotation,target.Width,target.Height,pan);lot.UpdateWalls(scene.Data,walls,pointerMode?(Vector2?)(pointer-new Vector2(0,88)):null,camera,target.Width,target.Height);scene.Draw(camera,walls);}
             finally{GraphicsDevice.SetRenderTargets(old);GraphicsDevice.Viewport=viewport;}
         }
         protected override void Update(GameTime time)
@@ -131,11 +133,24 @@ namespace FreeSims.Xbox.Proof
             if(pressed(Buttons.A)){rotation=(rotation+1)%4;rebuild=true;}
             if(pressed(Buttons.LeftShoulder)){zoom=zoom%3+1;rebuild=true;}
             if(pressed(Buttons.RightShoulder)){level=level%3+1;rebuild=true;}
-            if(pressed(Buttons.Y)){walls=!walls;redraw=true;ProofLog.Write("WALLS "+walls);}
+            if(pressed(Buttons.Y)){walls=(TS1WallMode)(((int)walls+1)%3);redraw=true;ProofLog.Write("WALL MODE "+walls);}
+            if(pressed(Buttons.LeftStick)){pointerMode=!pointerMode;redraw=true;ProofLog.Write("POINTER "+pointerMode);}
             if(pressed(Buttons.Back)){pan=Vector2.Zero;zoom=1;rebuild=true;}
+            float dt=(float)Math.Min(time.ElapsedGameTime.TotalSeconds,0.1);
             var stick=pad.ThumbSticks.Left;
-            if(stick.Length()>0.15f){pan+=new Vector2(-stick.X,stick.Y)*(float)Math.Min(time.ElapsedGameTime.TotalSeconds,0.1)*420;pan=Vector2.Clamp(pan,new Vector2(-3000),new Vector2(3000));redraw=true;}
-            try{if(rebuild&&lot!=null){TryRebuild();redraw=false;}if(redraw&&renderer!=null&&image!=null){Render(renderer,image,lot.Size);redraw=false;}}
+            if(pointerMode) {
+                if(stick.Length()>0.15f)pointer=Vector2.Clamp(pointer+new Vector2(stick.X,-stick.Y)*dt*420,new Vector2(4,92),new Vector2(1275,613));
+            }
+            stick=pad.ThumbSticks.Right+(pointerMode?Vector2.Zero:stick);
+            if(stick.Length()>1)stick.Normalize();
+            if(stick.Length()>0.15f){pan+=new Vector2(-stick.X,stick.Y)*dt*420;pan=Vector2.Clamp(pan,new Vector2(-3000),new Vector2(3000));redraw=true;}
+            try {
+            if(!rebuild&&lot!=null&&renderer!=null&&image!=null) {
+                var camera=TS1LotRenderer.Camera(lot.Size,zoom,rotation,image.Width,image.Height,pan);
+                if(lot.UpdateWalls(renderer.Data,walls,pointerMode?(Vector2?)(pointer-new Vector2(0,88)):null,camera,image.Width,image.Height))redraw=true;
+            }
+            if(rebuild&&lot!=null){TryRebuild();redraw=false;}if(redraw&&renderer!=null&&image!=null){Render(renderer,image,lot.Size);redraw=false;}
+            }
             catch(Exception ex){ReleaseView();error="RENDER FAILED - SEE LOG";ProofLog.Write("REDRAW FAILED "+ex);LogMemory("redraw-failed");}
             previous=pad;base.Update(time);
         }
@@ -150,9 +165,14 @@ namespace FreeSims.Xbox.Proof
             Text(status,970,24,2,error!=null?Color.OrangeRed:results.Count==0?Color.LightGray:passed?Color.LimeGreen:Color.OrangeRed);
             Text("COMMIT "+BuildInfo.Commit.Substring(0,12)+" - HOUSE "+house+" - ANGLE "+rotation+" - LEVEL "+(level==3?"ROOF":level.ToString())+" - ZOOM "+zoom,32,52,2,Color.LightGray);
             if(image!=null)batch.Draw(image,new Vector2(0,88),Color.White);
-            Text("TS1 TERRAIN AND POOLS - STATIC - NO SIMULATION",32,625,2,Color.Gold);
+            Text("WALLS "+walls.ToString().ToUpperInvariant()+" - "+(pointerMode?"POINTER ON":"CAMERA")+" - STATIC - NO SIMULATION",32,625,2,Color.Gold);
+            if(pointerMode) {
+                int px=(int)pointer.X,py=(int)pointer.Y;
+                batch.Draw(pixel,new Rectangle(px-7,py-1,15,3),Color.Black);batch.Draw(pixel,new Rectangle(px-1,py-7,3,15),Color.Black);
+                batch.Draw(pixel,new Rectangle(px-6,py,13,1),Color.Gold);batch.Draw(pixel,new Rectangle(px,py-6,1,13),Color.Gold);
+            }
             Text("A ROTATE - X HOUSE - Y WALLS - LB ZOOM - RB FLOOR/ROOF",32,653,2,Color.White);
-            Text("STICK PAN - VIEW CENTER - MENU TESTS - B EXIT",32,681,2,Color.LightGray);
+            Text("LS CLICK POINTER - LS MOVE - RS PAN - VIEW CENTER - MENU TESTS - B EXIT",32,681,1,Color.LightGray);
             if(renderer!=null)Text("DRAWN "+renderer.Data.Rendered+" - SLOTTED HELD "+renderer.Data.Contained+" - UNSUPPORTED "+renderer.Data.Unsupported+" - RUN "+runs,32,76,1,Color.LightGray);
             if(error!=null)Text(error,32,596,2,Color.OrangeRed);
             batch.End();base.Draw(time);
