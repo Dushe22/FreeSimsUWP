@@ -40,6 +40,17 @@ namespace FSO.SimAntics
             }
         }
 
+        /// <summary>Change cadence without changing the saved minute or elapsed tick count.
+        /// The fractional minute is rounded down to the new clock's resolution.</summary>
+        public void SetTicksPerMinute(int rate)
+        {
+            if (rate <= 0) throw new ArgumentOutOfRangeException("rate");
+            if (TicksPerMinute <= 0 || MinuteFractions < 0 || MinuteFractions >= TicksPerMinute)
+                throw new InvalidOperationException("Invalid clock phase.");
+            MinuteFractions = (int)((long)MinuteFractions * rate / TicksPerMinute);
+            TicksPerMinute = rate;
+        }
+
         public void Tick()
         {
             if (TicksPerMinute <= 0) throw new InvalidOperationException("Clock ticks per minute must be positive.");

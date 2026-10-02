@@ -143,13 +143,16 @@ namespace FreeSims.Tests
                     int textures=renderer.TextureCount,capacity=renderer.WallGeometryCapacity,count=view.Sprites.Count;
                     long bytes=renderer.TextureBytes;var pixelsRefs=view.Sprites.Select(x=>x.Layer.Pixels).ToArray();
                     long start=lot.Clock.Ticks;
+                    int startMinute=lot.Clock.Hours*60+lot.Clock.Minutes,phase=lot.Clock.MinuteFractions;
+                    if(lot.Clock.TicksPerMinute!=30)throw new InvalidOperationException("Live clock was not configured for one sim minute per real second.");
                     for(int batch=0;batch<80;batch++) {
                         if(lot.AdvanceSimulation(75,view))renderer.UpdateSimulation();
                         if(batch%4==0)draw();
                         if(renderer.TextureCount!=textures||renderer.TextureBytes!=bytes||renderer.WallGeometryCapacity!=capacity||view.Sprites.Count!=count)
                             throw new InvalidOperationException("Live ticks allocated/rebuilt scene resources.");
                     }
-                    if(lot.Clock.Ticks!=start+6000||lot.CompletedTicks!=6000||lot.SimulationFault!=null||!lot.SimulationStopped||
+                    if(lot.Clock.Ticks!=start+6000||lot.Clock.Hours*60+lot.Clock.Minutes!=(startMinute+200)%1440||lot.Clock.MinuteFractions!=phase||
+                        lot.CompletedTicks!=6000||lot.SimulationFault!=null||!lot.SimulationStopped||
                         lot.AdvanceSimulation(1,view)||!pixelsRefs.SequenceEqual(view.Sprites.Select(x=>x.Layer.Pixels)))
                         throw new InvalidOperationException("Live limit/clock/frame ownership mismatch.");
                     if(house==28&&(view.SpriteRevision==0||view.LightRevision==0||before.SequenceEqual(draw())))
@@ -198,6 +201,8 @@ namespace FreeSims.Tests
             foreach(var speed in new[]{VMTimeSpeed.Normal,VMTimeSpeed.Fast,VMTimeSpeed.Ultra})
             foreach(double dt in new[]{.01,.05,.1,.25}) {
                 var pacing=new VMTimeController();pacing.SetSpeed(speed);
+                int expectedMultiplier=speed==VMTimeSpeed.Normal?1:speed==VMTimeSpeed.Fast?2:4;
+                if(pacing.Multiplier!=expectedMultiplier)throw new InvalidOperationException("Expected Normal/Fast/Ultra multipliers 1/2/4.");
                 var clock=new VMClock{Hours=23,Minutes=59,TicksPerMinute=VMTimeController.TS1TicksPerMinute};
                 int ticks=0;
                 for(int i=0;i<(int)Math.Round(10/dt);i++){
@@ -216,7 +221,18 @@ namespace FreeSims.Tests
                 pacing.Suspend();
                 if(pacing.Advance(100)!=0 || pacing.Advance(.1)!=3*pacing.Multiplier)
                     throw new InvalidOperationException("Resume caught up suspended time.");
-                if(pacing.Advance(100)>75)throw new InvalidOperationException("Long frame created unbounded tick work.");
+                if(pacing.Advance(100)>30)throw new InvalidOperationException("Long frame created unbounded tick work.");
+                // Verify a whole day at its real duration, including the final midnight boundary.
+                var day=new VMClock{TicksPerMinute=VMTimeController.TS1TicksPerMinute};
+                var dayPacing=new VMTimeController();dayPacing.SetSpeed(speed);
+                int frames=(int)Math.Round(1440.0/expectedMultiplier/dt);
+                for(int frame=0;frame<frames;frame++) {
+                    int step=dayPacing.Advance(dt);
+                    if(frame==frames-1&&day.Hours==0&&day.Minutes==0)throw new InvalidOperationException("Day completed too early.");
+                    for(int tick=0;tick<step;tick++)day.Tick();
+                }
+                if(day.Ticks!=43200||day.Hours!=0||day.Minutes!=0||day.MinuteFractions!=0)
+                    throw new InvalidOperationException("Day duration differs from 24/12/6 real minutes.");
             }
             var controls=new VMTimeController();
             controls.ChangeSpeed(1);
@@ -233,6 +249,16 @@ namespace FreeSims.Tests
             }
             var legacy=new VMClock();for(int t=0;t<150;t++)legacy.Tick();
             if(legacy.Minutes!=1)throw new InvalidOperationException("Legacy clock fallback changed.");
+            for(int phase=0;phase<150;phase++) {
+                var converted=new VMClock{Ticks=42,TicksPerMinute=150,Hours=23,Minutes=59,MinuteFractions=phase};
+                converted.SetTicksPerMinute(30);
+                if(converted.Ticks!=42||converted.Hours!=23||converted.Minutes!=59||converted.MinuteFractions!=phase/5)
+                    throw new InvalidOperationException("Cadence conversion changed saved time or lost normalized phase.");
+                var restored=new VMClock(converted.Save());restored.SetTicksPerMinute(30);
+                if(restored.MinuteFractions!=converted.MinuteFractions)throw new InvalidOperationException("Clock configuration is not idempotent.");
+            }
+            bool invalidRate=false;try{legacy.SetTicksPerMinute(0);}catch(ArgumentOutOfRangeException){invalidRate=true;}
+            if(!invalidRate||legacy.TicksPerMinute!=150)throw new InvalidOperationException("Invalid clock rate accepted or mutated clock.");
             var saved=new VMClock(new VMClock{TicksPerMinute=45,Hours=18,Minutes=59,MinuteFractions=44}.Save());
             saved.Tick();
             if(saved.TicksPerMinute!=45||saved.Hours!=19||saved.Minutes!=0)

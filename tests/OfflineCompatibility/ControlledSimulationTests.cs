@@ -35,6 +35,12 @@ namespace FreeSims.Tests
                 };
                 check("SUPPORTED OBJECTS START PAUSED", sim => {
                     Require(!sim.Running && sim.CompletedTicks == 0 && sim.ActiveObjects == 80 && sim.HeldObjects == 675, "Incorrect initial state.");
+                    using(var raw=TS1LotObjectSession.Load(House(paths,28),content)) {
+                        var clock=sim.VM.Context.Clock;var saved=raw.VM.Context.Clock;
+                        Require(saved.TicksPerMinute==150&&clock.TicksPerMinute==30&&clock.Hours==saved.Hours&&clock.Minutes==saved.Minutes&&
+                            clock.MinuteFractions==saved.MinuteFractions/5&&sim.VM.GlobalState[6]==clock.Seconds,
+                            "Live cadence conversion changed raw import or saved clock time.");
+                    }
                     Require(sim.VM.Entities.Count(e => e.Thread.ThreadBreak == VMThreadBreakMode.Pause) == 675, "Unselected threads activated.");
                     sim.Load(House(paths, 2), content, 2);
                     Require(sim.ActiveObjects == 134 && sim.HeldObjects == 254 && !sim.Running, "Incorrect flower profile.");

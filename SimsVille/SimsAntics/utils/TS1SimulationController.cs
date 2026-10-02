@@ -42,6 +42,7 @@ namespace FSO.SimAntics
             try {
                 var selected = candidate.VM.Entities.Where(e => SupportsControlledBehavior(e.Object.Resource.Name)).ToArray();
                 if (selected.Length == 0) throw new InvalidOperationException("No supported objects in this lot.");
+                candidate.ConfigureLiveClock();
                 candidate.VM.Context.RandomSeed = 12345;
                 foreach (var entity in selected) candidate.RestartMain(entity.ObjectID);
                 var previous = session;

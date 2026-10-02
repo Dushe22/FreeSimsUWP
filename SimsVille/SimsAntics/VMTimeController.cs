@@ -22,8 +22,8 @@ namespace FSO.SimAntics
             get {
                 switch (Speed) {
                     case VMTimeSpeed.Normal: return 1;
-                    case VMTimeSpeed.Fast: return 3;
-                    case VMTimeSpeed.Ultra: return 10;
+                    case VMTimeSpeed.Fast: return 2;
+                    case VMTimeSpeed.Ultra: return 4;
                     default: return 0;
                 }
             }

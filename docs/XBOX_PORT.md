@@ -1915,3 +1915,25 @@ Automatic turbo was cancelled without implementation.
 both lots at 6000 ticks, all views, resource stability and release. Twelve local
 captures are in artifacts/simulation-qa. Follow TESTING.md and return Xbox SIM/
 MEMORY logs before the Sims milestone; desktop tests do not certify Xbox FPS.
+
+## 0.16.1: requested clock cadence
+
+The user validated 0.16 aquarium animation and reported no visual defects.
+Its b3c265df8567 hardware log passes 36/36; peak application memory is 523.03
+MiB of 1024 MiB, one Medium sample at a view rebuild and otherwise Low. No errors in that session; no full FPS claim.
+
+Live sessions now use 30 ticks/sim minute while retaining 30 base ticks/real
+second, yielding one sim minute per real second and 24 real minutes per day.
+Normal/Fast/Ultra multipliers are 1x/2x/4x (24/12/6 minutes per day); Paused is 0x.
+This implements the supplied timing specification, superseding 0.16's slow
+150-tick live clock and 3x/10x multipliers. Automatic turbo remains cancelled.
+
+Raw imports still restore the saved clock representation. Explicit live start
+rescales the in-memory fractional minute to the two-sim-second tick resolution,
+retaining hour/minute and completed ticks; odd saved seconds round down by one.
+Both live renderer and headless controller use the same session method.
+No simulation-frequency increase, geometry/shader/asset changes or save writes.
+The trial still ends after 6000 ticks (200 sim minutes); stall/focus/pause bounds
+and GPU/frame ownership remain intact. Test whole-day boundaries and actual
+live VM advancement, not only the displayed clock. Hardware cadence remains
+pending for this build; the next milestone is Sims import/rendering.

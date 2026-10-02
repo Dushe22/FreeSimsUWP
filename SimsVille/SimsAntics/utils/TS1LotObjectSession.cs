@@ -133,6 +133,15 @@ namespace FSO.SimAntics
                 return session;
             } catch { session.Dispose(); throw; }
         }
+        /// <summary>Use the live game's one-sim-minute-per-real-second cadence.
+        /// Raw imports retain their original clock representation until explicitly started.</summary>
+        public void ConfigureLiveClock()
+        {
+            if (disposed) throw new ObjectDisposedException("TS1LotObjectSession");
+            VM.Context.Clock.SetTicksPerMinute(VMTimeController.TS1TicksPerMinute);
+            VM.GlobalState[6] = (short)VM.Context.Clock.Seconds;
+        }
+
         private static int ContainerDepth(OBJM.MappedObject saved, OBJM map)
         {
             int depth = 0;

@@ -79,6 +79,7 @@ namespace FSO.LotView
                 }
                 Live=live;
                 if(live) {
+                    session.ConfigureLiveClock();
                     session.VM.Context.RandomSeed=12345;
                     foreach(var entity in session.VM.Entities) {
                         placements.Add(entity.ObjectID,new Placement {Position=entity.Position,Direction=entity.Direction,

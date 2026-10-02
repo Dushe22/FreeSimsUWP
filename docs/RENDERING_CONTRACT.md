@@ -113,7 +113,10 @@ invalid chains; compute only during view builds and share existing frame arrays.
 - Primitive sprite visibility/light-room and room-light snapshots own no VM
   entities. Update them after one bounded pacing batch; reuse existing vertices,
   alpha order, textures and targets. Never decode/upload/rebuild on a live tick.
-- Preserve imported clock cadence and advance it only through session.Tick;
+- Raw imports preserve the saved clock representation. Explicit live sessions
+  configure 30 ticks/sim minute through ConfigureLiveClock, preserving hour,
+  minute and fractional phase to the new two-sim-second resolution. Advance
+  only through session.Tick at 30 base ticks/real second, with 1x/2x/4x speeds;
   never tick a parallel preview clock. Discard blocked/background elapsed time.
 - End controlled trials at 6000 ticks. Faults or unsupported topology/placement
   changes freeze simulation with context and require a fresh lot; no reset/delete

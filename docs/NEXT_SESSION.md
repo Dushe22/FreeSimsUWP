@@ -1,6 +1,6 @@
 # Next session
 
-Branch: xbox-uwp-port. Milestone: Xbox 0.16.0 controlled simulation/rendering; hardware validation pending.
+Branch: xbox-uwp-port. Milestone: Xbox 0.16.1 clock correction; new cadence hardware validation pending.
 
 User confirmed the inclined stair handrail fix works normally on Xbox.
 0.11 evidence (UWP Screenshots/0.11): 13/13 PASS, both houses with roofs at all
@@ -192,3 +192,30 @@ Next after controlled simulation's Xbox memory/performance/visual gate:
 loading/rendering Sims and their saved state, then interaction and full saves.
 
 Final offline gate: 8/8, existing behavior/controller/checkpoint tests pass, both controlled object trials reach 6000 ticks with no script errors, all 91 original game-file hashes unchanged.
+
+0.16 hardware review (2026-10-02): only the b3c265df8567 session beginning
+21:25:19 UTC in Desktop/UWP Screenshots/0.16/proof.log belongs to this build.
+36/36 PASS; 31 views; no FAIL/FATAL/UNHANDLED/exception or script-stop records.
+Peak app memory 523.03 MiB / 1024 MiB, one Medium sample at view rebuild; all other samples Low. View texture totals remain
+constant during tick updates. User confirms no visual defects and correct
+moving aquarium; two screenshots show different fish frames. Full FPS is not measured.
+
+0.16.1 supersedes the previous live clock cadence and speed multipliers:
+one sim minute/real second at Normal, a full day in 24 real minutes; Fast 2x,
+Ultra 4x (12/6 minutes/day). These are the user's requested rates. No independent
+original-executable calibration or auto-turbo is claimed. Auto-turbo remains cancelled.
+Keep simulation at 30 base ticks/s so aquarium behavior is not accelerated at Normal.
+ConfigureLiveClock is common to renderer and headless controller; raw imports
+retain 150 ticks/minute. VMClock rescales fractional phase without changing hours,
+minutes or tick count; odd seconds round down by one sim second at live resolution.
+No source files/saves are rewritten. Pauses/loading/disconnects still discard
+elapsed time; slow-frame work tops out at 30 Ultra ticks without catch-up debt.
+Trial limit remains 6000 ticks: 200 sim minutes, 200/100/50 real seconds.
+Timing tests cover exact multipliers, full days at multiple frame rates,
+midnight/pause/resume and phase conversion; live tests cover both lots at 6000 ticks.
+Logs: artifacts/clock-render-tests.log, artifacts/clock-offline-tests.log.
+Native handoff: artifacts/offline-clock-0161-final, artifacts/xbox-clock-*.zip.
+Next after clock hardware validation: Sims import/render and saved state,
+then interaction and full saves. Preserve all accepted rendering and memory rules.
+
+0.16.1 final local gate: 36/36 render checks, OfflineCompatibility 8/8 plus behavior/controller/checkpoint checks; both live lots complete 6000 ticks, frame/texture totals fixed, all 91 original game-file hashes unchanged. New cadence hardware validation remains pending.
