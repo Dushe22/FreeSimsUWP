@@ -16,7 +16,7 @@ namespace FSO.LotView
         }
         private sealed class MaterialItem
         {
-            public Texture2D Texture; public VertexPositionColorTexture[] Vertices; public bool Wall;
+            public Texture2D Texture; public VertexPositionColorTexture[] Vertices; public bool Wall, Roof;
         }
         private readonly List<MaterialItem> materialItems=new List<MaterialItem>();
         private readonly GraphicsDevice device;
@@ -33,8 +33,8 @@ namespace FSO.LotView
                 surfaces=new BasicEffect(device) {VertexColorEnabled=true};sprites=new Effect(device,effect);
                 materials=new AlphaTestEffect(device) {VertexColorEnabled=true,ReferenceAlpha=128,AlphaFunction=CompareFunction.GreaterEqual};
                 ground=data.Ground.ToArray();walls=data.Walls.ToArray();
-                foreach(var source in data.FloorMaterials.Concat(data.WallMaterials)) {
-                    var item=new MaterialItem {Wall=data.WallMaterials.Contains(source) && !source.KeepWhenWallsHidden,Vertices=source.Vertices.ToArray()};materialItems.Add(item);
+                foreach(var source in data.FloorMaterials.Concat(data.WallMaterials).Concat(data.RoofMaterials)) {
+                    var item=new MaterialItem {Wall=data.WallMaterials.Contains(source) && !source.KeepWhenWallsHidden,Roof=data.RoofMaterials.Contains(source),Vertices=source.Vertices.ToArray()};materialItems.Add(item);
                     item.Texture=new Texture2D(device,source.Material.Width,source.Material.Height);item.Texture.SetData(source.Material.Pixels);
                 }
                 foreach(var source in data.Sprites) {
@@ -59,6 +59,7 @@ namespace FSO.LotView
             materials.World=Matrix.Identity;materials.View=Matrix.Identity;materials.Projection=projection;device.SamplerStates[0]=SamplerState.PointClamp;
             foreach(var item in materialItems) {
                 if(item.Wall&&!showWalls)continue;
+                device.SamplerStates[0]=item.Roof?SamplerState.PointWrap:SamplerState.PointClamp;
                 materials.Texture=item.Texture;
                 foreach(var pass in materials.CurrentTechnique.Passes) {pass.Apply();for(int offset=0;offset<item.Vertices.Length;offset+=18000)device.DrawUserPrimitives(PrimitiveType.TriangleList,item.Vertices,offset,Math.Min(18000,item.Vertices.Length-offset)/3);}
             }

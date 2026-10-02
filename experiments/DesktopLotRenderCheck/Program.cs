@@ -18,8 +18,8 @@ using(var c=new Control()) using(var d=new GraphicsDevice(GraphicsAdapter.Defaul
 var effect=File.ReadAllBytes("experiments/XboxOfflineProbe/Effects/TS1SpriteDepth.mgfxo");
 if(!FreeSims.Tests.LotRenderTests.Run(d,paths,effect,Console.WriteLine).All(x=>x.StartsWith("PASS "))) return 1;
 foreach(int house in new[]{2,28}) using(var lot=new TS1LotRenderData(paths,house)) {
-for(int level=1;level<=2;level++) for(int r=0;r<4;r++) {
-var data=lot.Build(1,r,level);Console.WriteLine("HOUSE="+house+" LEVEL="+level+" ROT="+r+" SIZE="+lot.Size+" OBJECTS="+lot.ObjectCount+" DRAWN="+data.Rendered+" HIDDEN="+data.Hidden+" CONTAINED="+data.Contained+" NOGRAPHIC="+data.NoGraphic+" OOW="+data.OutOfWorld+" UPPER="+data.AboveLevel+" UNSUPPORTED="+data.Unsupported+" FLOORS="+data.FloorTiles+" WALLS="+data.WallEdges);
+for(int level=1;level<=3;level++) for(int r=0;r<4;r++) {
+var data=lot.Build(1,r,level);Console.WriteLine("HOUSE="+house+" LEVEL="+level+" ROT="+r+" SIZE="+lot.Size+" OBJECTS="+lot.ObjectCount+" DRAWN="+data.Rendered+" HIDDEN="+data.Hidden+" CONTAINED="+data.Contained+" NOGRAPHIC="+data.NoGraphic+" OOW="+data.OutOfWorld+" UPPER="+data.AboveLevel+" UNSUPPORTED="+data.Unsupported+" FLOORS="+data.FloorTiles+" WALLS="+data.WallEdges+" OPENINGS="+data.OpeningEdges+" JOINTS="+data.StoryJoints+" ROOF="+data.RoofTriangles);
 foreach(var issue in data.Issues) Console.WriteLine(issue);
 using(var renderer=new TS1LotRenderer(d,data,effect)) using(var target=new RenderTarget2D(d,1280,720,false,SurfaceFormat.Color,DepthFormat.Depth24)) {
 foreach(bool walls in new[]{false,true}) {

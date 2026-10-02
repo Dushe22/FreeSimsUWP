@@ -14,12 +14,16 @@ using Microsoft.Xna.Framework.Graphics;
 
 namespace FSO.LotView
 {
-    // Static saved architecture with TS1 material textures; no roofs or wall openings.
+    // Static saved architecture with authored TS1 opening masks and roof textures.
     public sealed class TS1LotRenderData : IDisposable
     {
         private readonly TS1LotObjectSession session;
         private readonly TS1MaterialProvider materials;
         private readonly byte[] floorFlags;
+        private readonly string roofName;
+        private readonly VMRoomMap[] roofRooms = new VMRoomMap[2];
+        private readonly List<VMRoom> roofRoomData = new List<VMRoom> {new VMRoom {IsOutside = true}};
+        private readonly Dictionary<string, Opening> openings = new Dictionary<string, Opening>();
         public int Size { get { return session.VM.Context.Architecture.Width; } }
         public int ObjectCount { get { return session.SavedObjectCount; } }
         public TS1LotRenderData(GamePaths paths, int house)
@@ -29,6 +33,9 @@ namespace FSO.LotView
             var store = new NeighborhoodStore(paths, 0);
             var iff = new IffFile(store.GetReadPath("Houses/House"+house.ToString("00")+".iff"));
             materials = new TS1MaterialProvider(paths, iff);
+            var houseInfo = iff.Get<HOUS>(0) ?? iff.Get<HOUS>(1);
+            if(houseInfo==null)throw new InvalidDataException("Missing saved house metadata.");
+            roofName = houseInfo.RoofName;
             var flags = iff.Get<ARRY>(8);
             if (flags == null || flags.Width != 64 || flags.Height != 64 || flags.ByteSize() != 1) throw new InvalidDataException("Missing lot floor flags.");
             floorFlags = flags.TransposeData;
@@ -42,7 +49,96 @@ namespace FSO.LotView
                     if(stub.EntryPoints[6].ActionFunction!=expected || !stub.ExecuteEntryPoint(6,session.VM.Context,true))
                         throw new InvalidDataException("Unsupported stair visual callback: "+stub.ObjectID);
                 }
+                LoadOpenings();
+                // Water separates simulation room regions; it must not enclose a roof.
+                for (int story = 0; story < 2; story++) {
+                    roofRooms[story] = new VMRoomMap();
+                    roofRooms[story].GenerateMap(session.VM.Context.Architecture.Walls[story], new FloorTile[Size * Size], Size, Size, roofRoomData);
+                }
             } catch {session.Dispose();throw;}
+        }
+        private sealed class Opening
+        {
+            public SPR Mask;
+            public string Identity;
+        }
+        private string EdgeKey(int story, int ax, int ay, int bx, int by)
+        {
+            int a = ay * (Size + 1) + ax, b = by * (Size + 1) + bx;
+            return story + ":" + Math.Min(a, b) + ":" + Math.Max(a, b);
+        }
+        private void LoadOpenings()
+        {
+            foreach (var entity in session.VM.Entities.OrderBy(e => e.ObjectID)) {
+                var definition = entity.Object.OBJ;
+                var flags = (VMEntityFlags2)entity.GetValue(VMStackObjectVariable.FlagField2);
+                if ((flags & (VMEntityFlags2.ArchitectualWindow | VMEntityFlags2.ArchitectualDoor)) == 0 || definition.WallStyle == 0 || entity.Container != null) continue;
+                int x = entity.Position.TileX, y = entity.Position.TileY, story = entity.Position.Level - 1;
+                if (x < 0 || y < 0 || x >= Size || y >= Size || story < 0 || story > 1) continue;
+                int direction = entity.Direction == Direction.NORTH ? 0 : entity.Direction == Direction.EAST ? 1 : entity.Direction == Direction.SOUTH ? 2 : entity.Direction == Direction.WEST ? 3 : -1;
+                if (direction < 0) continue;
+                int required = entity.GetValue(VMStackObjectVariable.WallPlacementFlags) & 15;
+                for (int relative = 0; relative < 4; relative++) {
+                    if ((required & (1 << relative)) == 0) continue;
+                    int side = (direction + relative) % 4;
+                    // The VM uses only canonical top-left/top-right segments. The
+                    // other saved multitile half supplies the matching opposite side.
+                    if (side != 0 && side != 3) continue;
+                    var wall = session.VM.Context.Architecture.Walls[story][y * Size + x];
+                    var segment = side == 0 ? WallSegments.TopRight : WallSegments.TopLeft;
+                    if ((wall.Segments & segment) == 0) continue;
+                    var mask = definition.WallStyle > 21 ? entity.Object.Resource.Get<SPR>((ushort)(definition.WallStyleSpriteID + 2)) : materials.OpeningMask(definition.WallStyle);
+                    if (mask == null) throw new InvalidDataException("Missing wall opening mask for object " + entity.ObjectID);
+                    string identity = definition.WallStyle > 21 ? entity.Object.Resource.Name + ":" + definition.WallStyleSpriteID : "global:" + definition.WallStyle;
+                    string key = side == 0 ? EdgeKey(story, x, y, x + 1, y) : EdgeKey(story, x, y, x, y + 1);
+                    Opening existing;
+                    if (openings.TryGetValue(key, out existing) && existing.Identity != identity) throw new InvalidDataException("Conflicting wall openings at " + key);
+                    openings[key] = new Opening {Mask = mask, Identity = identity};
+                }
+            }
+        }
+        private bool Indoors(int x, int y, int story)
+        {
+            if (x < 0 || y < 0 || x >= Size || y >= Size || story > 1) return false;
+            uint room = roofRooms[story].Map[y * Size + x];
+            return RoomInside(room & 65535) || RoomInside(room >> 16);
+        }
+        private bool RoomInside(uint room)
+        {
+            var rooms = roofRoomData;
+            return room > 0 && room < rooms.Count && !rooms[(int)room].IsOutside;
+        }
+        private void BuildRoofs(View view, int zoom, int rotation)
+        {
+            var arch = session.VM.Context.Architecture;
+            for (int story = 0; story < 2; story++) {
+                var footprint = new List<Vector2[]>();
+                for (int y = 0; y < Size; y++) for (int x = 0; x < Size; x++) {
+                    int offset = y * Size + x;
+                    if (story == 0 && (Indoors(x, y, 1) || arch.Floors[1][offset].Pattern != 0)) continue;
+                    uint room = roofRooms[story].Map[offset]; var wall = arch.Walls[story][offset];
+                    var p = new[] {new Vector2(x, y), new Vector2(x + 1, y), new Vector2(x + 1, y + 1), new Vector2(x, y + 1)};
+                    int[] first, second;
+                    if ((wall.Segments & WallSegments.HorizontalDiag) != 0) { first = new[] {0, 1, 3}; second = new[] {1, 2, 3}; }
+                    else if ((wall.Segments & WallSegments.VerticalDiag) != 0) { first = new[] {0, 1, 2}; second = new[] {0, 2, 3}; }
+                    else { first = new[] {0, 1, 2}; second = new[] {0, 2, 3}; }
+                    if (RoomInside(room & 65535)) footprint.Add(first.Select(i => p[i]).ToArray());
+                    // The flood-fill seed has only the low room ID on a regular tile.
+                    uint secondRoom = (wall.Segments & WallSegments.AnyDiag) == 0 ? room & 65535 : room >> 16;
+                    if (RoomInside(secondRoom)) footprint.Add(second.Select(i => p[i]).ToArray());
+                }
+                if (footprint.Count == 0) continue;
+                var mesh = TS1RoofMesh.Build(footprint, (story + 1) * 2.95f, arch.RoofPitch);
+                var material = materials.Roof(roofName);
+                foreach (var triangle in mesh) {
+                    var normal = Vector3.Normalize(Vector3.Cross(triangle[1] - triangle[0], triangle[2] - triangle[0]));
+                    if (normal.Z < 0) normal = -normal;
+                    float shade = MathHelper.Clamp(.8f + .18f * Vector3.Dot(normal, Vector3.Normalize(new Vector3(-1, -1, 2))), .6f, 1);
+                    var uv = triangle.Select(p => new Vector2(p.X / 2, p.Y / 2)).ToArray();
+                    Textured(view.RoofMaterials, material, triangle, uv, new[] {0, 1, 2}, new Color(shade, shade, shade), zoom, rotation);
+                }
+                view.RoofTriangles += mesh.Count;
+            }
         }
         public sealed class Sprite
         {
@@ -63,13 +159,15 @@ namespace FSO.LotView
             public readonly List<VertexPositionColor> Walls = new List<VertexPositionColor>();
             public readonly List<Surface> FloorMaterials = new List<Surface>();
             public readonly List<Surface> WallMaterials = new List<Surface>();
+            public readonly List<Surface> RoofMaterials = new List<Surface>();
             public readonly List<Sprite> Sprites = new List<Sprite>();
+            public int OpeningEdges, StoryJoints, RoofTriangles;
             public int Rendered, Hidden, OutOfWorld, Contained, NoGraphic, Unsupported, AboveLevel, FloorTiles, WallEdges;
             public readonly List<string> Issues = new List<string>();
         }
         public View Build(int zoom,int rotation,int level)
         {
-            if (level < 1 || level > 2) throw new ArgumentOutOfRangeException("level");
+            if (level < 1 || level > 3) throw new ArgumentOutOfRangeException("level");
             TS1SpriteLayer.Project(Vector3.Zero,zoom,rotation); // validate before allocating
             var view=new View(); var arch=session.VM.Context.Architecture;
             for(int y=0;y<Size;y++) for(int x=0;x<Size;x++) {
@@ -77,14 +175,14 @@ namespace FSO.LotView
                 Quad(view.Ground,new Vector3(x,y,0),new Vector3(x+1,y,0),new Vector3(x+1,y+1,0),new Vector3(x,y+1,0),new Color(56,green,44),zoom,rotation);
             }
             var camera = new[] {new Vector2(1,1),new Vector2(1,-1),new Vector2(-1,-1),new Vector2(-1,1)}[rotation];
-            for(int story=0;story<level;story++) {
+            for(int story=0;story<Math.Min(level,2);story++) {
                 var edges=new HashSet<string>(); float z=story*2.95f;
                 Func<int,int,WallTile> wallAt=(xx,yy)=>xx<0||yy<0||xx>=Size||yy>=Size?default(WallTile):arch.Walls[story][yy*Size+xx];
                 for(int y=0;y<Size;y++) for(int x=0;x<Size;x++) {
                     var wall=wallAt(x,y);
                     bool global=(floorFlags[y*64+x]&0x20)!=0;
                     bool splitFloor=(wall.Segments&WallSegments.AnyDiag)!=0 && (wall.TopLeftPattern!=0 || wall.TopLeftStyle!=0);
-                    var corners=new[]{new Vector3(x,y,z+.003f),new Vector3(x+1,y,z+.003f),new Vector3(x+1,y+1,z+.003f),new Vector3(x,y+1,z+.003f)};
+                    var corners=new[]{new Vector3(x,y,z),new Vector3(x+1,y,z),new Vector3(x+1,y+1,z),new Vector3(x,y+1,z)};
                     var uv=new[]{Vector2.Zero,Vector2.UnitX,Vector2.One,Vector2.UnitY};
                     Action<ushort,int[]> floor=(pattern,indices)=>{
                         if(pattern==0)return;
@@ -102,8 +200,22 @@ namespace FSO.LotView
                         int a=ay*(Size+1)+ax,b=by*(Size+1)+bx;
                         if(!edges.Add(Math.Min(a,b)+":"+Math.Max(a,b))) return;
                         var color=ax==bx?new Color(225,225,225):Color.White;
-                        var points=new[]{new Vector3(ax,ay,z),new Vector3(bx,by,z),new Vector3(bx,by,z+2.95f),new Vector3(ax,ay,z+2.95f)};
-                        Textured(view.WallMaterials,materials.Wall(pattern,style),points,new[]{Vector2.UnitY,Vector2.One,Vector2.UnitX,Vector2.Zero},new[]{0,1,2,0,2,3},color,zoom,rotation,style==2 || style==12 || style==13 || style==14);
+                        bool persistent = style==2 || style==12 || style==13 || style==14;
+                        // Share the exact floor elevation and overlap adjoining solid
+                        // walls by a subpixel amount to close raster cracks between stories.
+                        bool joint = story==0 && level>=2 && !persistent && (arch.Walls[1][y*Size+x].Segments & flag)!=0;
+                        float bottom = z - (story>0 && !persistent ? .015f : 0), top = z+2.95f+(joint ? .015f : 0);
+                        if(joint)view.StoryJoints++;
+                        var points=new[]{new Vector3(ax,ay,bottom),new Vector3(bx,by,bottom),new Vector3(bx,by,top),new Vector3(ax,ay,top)};
+                        var material=materials.Wall(pattern,style);
+                        Opening opening;
+                        if(!persistent && openings.TryGetValue(EdgeKey(story,ax,ay,bx,by),out opening)) {
+                            var delta=TS1SpriteLayer.Project(points[1]-points[0],zoom,rotation);
+                            int frame=delta.X*delta.Y<0?0:1;
+                            material=materials.WithOpening(material,opening.Mask,frame,delta.X<0,opening.Identity);
+                            view.OpeningEdges++;
+                        }
+                        Textured(view.WallMaterials,material,points,new[]{Vector2.UnitY,Vector2.One,Vector2.UnitX,Vector2.Zero},new[]{0,1,2,0,2,3},color,zoom,rotation,persistent);
                         view.WallEdges++;
                     };
                     edge(WallSegments.TopLeft,x,y,x,y+1,camera.X>0?wall.TopLeftPattern:wallAt(x-1,y).BottomRightPattern,wall.TopLeftStyle);
@@ -136,6 +248,7 @@ namespace FSO.LotView
                     view.Unsupported++;view.Issues.Add("OBJECT "+entity.ObjectID+" GUID="+entity.Object.OBJ.GUID.ToString("X8")+" "+ex.Message);
                 }
             }
+            if(level==3)BuildRoofs(view,zoom,rotation);
             return view;
         }
         private static void Textured(List<Surface> surfaces,TS1MaterialProvider.Material material,Vector3[] corners,Vector2[] uv,int[] indices,Color color,int zoom,int rotation,bool keepWhenWallsHidden=false)

@@ -59,7 +59,7 @@ namespace FreeSims.Xbox.Proof
                 var data=source.Build(zoom,rotation,level);candidate=new TS1LotRenderer(GraphicsDevice,data,effect);
                 target=new RenderTarget2D(GraphicsDevice,1280,530,false,SurfaceFormat.Color,DepthFormat.Depth24);Render(candidate,target,source.Size);
                 if(renderer!=null)renderer.Dispose();if(image!=null)image.Dispose();renderer=candidate;candidate=null;image=target;target=null;error=null;
-                ProofLog.Write("LOT VIEW house="+house+" rotation="+rotation+" zoom="+zoom+" level="+level+" walls="+walls+" rendered="+data.Rendered+" hidden="+data.Hidden+" contained="+data.Contained+" unsupported="+data.Unsupported+" floors="+data.FloorTiles+" wallEdges="+data.WallEdges+" floorMaterials="+data.FloorMaterials.Count+" wallMaterials="+data.WallMaterials.Count);
+                ProofLog.Write("LOT VIEW house="+house+" rotation="+rotation+" zoom="+zoom+" level="+level+" walls="+walls+" rendered="+data.Rendered+" hidden="+data.Hidden+" contained="+data.Contained+" unsupported="+data.Unsupported+" floors="+data.FloorTiles+" wallEdges="+data.WallEdges+" floorMaterials="+data.FloorMaterials.Count+" wallMaterials="+data.WallMaterials.Count+" openings="+data.OpeningEdges+" joints="+data.StoryJoints+" roofTriangles="+data.RoofTriangles);
                 foreach(var issue in data.Issues)ProofLog.Write(issue);
             }finally{if(candidate!=null)candidate.Dispose();if(target!=null)target.Dispose();}
         }
@@ -80,7 +80,7 @@ namespace FreeSims.Xbox.Proof
             if(pressed(Buttons.X)){house=house==2?28:2;zoom=1;level=1;rotation=0;pan=Vector2.Zero;LoadLot();rebuild=false;}
             if(pressed(Buttons.A)){rotation=(rotation+1)%4;rebuild=true;}
             if(pressed(Buttons.LeftShoulder)){zoom=zoom%3+1;rebuild=true;}
-            if(pressed(Buttons.RightShoulder)){level=3-level;rebuild=true;}
+            if(pressed(Buttons.RightShoulder)){level=level%3+1;rebuild=true;}
             if(pressed(Buttons.Y)){walls=!walls;redraw=true;ProofLog.Write("WALLS "+walls);}
             if(pressed(Buttons.Back)){pan=Vector2.Zero;zoom=1;rebuild=true;}
             var stick=pad.ThumbSticks.Left;
@@ -97,10 +97,10 @@ namespace FreeSims.Xbox.Proof
             Text("FREESIMS TEXTURED LOT RENDER",32,18,3,Color.White);
             bool passed=results.Count==LotRenderTests.Count&&results.All(x=>x.StartsWith("PASS "));
             Text(passed?(results.Count+"/"+LotRenderTests.Count+" PASS"):"TEST FAILURE - SEE LOG",970,24,2,passed?Color.LimeGreen:Color.OrangeRed);
-            Text("COMMIT "+BuildInfo.Commit.Substring(0,12)+" - HOUSE "+house+" - ANGLE "+rotation+" - LEVEL "+level+" - ZOOM "+zoom,32,52,2,Color.LightGray);
+            Text("COMMIT "+BuildInfo.Commit.Substring(0,12)+" - HOUSE "+house+" - ANGLE "+rotation+" - LEVEL "+(level==3?"ROOF":level.ToString())+" - ZOOM "+zoom,32,52,2,Color.LightGray);
             if(image!=null)batch.Draw(image,new Vector2(0,88),Color.White);
-            Text("TS1 FLOOR AND WALL TEXTURES - STATIC - NO SIMULATION",32,625,2,Color.Gold);
-            Text("A ROTATE - X HOUSE - Y WALLS - LB ZOOM - RB FLOOR",32,653,2,Color.White);
+            Text("TS1 OPENINGS AND ROOFS - STATIC - NO SIMULATION",32,625,2,Color.Gold);
+            Text("A ROTATE - X HOUSE - Y WALLS - LB ZOOM - RB FLOOR/ROOF",32,653,2,Color.White);
             Text("STICK PAN - VIEW CENTER - MENU TESTS - B EXIT",32,681,2,Color.LightGray);
             if(renderer!=null)Text("DRAWN "+renderer.Data.Rendered+" - SLOTTED HELD "+renderer.Data.Contained+" - UNSUPPORTED "+renderer.Data.Unsupported+" - RUN "+runs,32,76,1,Color.LightGray);
             if(error!=null)Text(error,32,596,2,Color.OrangeRed);

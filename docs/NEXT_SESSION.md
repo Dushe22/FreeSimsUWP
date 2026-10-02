@@ -1,20 +1,26 @@
-# Resume after quota reset
+# Next session
 
-Branch: xbox-uwp-port. Latest build: Xbox 0.10.3 stair handrail fix.
+Branch: xbox-uwp-port. New milestone: Xbox 0.11 architecture renderer.
 
-The 0.10.2 Xbox screenshots confirmed persistent stairwell banisters, but exposed
-missing upper pieces of the separate inclined stair handrail. Saved OBJM loading
-had not reconstructed its dynamic sprite flags. The static renderer now runs the
-two known upper-stub visual callbacks in its isolated session, restoring only the
-exposed-side layers. No Init/Main or wider simulation is enabled.
+User confirmed 0.10.3's inclined stair handrail works normally on Xbox.
+The static renderer retains the narrow upper-stub visual callbacks; no Init/Main
+or wider simulation is enabled.
 
-Local renderer suite: 8/8, both houses, all rotations and levels; stair layers
-checked at all three zooms. Existing floor and persistent-railing checks pass.
-Xbox 0.10.3: user confirmed the stair handrail now works normally (2026-10-01). The reported handrail bug is resolved. Existing game files suffice.
+0.11 adds authored door/window masks, shared story elevations with adjoining
+wall overlap, and pitched roofs selected by HOUS metadata. Full-wall reference
+masks remove transparent sprite padding without stretching low fences/openings.
+Roof footprints use wall-only room maps so water cannot create false indoor
+islands. Diagonal halves and flood-fill seed tiles are covered correctly.
+Existing blue-carpet, stair-hole and all-zoom handrail regressions remain.
 
-Logs: artifacts/stair-fix-test.log and artifacts/stair-fix-native.log.
-Package audit: artifacts/offline-stair-fix-final/AUDIT.txt.
-Handoff: artifacts/xbox-stair-fix-*.zip. No game data or private keys included.
+Local suite: 13 checks, both houses, four rotations and three levels, GPU depth
+readback plus roof bitmap bounds and geometry. Log: artifacts/architecture-test.log.
+Xbox 0.11 is pending the user's test. Use experiments/XboxOfflineProbe/TESTING.md.
+New owned assets: r4_.bmp and tar1.bmp, staged in artifacts/lot-roof-upload;
+upload into LocalState/GameData/GameData/Roofs/. No game data/private keys in ZIP.
+Build/audit: artifacts/offline-architecture-final. Handoff: xbox-architecture-*.zip.
 
-Next: door/window opening masks, thin inter-floor seams, then roofs.
-Terrain/water remain diagnostic; contained objects remain held; host is static.
+Remaining rendering: exact roof ridges/eaves, terrain/water and lighting,
+contained-object visual offsets. Roofs currently approximate hips/valleys over
+closed wall footprints at the saved pitch; cardinal openings cover the test lots.
+Keep the viewer static until this build is validated; wider simulation is separate.
