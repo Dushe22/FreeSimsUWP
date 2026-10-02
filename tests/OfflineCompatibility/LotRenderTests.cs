@@ -11,7 +11,7 @@ namespace FreeSims.Tests
 {
     public static class LotRenderTests
     {
-        public const int Count=13;
+        public const int Count=16;
         public static List<string> Run(GraphicsDevice device,GamePaths paths,byte[] effect,Action<string> log)
         {
             var result=new List<string>();bool oldWorld=VM.UseWorld;VM.UseWorld=false;
@@ -28,6 +28,9 @@ namespace FreeSims.Tests
                 check("SHARED FLOOR HEIGHT AND STORY JOINTS",()=>StoryJoints(paths));
                 check("ROOF BMP RLE8 AND BOUNDS",()=>RoofBitmap());
                 check("ROOF HIPS AND OPEN COURTYARDS",()=>RoofGeometry(paths));
+                check("SAVED GRASS AND DETERMINISTIC TERRAIN",()=>TerrainMaterial(paths));
+                check("AUTHORED POOL AND WATER BORDERS",()=>WaterMaterials(paths));
+                check("GPU POOLS FOUR ANGLES THREE ZOOMS",()=>WaterViews(device,paths,effect));
                 foreach(int house in new[]{2,28}) check("HOUSE "+house+" FOUR ANGLES THREE LEVELS",()=> {
                     using(var lot=new TS1LotRenderData(paths,house)) {
                         for(int level=1;level<=3;level++) {
@@ -61,6 +64,78 @@ namespace FreeSims.Tests
                 });
             }finally{VM.UseWorld=oldWorld;}
             return result;
+        }
+        private static void TerrainMaterial(GamePaths paths)
+        {
+            var store=new NeighborhoodStore(paths,0);var iff=new FSO.Files.Formats.IFF.IffFile(store.GetReadPath("Houses/House02.iff"));
+            var grass=iff.Get<FSO.Files.Formats.IFF.Chunks.ARRY>(6).TransposeData;var before=(byte[])grass.Clone();
+            var a=new FSO.Content.TS1.TS1MaterialProvider(paths,iff).Terrain(grass,56);
+            var b=new FSO.Content.TS1.TS1MaterialProvider(paths,iff).Terrain(grass,56);
+            if(a.Width!=1792||a.Height!=1792||a.Pixels.Any(p=>p.A!=255)||a.Pixels.Select(p=>p.PackedValue).Distinct().Count()<30)
+                throw new InvalidOperationException("Terrain lacks opaque grass detail.");
+            if(!a.Pixels.SequenceEqual(b.Pixels)||!grass.SequenceEqual(before))throw new InvalidOperationException("Terrain changed saved data or changed on reload.");
+            bool rejected=false;try{new FSO.Content.TS1.TS1MaterialProvider(paths,iff).Terrain(new byte[10],56);}catch(System.IO.InvalidDataException){rejected=true;}
+            if(!rejected)throw new InvalidOperationException("Truncated grass map accepted.");
+        }
+        private static void WaterMaterials(GamePaths paths)
+        {
+            var store=new NeighborhoodStore(paths,0);var iff=new FSO.Files.Formats.IFF.IffFile(store.GetReadPath("Houses/House02.iff"));
+            var provider=new FSO.Content.TS1.TS1MaterialProvider(paths,iff);
+            var floors=Enumerable.Repeat(new FSO.LotView.Model.FloorTile{Pattern=65535},9).ToArray();
+            floors[4]=new FSO.LotView.Model.FloorTile();
+            if(TS1LotRenderData.WaterNeighbors(floors,3,1,0,65535)!=108 || TS1LotRenderData.WaterNeighbors(floors,3,0,0,65535)!=20)
+                throw new InvalidOperationException("Pool island/boundary adjacency is incorrect.");
+            if(TS1LotRenderData.WaterNeighbors(floors,3,1,0,65534)!=0)throw new InvalidOperationException("Pond and pool regions were joined.");
+            foreach(ushort pattern in new ushort[]{65534,65535}) {
+                // All concave/convex neighbor combinations must decode without
+                // introducing transparent holes or missing corner resources.
+                for(int mask=0;mask<256;mask++) {
+                    var m=provider.Water(pattern,(byte)mask,0);
+                    if(m.Pixels.Any(p=>p.A!=255))throw new InvalidOperationException("Empty water interior.");
+                }
+                if(provider.Water(pattern,0,0).Pixels.SequenceEqual(provider.Water(pattern,255,0).Pixels))
+                    throw new InvalidOperationException("Water borders were not selected.");
+            }
+            // A single northern neighbor moves through four authored edge
+            // variants. Check the source pixels independently of the UV mapper.
+            var source=new FSO.Files.Formats.IFF.IffFile(paths.GetGameDataPath("GameData/floors.iff"));
+            int[] variants={1,8,4,2},px={63,64,63,62},py={31,32,32,32};
+            for(int rotation=0;rotation<4;rotation++) {
+                var frame=source.Get<FSO.Files.Formats.IFF.Chunks.SPR2>((ushort)(0x420+variants[rotation])).Frames[0];frame.DecodeIfRequired();
+                var expected=frame.PixelData[py[rotation]*127+px[rotation]];expected.A=255;
+                Expect(provider.Water(65535,1,rotation).Pixels[31*64+31],expected);
+            }
+        }
+        private static void WaterViews(GraphicsDevice device,GamePaths paths,byte[] effect)
+        {
+            var previous=device.GetRenderTargets();var viewport=device.Viewport;
+            try {
+                foreach(int house in new[]{2,28})using(var lot=new TS1LotRenderData(paths,house)) {
+                    int pool=-1,water=-1;
+                    for(int zoom=1;zoom<=3;zoom++)for(int rotation=0;rotation<4;rotation++) {
+                        var view=lot.Build(zoom,rotation,1);
+                        if(view.TerrainTiles!=lot.Size*lot.Size || view.TerrainMaterials.Count!=1 || view.PoolTiles==0 || (house==28&&view.WaterTiles==0))
+                            throw new InvalidOperationException("Saved terrain/water coverage missing.");
+                        if(pool>=0&&(pool!=view.PoolTiles||water!=view.WaterTiles))throw new InvalidOperationException("Camera changed water coverage.");
+                        pool=view.PoolTiles;water=view.WaterTiles;
+                        var tile=view.FloorMaterials.First(s=>s.Material.Name.StartsWith("water:65535:"));
+                        var isolated=new TS1LotRenderData.View();isolated.FloorMaterials.Add(tile);
+                        var min=new Vector2(tile.Vertices.Min(v=>v.Position.X),tile.Vertices.Min(v=>v.Position.Y));
+                        var max=new Vector2(tile.Vertices.Max(v=>v.Position.X),tile.Vertices.Max(v=>v.Position.Y));
+                        float scale=Math.Min(220/(max.X-min.X),160/(max.Y-min.Y));
+                        var center=(min+max)/2;
+                        var camera=Matrix.CreateTranslation(-center.X,-center.Y,0)*Matrix.CreateScale(scale,scale,1)*
+                            Matrix.CreateTranslation(128,96,0)*Matrix.CreateOrthographicOffCenter(0,256,192,0,-128,128);
+                        using(var renderer=new TS1LotRenderer(device,isolated,effect))using(var target=new RenderTarget2D(device,256,192,false,SurfaceFormat.Color,DepthFormat.Depth24)) {
+                            device.SetRenderTarget(target);device.Clear(ClearOptions.Target|ClearOptions.DepthBuffer,Color.Magenta,1,0);
+                            renderer.Draw(camera,true);device.SetRenderTargets(previous);device.Viewport=viewport;
+                            var pixels=new Color[256*192];target.GetData(pixels);
+                            if(pixels.Count(p=>p!=Color.Magenta)<1500 || pixels.Where(p=>p!=Color.Magenta).Select(p=>p.PackedValue).Distinct().Count()<20)
+                                throw new InvalidOperationException("Pool GPU view lacks authored detail.");
+                        }
+                    }
+                }
+            }finally{device.SetRenderTargets(previous);device.Viewport=viewport;}
         }
         private static void OpeningMasks(GamePaths paths)
         {

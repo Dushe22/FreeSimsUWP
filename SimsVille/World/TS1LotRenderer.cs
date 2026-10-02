@@ -33,7 +33,7 @@ namespace FSO.LotView
                 surfaces=new BasicEffect(device) {VertexColorEnabled=true};sprites=new Effect(device,effect);
                 materials=new AlphaTestEffect(device) {VertexColorEnabled=true,ReferenceAlpha=128,AlphaFunction=CompareFunction.GreaterEqual};
                 ground=data.Ground.ToArray();walls=data.Walls.ToArray();
-                foreach(var source in data.FloorMaterials.Concat(data.WallMaterials).Concat(data.RoofMaterials)) {
+                foreach(var source in data.TerrainMaterials.Concat(data.FloorMaterials).Concat(data.WallMaterials).Concat(data.RoofMaterials)) {
                     var item=new MaterialItem {Wall=data.WallMaterials.Contains(source) && !source.KeepWhenWallsHidden,Roof=data.RoofMaterials.Contains(source),Vertices=source.Vertices.ToArray()};materialItems.Add(item);
                     item.Texture=new Texture2D(device,source.Material.Width,source.Material.Height);item.Texture.SetData(source.Material.Pixels);
                 }

@@ -1,33 +1,30 @@
-# Architecture Render Probe 0.11.0.0
+# Terrain and Pool Render Probe 0.12.0.0
 
-Update the existing Offline Probe. Keep previously uploaded game files.
-Add these two BMPs from your own game to LocalState/GameData/GameData/Roofs/
-using Device Portal:
-- r4_.bmp (House 2)
-- tar1.bmp (House 28)
-Local copies are staged in artifacts/lot-roof-upload. No game data is in the AppX.
-Missing roof files produce a clear log error; existing floor views remain usable.
+Update the existing Offline Probe. Keep the game files uploaded for 0.11;
+no additional game assets are needed. Pool/water pieces come from floors.iff.
+The roof geometry, shading and sampling remain the accepted 0.11 implementation.
 
-Expect **13/13 PASS**. A rotate, X house, Y walls, LB zoom,
+Expect **16/16 PASS**. A rotate, X house, Y walls, LB zoom,
 RB cycles floor 1 / floor 2 / ROOF, stick pan, View center, Menu tests, B exit.
 
-Check both houses at all angles and zooms:
-- Doors/windows: openings must reveal the room or outdoors behind the frame.
-  Check House 2's arched windows and House 28's large shop windows.
-- Between floors: no orange/white gaps through adjoining walls; check House 2
-  angle 1, level 2, zoom 3. Texture changes/baseboards can remain visible.
-- ROOF: pitched textured surfaces have straight ridges and half-tile eaves, avoiding balconies,
-  open courtyards, pools and the island in House 2's pool. No triangular holes.
-- Stair regression: the real staircase opening stays open; the repaired blue
-  carpet stays complete. Stairwell banisters and inclined handrails still render.
+Check both houses at all four angles and three zooms:
+- Grass: no checker grid, no tile seams; identical appearance after relaunch.
+- House 2 pool: continuous authored edge pieces around the perimeter and central
+  island. Check the concave corners and narrow strips for black/transparent gaps.
+- House 28 pool: continuous edging, aligned with the ladders/diving board.
+  The larger water area has authored shore pieces, including its small island.
+- Switch walls and floors: water stays at ground level; normal floors, door/window
+  openings and balcony fences remain intact. The blue carpet, stair opening,
+  stairwell banisters and inclined handrail must keep working on floor 2.
+- ROOF: same shape/textures as 0.11, without covering balconies or water.
 
 Rerun tests, Home/return, exit/relaunch. Send proof.log and original Device Portal
-PNGs of floor 2 and ROOF for both houses. Xbox validation of 0.11 is pending.
+PNGs: close pool/island views for both houses, one whole-lot view, and floor 2.
+Local GPU verification passes; Xbox verification of 0.12 is pending.
 
-Still static: flat checker terrain/blue water, no lighting or simulation;
-contained objects remain held. Roof shape uses the existing half-tile rectangular hip model at the saved pitch.
-Roof tiles use the existing renderer's face-relative texture scale. Pixel-identical
-TS1 shading/filtering is not yet reproduced.
-Authored near-view materials/masks are sampled onto geometry. Architectural
-opening mapping currently covers cardinal placements in these two test lots.
+Still static: terrain height is flat and grass is a deterministic procedural
+approximation driven by saved ARRY 6, not a reproduction of TS1's grass shader.
+Water uses the original near-view pieces resampled onto geometry; there is no
+water animation, new lighting or wider simulation. Eleven contained objects in
+House 28 remain held. Roof shading/filtering is not pixel-identical to TS1.
 Camera/test counters reset on a fresh launch.

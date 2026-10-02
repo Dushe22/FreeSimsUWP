@@ -113,6 +113,75 @@ namespace FSO.Content.TS1
             }
             cache.Add(key, result); return result;
         }
+        // Saved grass data drives this procedural approximation. Keep the
+        // replacement grain deterministic and separate from saved simulation state.
+        public Material Terrain(byte[] grass, int size)
+        {
+            if(grass==null || grass.Length!=4096 || size<2 || size>64)throw new InvalidDataException("Invalid saved grass map.");
+            Material result;if(cache.TryGetValue("terrain",out result))return result;
+            int width=size*32;
+            result=new Material{Name="terrain",Width=width,Height=width,Pixels=new Color[width*width]};
+            for(int y=0;y<width;y++)for(int x=0;x<width;x++) {
+                float tx=x/32f,ty=y/32f;int ix=(int)tx,iy=(int)ty;
+                int nx=Math.Min(63,ix+1),ny=Math.Min(63,iy+1);float fx=tx-ix,fy=ty-iy;
+                float state=MathHelper.Lerp(MathHelper.Lerp(grass[iy*64+ix],grass[iy*64+nx],fx),
+                    MathHelper.Lerp(grass[ny*64+ix],grass[ny*64+nx],fx),fy)/255f;
+                uint hash=unchecked((uint)(x*374761393+y*668265263));hash=(hash^(hash>>13))*1274126177u;hash^=hash>>16;
+                float grain=(hash&255)/255f-.5f;
+                float light=.91f+state*.12f+grain*.25f;
+                result.Pixels[y*width+x]=new Color((byte)(65*light),(byte)(113*light),(byte)(39*light));
+            }
+            cache.Add("terrain",result);return result;
+        }
+        public Material Water(ushort pattern, byte neighbors, int rotation)
+        {
+            if((pattern!=65534 && pattern!=65535)||rotation<0||rotation>3)throw new ArgumentOutOfRangeException("pattern");
+            string key="water:"+pattern+":"+neighbors+":"+rotation;
+            Material result;if(cache.TryGetValue(key,out result))return result;
+            int shift=rotation*2,adj=((neighbors<<shift)|(neighbors>>(8-shift)))&255;
+            int variant=((adj&1)!=0?1:0)|((adj&64)!=0?2:0)|((adj&16)!=0?4:0)|((adj&4)!=0?8:0);
+            var sprite=floorGlobals.Get<SPR2>((ushort)((pattern==65535?0x420:0x800)+variant));
+            if(sprite==null||sprite.Frames.Length==0)throw new InvalidDataException("Missing TS1 water tile: "+key);
+            var frame=sprite.Frames[0];frame.DecodeIfRequired();
+            if(frame.PixelData==null||frame.Width!=127||frame.Height!=64)throw new InvalidDataException("Invalid TS1 water diamond: "+key);
+            var pixels=(Color[])frame.PixelData.Clone();
+            if(pattern==65535) {
+                if((adj&65)==65 && (adj&128)==0)PoolCorner(pixels,frame.Width,frame.Height,0);
+                if((adj&80)==80 && (adj&32)==0)PoolCorner(pixels,frame.Width,frame.Height,1);
+                if((adj&20)==20 && (adj&8)==0)PoolCorner(pixels,frame.Width,frame.Height,2);
+                if((adj&5)==5 && (adj&2)==0)PoolCorner(pixels,frame.Width,frame.Height,3);
+            }
+            result=new Material{Name=key,Width=64,Height=64,Pixels=new Color[4096]};
+            for(int y=0;y<64;y++)for(int x=0;x<64;x++) {
+                float u=(x+.5f)/64,v=(y+.5f)/64,a=u,b=v;
+                switch(rotation){case 1:a=1-v;b=u;break;case 2:a=1-u;b=1-v;break;case 3:a=v;b=1-u;break;}
+                int sx=Math.Min(126,Math.Max(0,(int)((a-b+1)*.5f*127))),sy=Math.Min(63,Math.Max(0,(int)((a+b)*32)));
+                var p=pixels[sy*127+sx];
+                // Quantized diamond tips sometimes fall one texel outside the
+                // opaque tile. Sample the nearest interior texel, never black.
+                if(p.A==0)for(int radius=1;radius<=2 && p.A==0;radius++)
+                    for(int dy=-radius;dy<=radius && p.A==0;dy++)for(int dx=-radius;dx<=radius && p.A==0;dx++) {
+                        int xx=sx+dx,yy=sy+dy;if(xx>=0&&yy>=0&&xx<127&&yy<64)p=pixels[yy*127+xx];
+                    }
+                if(p.A==0)throw new InvalidDataException("Empty interior water texel: "+key);
+                p.A=255;result.Pixels[y*64+x]=p;
+            }
+            cache.Add(key,result);return result;
+        }
+        private void PoolCorner(Color[] pixels,int width,int height,int corner)
+        {
+            var sprite=floorGlobals.Get<SPR2>((ushort)(0x438+corner));
+            if(sprite==null||sprite.Frames.Length==0)throw new InvalidDataException("Missing pool corner.");
+            var f=sprite.Frames[0];f.DecodeIfRequired();
+            int left=corner==1?0:corner==3?width-f.Width:width/2-f.Width/2;
+            int top=corner==0?0:corner==2?height-f.Height:height/2+1-f.Height/2;
+            for(int y=0;y<f.Height;y++)for(int x=0;x<f.Width;x++) {
+                int xx=left+x,yy=top+y;if(xx<0||yy<0||xx>=width||yy>=height)continue;
+                var src=f.PixelData[y*f.Width+x];if(src.A==0)continue;
+                var dst=pixels[yy*width+xx];float alpha=src.A/255f;
+                var mixed=Color.Lerp(dst,src,alpha);mixed.A=(byte)Math.Max(src.A,dst.A);pixels[yy*width+xx]=mixed;
+            }
+        }
         public SPR OpeningMask(ushort style)
         {
             return wallGlobals.Get<SPR>((ushort)(1024 + style * 2));

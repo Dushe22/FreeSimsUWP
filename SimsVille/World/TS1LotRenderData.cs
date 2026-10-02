@@ -19,7 +19,7 @@ namespace FSO.LotView
     {
         private readonly TS1LotObjectSession session;
         private readonly TS1MaterialProvider materials;
-        private readonly byte[] floorFlags;
+        private readonly byte[] floorFlags, grass;
         private readonly string roofName;
         private readonly VMRoomMap[] roofRooms = new VMRoomMap[2];
         private readonly List<VMRoom> roofRoomData = new List<VMRoom> {new VMRoom {IsOutside = true}};
@@ -39,6 +39,9 @@ namespace FSO.LotView
             var flags = iff.Get<ARRY>(8);
             if (flags == null || flags.Width != 64 || flags.Height != 64 || flags.ByteSize() != 1) throw new InvalidDataException("Missing lot floor flags.");
             floorFlags = flags.TransposeData;
+            var savedGrass=iff.Get<ARRY>(6);
+            if(savedGrass==null || savedGrass.Width!=64 || savedGrass.Height!=64 || savedGrass.ByteSize()!=1)throw new InvalidDataException("Missing saved grass map.");
+            grass=savedGrass.TransposeData;
             session = TS1LotObjectSession.Load(iff,new TS1ObjectProvider(paths));
             try {
                 // OBJM loading holds behaviors and does not reconstruct dynamic sprite
@@ -161,11 +164,13 @@ namespace FSO.LotView
         {
             public readonly List<VertexPositionColor> Ground = new List<VertexPositionColor>();
             public readonly List<VertexPositionColor> Walls = new List<VertexPositionColor>();
+            public readonly List<Surface> TerrainMaterials = new List<Surface>();
             public readonly List<Surface> FloorMaterials = new List<Surface>();
             public readonly List<Surface> WallMaterials = new List<Surface>();
             public readonly List<Surface> RoofMaterials = new List<Surface>();
             public readonly List<Sprite> Sprites = new List<Sprite>();
             public int OpeningEdges, StoryJoints, RoofTriangles;
+            public int TerrainTiles, PoolTiles, WaterTiles;
             public int Rendered, Hidden, OutOfWorld, Contained, NoGraphic, Unsupported, AboveLevel, FloorTiles, WallEdges;
             public readonly List<string> Issues = new List<string>();
         }
@@ -174,9 +179,13 @@ namespace FSO.LotView
             if (level < 1 || level > 3) throw new ArgumentOutOfRangeException("level");
             TS1SpriteLayer.Project(Vector3.Zero,zoom,rotation); // validate before allocating
             var view=new View(); var arch=session.VM.Context.Architecture;
-            for(int y=0;y<Size;y++) for(int x=0;x<Size;x++) {
-                byte green=(byte)(94+((x+y)%2)*6);
-                Quad(view.Ground,new Vector3(x,y,0),new Vector3(x+1,y,0),new Vector3(x+1,y+1,0),new Vector3(x,y+1,0),new Color(56,green,44),zoom,rotation);
+            var terrain=materials.Terrain(grass,Size);
+            for(int y=0;y<Size;y++)for(int x=0;x<Size;x++) {
+                var points=new[]{new Vector3(x,y,-.01f),new Vector3(x+1,y,-.01f),new Vector3(x+1,y+1,-.01f),new Vector3(x,y+1,-.01f)};
+                var textureUV=new[]{new Vector2(x/(float)Size,y/(float)Size),new Vector2((x+1)/(float)Size,y/(float)Size),
+                    new Vector2((x+1)/(float)Size,(y+1)/(float)Size),new Vector2(x/(float)Size,(y+1)/(float)Size)};
+                Textured(view.TerrainMaterials,terrain,points,textureUV,new[]{0,1,2,0,2,3},Color.White,zoom,rotation);
+                view.TerrainTiles++;
             }
             var camera = new[] {new Vector2(1,1),new Vector2(1,-1),new Vector2(-1,-1),new Vector2(-1,1)}[rotation];
             for(int story=0;story<Math.Min(level,2);story++) {
@@ -190,7 +199,10 @@ namespace FSO.LotView
                     var uv=new[]{Vector2.Zero,Vector2.UnitX,Vector2.One,Vector2.UnitY};
                     Action<ushort,int[]> floor=(pattern,indices)=>{
                         if(pattern==0)return;
-                        if(pattern>=65534){TriangleSurface(view.Ground,corners,indices,new Color(45,125,175),zoom,rotation);}
+                        if(pattern>=65534){
+                            Textured(view.FloorMaterials,materials.Water(pattern,WaterNeighbors(arch.Floors[story],Size,x,y,pattern),rotation),corners,uv,indices,Color.White,zoom,rotation);
+                            if(pattern==65535)view.PoolTiles++;else view.WaterTiles++;
+                        }
                         else Textured(view.FloorMaterials,materials.Floor(pattern,global&&!splitFloor&&pattern<=30),corners,uv,indices,Color.White,zoom,rotation);
                         view.FloorTiles++;
                     };
@@ -254,6 +266,17 @@ namespace FSO.LotView
             }
             if(level==3)BuildRoofs(view,zoom,rotation);
             return view;
+        }
+        public static byte WaterNeighbors(FloorTile[] floors,int size,int x,int y,ushort pattern)
+        {
+            if(floors==null||size<1||floors.Length!=size*size||x<0||y<0||x>=size||y>=size || (pattern!=65534&&pattern!=65535))
+                throw new ArgumentException("Invalid water footprint.");
+            int[] dx={0,1,1,1,0,-1,-1,-1},dy={-1,-1,0,1,1,1,0,-1};int result=0;
+            for(int i=0;i<8;i++) {
+                int xx=x+dx[i],yy=y+dy[i];
+                if(xx>=0&&yy>=0&&xx<size&&yy<size&&floors[yy*size+xx].Pattern==pattern)result|=1<<i;
+            }
+            return (byte)result;
         }
         private static void Textured(List<Surface> surfaces,TS1MaterialProvider.Material material,Vector3[] corners,Vector2[] uv,int[] indices,Color color,int zoom,int rotation,bool keepWhenWallsHidden=false)
         {

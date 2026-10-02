@@ -1726,3 +1726,23 @@ The visible 4/4 label was stale text; corrected to use the actual result count.
 Existing limits remain: diagnostic terrain/water, no roofs or opening masks,
 contained objects held. Thin inter-floor seams remain visible for follow-up.
 Evidence: artifacts/xbox-materials-a9c71c2b7f89/proof.log.
+
+## 2026-10-01 - Terrain and pools 0.12
+0.11 Xbox evidence: eight Device Portal PNGs show both houses with roofs at all
+four angles; proof.log reports 13/13 passes, exit/relaunch and suspend followed
+by a fresh launch. The user requested restoration of the 04cde62ee4b6 roof after
+later contour polish. That geometry, shading and sampling remain unchanged.
+
+0.12 replaces checker grass with deterministic procedural grain using saved
+ARRY 6. Original floors.iff pool/pond variants supply borders and shores;
+camera-relative neighbor masks and authored concave corners preserve islands.
+No additional game upload is needed. Terrain height is still flat and water is
+static; this does not reproduce TS1's grass shader or enable lighting/simulation.
+
+Sixteen local checks pass: all 256 pool/pond masks, rotation mapping, saved grass
+immutability/determinism, GPU pools in both houses at four angles/three zooms,
+and previous depth, architecture, roof and stair regressions. Forty-eight full
+views were exported. Logs: artifacts/terrain-pool-test.log, pool-close-qa.log.
+Signed native build/audit: artifacts/offline-terrain-final; handoff xbox-terrain-*.zip.
+Xbox 0.12 verification remains pending per XboxOfflineProbe/TESTING.md.
+Next rendering gate: contained-object SLOT offsets, followed by lighting.
