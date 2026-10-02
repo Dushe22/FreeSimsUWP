@@ -291,6 +291,7 @@
     <Compile Include="$(MSBuildThisFileDirectory)SimsAntics\VMAI.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)SimsAntics\VMArchitecture.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)SimsAntics\VMClock.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)SimsAntics\VMTimeController.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)SimsAntics\VMContext.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)UI\Controls\Catalog\UICatalog.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)UI\Controls\Catalog\UICatalogFloorResProvider.cs" />

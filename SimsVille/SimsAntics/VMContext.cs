@@ -88,7 +88,7 @@ namespace FSO.SimAntics
             }
 
             RandomSeed = (ulong)((new Random()).NextDouble() * UInt64.MaxValue); //when resuming state, this should be set.
-            Clock.TicksPerMinute = 30; //1 minute per irl second
+            Clock.TicksPerMinute = 150; // Preserve legacy VM pace; local TS1 playback selects its rate explicitly.
 
             AddPrimitive(new VMPrimitiveRegistration(new VMSleep())
             {

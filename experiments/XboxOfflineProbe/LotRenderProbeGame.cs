@@ -26,13 +26,14 @@ namespace FreeSims.Xbox.Proof
         private Vector2 pointer=new Vector2(640,353);
         private int memoryPressure;
         private double wallTime;
-        private double lightingHour=12;
-        private bool lightingCycle;
+        private readonly VMTimeController timeControl=new VMTimeController();
+        private readonly VMClock previewClock=new VMClock{Hours=12,TicksPerMinute=VMTimeController.TS1TicksPerMinute};
+        private double LightingHour {get{return previewClock.Hours+(previewClock.Minutes+previewClock.MinuteFractions/(double)previewClock.TicksPerMinute)/60.0;}}
         private int lightingMinute=720;
         private void LogLighting(){
             if(renderer==null)return;
-            ProofLog.Write("LIGHT hour="+lightingHour.ToString("F2",System.Globalization.CultureInfo.InvariantCulture)+
-                " cycle="+lightingCycle+" rooms="+renderer.Data.Lighting.Length+" outside="+renderer.OutsideColor+
+            ProofLog.Write("LIGHT hour="+LightingHour.ToString("F2",System.Globalization.CultureInfo.InvariantCulture)+
+                " speed="+timeControl.Speed+" multiplier="+timeControl.Multiplier+" ticks="+previewClock.Ticks+" rooms="+renderer.Data.Lighting.Length+" outside="+renderer.OutsideColor+
                 " textures="+renderer.TextureCount+" uploadBytes="+renderer.TextureBytes+" revision="+renderer.LightingRevision);
         }
         private Vector2 pan; private string error; private Rectangle lastViewport;
@@ -85,7 +86,7 @@ namespace FreeSims.Xbox.Proof
         private void LoadLot()
         {
             // Release the previous VM and GPU scene before allocating a new lot.
-            ReleaseLot();CollectReleasedMemory();var timer=Stopwatch.StartNew();LogMemory("load-begin");
+            timeControl.Suspend();ReleaseLot();CollectReleasedMemory();var timer=Stopwatch.StartNew();LogMemory("load-begin");
             try{lot=new TS1LotRenderData(UwpGameStorage.CreatePaths(),house);TryRebuild();}
             catch(Exception ex){ReleaseLot();error="LOT LOAD FAILED - SEE LOG";ProofLog.Write("LOT LOAD FAILED house="+house+" "+ex);}
             ProofLog.Write("LOT LOAD ms="+timer.ElapsedMilliseconds);LogMemory("load-end");
@@ -93,12 +94,12 @@ namespace FreeSims.Xbox.Proof
         private void Rebuild(TS1LotRenderData source)
         {
             // Never keep two complete CPU/GPU views alive across an upload.
-            ReleaseView();
+            timeControl.Suspend();ReleaseView();
             if(MemoryManager.AppMemoryUsageLevel>=AppMemoryUsageLevel.High)CollectReleasedMemory();
             var timer=Stopwatch.StartNew();LogMemory("view-begin");
             TS1LotRenderer candidate=null;RenderTarget2D target=null;
             try{
-                var data=source.Build(zoom,rotation,level);candidate=new TS1LotRenderer(GraphicsDevice,data,effect);candidate.UpdateLighting((int)(lightingHour*12)/12.0);
+                var data=source.Build(zoom,rotation,level);candidate=new TS1LotRenderer(GraphicsDevice,data,effect);candidate.UpdateLighting((int)(LightingHour*12)/12.0);
                 target=new RenderTarget2D(GraphicsDevice,1280,530,false,SurfaceFormat.Color,DepthFormat.Depth24);Render(candidate,target,source.Size);
                 if(renderer!=null)renderer.Dispose();if(image!=null)image.Dispose();renderer=candidate;candidate=null;image=target;target=null;error=null;
                 ProofLog.Write("LOT VIEW house="+house+" rotation="+rotation+" zoom="+zoom+" level="+level+" walls="+walls+" rendered="+data.Rendered+" hidden="+data.Hidden+" slotted="+data.SlottedRendered+" contained="+data.Contained+" unsupported="+data.Unsupported+" floors="+data.FloorTiles+" wallEdges="+data.WallEdges+" floorMaterials="+data.FloorMaterials.Count+" wallMaterials="+data.WallMaterials.Count+" openings="+data.OpeningEdges+" joints="+data.StoryJoints+" roofTriangles="+data.RoofTriangles+" terrain="+data.TerrainTiles+" pools="+data.PoolTiles+" water="+data.WaterTiles+" poolAttachments="+data.PoolAttachmentAdjustments);
@@ -135,7 +136,7 @@ namespace FreeSims.Xbox.Proof
                 CollectReleasedMemory();LogMemory("pressure");
             }
             var pad=GamePad.GetState(PlayerIndex.One);
-            if(Program.ConsumePause()||!IsActive||!pad.IsConnected){previous=pad;base.Update(time);return;}
+            if(Program.ConsumePause()||!IsActive||!pad.IsConnected){timeControl.Suspend();previous=pad;base.Update(time);return;}
             Func<Buttons,bool> pressed=b=>pad.IsButtonDown(b)&&previous.IsButtonUp(b);
             if(pressed(Buttons.B)){ProofLog.Write("EXIT REQUESTED");Exit();return;}
             if(pressed(Buttons.Start))RunTests();
@@ -150,18 +151,20 @@ namespace FreeSims.Xbox.Proof
             float dt=(float)Math.Min(time.ElapsedGameTime.TotalSeconds,0.1);
             bool lightControl=false;
             if(pressed(Buttons.DPadLeft)||pressed(Buttons.DPadRight)){
-                lightingHour=(lightingHour+(pressed(Buttons.DPadRight)?3:21))%24;
-                lightingCycle=false;lightControl=true;
+                timeControl.ChangeSpeed(pressed(Buttons.DPadRight)?1:-1);lightControl=true;
             }
-            if(pressed(Buttons.RightStick)){lightingCycle=!lightingCycle;lightControl=true;}
-            // Preview-only clock: four real minutes/day, five-minute redraw steps.
-            // Pause/suspend paths above do not advance it or run VM behavior.
-            if(lightingCycle)lightingHour=(lightingHour+dt*.1)%24;
-            int minute=(int)(lightingHour*12)*5;
+            if(pressed(Buttons.RightStick)){timeControl.TogglePause();lightControl=true;}
+            // Same shared tick pacing will drive offline simulation. This rendering
+            // gate advances only its independent VMClock, never saved entities.
+            int ticks=0;
+            if(rebuild||pressed(Buttons.Start)||pressed(Buttons.X)||renderer==null)timeControl.Suspend();
+            else ticks=timeControl.Advance(time.ElapsedGameTime.TotalSeconds);
+            for(int tick=0;tick<ticks;tick++)previewClock.Tick();
+            int minute=(previewClock.Hours*60+previewClock.Minutes)/5*5;
             if(lightControl||minute!=lightingMinute){
                 lightingMinute=minute;
                 if(renderer!=null&&renderer.UpdateLighting(minute/60.0))redraw=true;
-                if(lightControl||(lightingCycle&&minute%60==0))LogLighting();
+                if(lightControl||(timeControl.Speed!=VMTimeSpeed.Paused&&minute%60==0))LogLighting();
             }
             var stick=pad.ThumbSticks.Left;
             if(pointerMode) {
@@ -191,14 +194,14 @@ namespace FreeSims.Xbox.Proof
             Text(status,970,24,2,error!=null?Color.OrangeRed:results.Count==0?Color.LightGray:passed?Color.LimeGreen:Color.OrangeRed);
             Text("COMMIT "+BuildInfo.Commit.Substring(0,12)+" - HOUSE "+house+" - ANGLE "+rotation+" - LEVEL "+(level==3?"ROOF":level.ToString())+" - ZOOM "+zoom,32,52,2,Color.LightGray);
             if(image!=null)batch.Draw(image,new Vector2(0,88),Color.White);
-            Text("WALLS "+walls.ToString().ToUpperInvariant()+" - "+(pointerMode?"POINTER ON":"CAMERA")+" - "+((int)lightingHour).ToString("00")+":"+((int)(lightingHour*60)%60).ToString("00")+" - "+(lightingCycle?"CYCLE":"PAUSED")+" - STATIC",32,625,2,Color.Gold);
+            Text("WALLS "+walls.ToString().ToUpperInvariant()+" - "+(pointerMode?"POINTER ON":"CAMERA")+" - "+previewClock.Hours.ToString("00")+":"+previewClock.Minutes.ToString("00")+" - "+timeControl.Speed.ToString().ToUpperInvariant()+" - STATIC",32,625,2,Color.Gold);
             if(pointerMode) {
                 int px=(int)pointer.X,py=(int)pointer.Y;
                 batch.Draw(pixel,new Rectangle(px-7,py-1,15,3),Color.Black);batch.Draw(pixel,new Rectangle(px-1,py-7,3,15),Color.Black);
                 batch.Draw(pixel,new Rectangle(px-6,py,13,1),Color.Gold);batch.Draw(pixel,new Rectangle(px,py-6,1,13),Color.Gold);
             }
             Text("A ROTATE - X HOUSE - Y WALLS - LB ZOOM - RB FLOOR/ROOF",32,653,2,Color.White);
-            Text("LS POINTER - RS PAN/CLICK CYCLE - DPAD TIME - VIEW CENTER - MENU TESTS - B EXIT",32,681,1,Color.LightGray);
+            Text("LS POINTER - RS PAN/CLICK PAUSE - DPAD SPEED - VIEW CENTER - MENU TESTS - B EXIT",32,681,1,Color.LightGray);
             if(renderer!=null)Text("DRAWN "+renderer.Data.Rendered+" - SLOTTED "+renderer.Data.SlottedRendered+" - HELD "+renderer.Data.Contained+" - UNSUPPORTED "+renderer.Data.Unsupported+" - RUN "+runs,32,76,1,Color.LightGray);
             if(error!=null)Text(error,32,596,2,Color.OrangeRed);
             batch.End();base.Draw(time);

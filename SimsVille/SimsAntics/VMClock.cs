@@ -17,7 +17,7 @@ namespace FSO.SimAntics
     {
         public long Ticks;
         public int MinuteFractions;
-        public int TicksPerMinute;
+        public int TicksPerMinute = 150;
         public int Minutes;
         public int Hours;
         public int DayOfMonth;
@@ -42,7 +42,7 @@ namespace FSO.SimAntics
 
         public void Tick()
         {
-            TicksPerMinute = 30 * 5; //30 * 5;
+            if (TicksPerMinute <= 0) throw new InvalidOperationException("Clock ticks per minute must be positive.");
             if (++MinuteFractions >= TicksPerMinute)
             {
                 MinuteFractions = 0;

@@ -1,6 +1,6 @@
 # Next session
 
-Branch: xbox-uwp-port. Milestone: Xbox 0.15.0 room lighting/day-night preview; hardware validation pending.
+Branch: xbox-uwp-port. Milestone: Xbox 0.15.1 shared pause/normal/fast/ultra clock; hardware validation pending.
 
 User confirmed the inclined stair handrail fix works normally on Xbox.
 0.11 evidence (UWP Screenshots/0.11): 13/13 PASS, both houses with roofs at all
@@ -99,7 +99,7 @@ brown stair tile (24,24), as explicitly requested after saved-material diagnosis
 held=0, unsupported=0 and correct counter placement. Peak app usage 459.48 MiB
 against 1024 MiB, pressure Low. SLOT rendering gate closed.
 
-Current 0.15.0 connects saved VM room lighting to the static renderer. Geometry
+0.15.0 lighting baseline connects saved VM room lighting to the static renderer. Geometry
 triangles and sprite roots use the architecture room map; camera-facing wall
 faces/caps/reveals sample the visible side. Exterior ground/water/roof uses
 the existing engine palette. Saved electric/window contributions and emissive
@@ -107,7 +107,7 @@ sprite flags follow engine rules. Room snapshots retain no VM entities.
 The palette is shared with simulation, uses twelve two-hour keys and wraps
 continuously through midnight. No lamp behaviors or VM clock/save edits.
 
-D-pad left/right changes preview time by three hours and pauses it; right-stick
+Original 0.15.0 controls: D-pad left/right changed time by three hours; right-stick
 click toggles a four-real-minute day. Starts paused at noon. Update light colors
 in existing vertex arrays at five-minute steps; redraw only on changed palette
 colors/visibility. No new textures/shader changes or per-frame light decoding.
@@ -122,3 +122,36 @@ Use experiments/XboxOfflineProbe/TESTING.md. Confirm lighting and memory on Xbox
 before controlled simulation/rendering, then Sims, interaction and full saves.
 Lighting is per-room ambient/electric; point-light falloff/cast shadows and
 behavior-driven lamp switching are outside this static rendering milestone.
+
+0.15 hardware results reviewed 2026-10-02 (UWP Screenshots/0.15):
+only the a80b41b0f756 session beginning 19:53:59 UTC belongs to this build;
+the appended log also includes older versions. 31/31 PASS, four view builds,
+no logged failure/OOM, peak sampled app usage 348.85 MiB / 1024 MiB, Low.
+Eight House 2 captures show night/dawn/noon/dusk without a new visible
+geometry defect. Texture totals stay fixed while time changes. Coverage
+does not yet establish two full automatic days, House 28 night hardware or FPS.
+
+0.15.1 replaces the four-minute preview day with shared VMTimeController:
+PAUSED / NORMAL / FAST / ULTRA, D-pad left/right lowers/raises the selected
+speed, RS click pauses/resumes the last running speed. Starts paused at noon.
+Normal uses 30 ticks/s and 30 ticks/sim minute (one sim minute/real second);
+fast/ultra use 3x/10x as current implementation values. The original Deluxe
+manual confirms the four modes, but supplies no precise multipliers:
+https://www.manuallib.com/download/2023-10-18/The%20Sims%E2%84%A2%20Deluxe%20Edition%20Manual.pdf
+Do not claim measured original-executable timing parity until calibrated.
+Automatic acceleration for all sleeping/away Sims awaits live Sim state.
+
+VMClock honors its configured/saved TicksPerMinute instead of overwriting
+it at every tick; both the unconfigured fallback and legacy VMContext remain 150, matching their previous effective rate. The viewer advances
+a separate VMClock, retains no entity callbacks and writes no saves. Fixed
+tick pacing is shared runtime code, ready for the offline simulation caller.
+Inactive/disconnected/load/test intervals are discarded on resume; slow
+frames accept at most 250 ms (75 Ultra ticks), without catch-up backlog.
+Lighting still updates existing vertices only at five-minute buckets and
+on actual palette changes. Camera/wall restoration uses real time regardless
+of pause/speed. Menu expects 32/32 including timing/frame-rate/resume tests.
+Tests: artifacts/time-render-tests.log, artifacts/time-offline-tests.log.
+Native handoff: artifacts/offline-time-0151-final, artifacts/xbox-time-*.zip.
+Next after hardware clock/light checks: controlled live simulation/rendering,
+then Sims, interaction and full saves.
+Final local checks: 32/32 render checks pass; OfflineCompatibility 8/8 and live object tests pass (150 ticks, zero script errors); all 91 source game-file SHA256 hashes unchanged. Shared timing changes introduce no texture/geometry/shader edits.

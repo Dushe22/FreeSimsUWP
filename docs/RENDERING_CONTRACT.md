@@ -88,9 +88,16 @@ invalid chains; compute only during view builds and share existing frame arrays.
 - Preserve base vertex colors, authored alpha and SPR2 depth. Relight existing
   vertex arrays from the base on palette changes; no compounded tint, texture
   edits/uploads, new lighting targets or shader/depth calibration changes.
-- Clock belongs to the viewer and pauses across inactive/disconnected updates.
-  Quantize to five preview minutes and invalidate only changed colors; retain
-  static redraw behavior. Changing time must not run behaviors or write saves.
+- Use shared VMTimeController fixed ticks and the configured VMClock rate,
+  with PAUSED/NORMAL/FAST/ULTRA modes. The static viewer advances a separate
+  clock; later live simulation must consume the same pacing ticks rather than
+  adding a second wall-clock timer. Never overwrite saved TicksPerMinute.
+- Suspend pacing across inactive/disconnected/load/test intervals and discard
+  the first elapsed interval on resume. Bound slow-frame work to 250 ms;
+  never accumulate catch-up debt. Pause preserves the selected running speed
+  and fractional tick. Cutaway restoration/camera movement use real time.
+- Quantize lighting to five clock minutes and invalidate only changed colors;
+  retain static redraw behavior. Clock changes here run no behaviors or saves.
 - Run Test-LotRendering.ps1 -LightingQa for day/night room/depth/resource gates
   and dynamic captures. Run OfflineCompatibility when changing shared engine
   lighting. Signed native/hardware validation remains separate.

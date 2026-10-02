@@ -12,7 +12,7 @@ namespace FreeSims.Tests
 {
     public static class LotRenderTests
     {
-        public const int Count=31;
+        public const int Count=32;
         public static List<string> Run(GraphicsDevice device,GamePaths paths,byte[] effect,Action<string> log)
         {
             var result=new List<string>();bool oldWorld=VM.UseWorld;VM.UseWorld=false;
@@ -22,6 +22,7 @@ namespace FreeSims.Tests
                 check("GPU SHARED SPRITES AND RESOURCE DISPOSAL",()=>SharedSprites(device,paths,effect));
                 check("CONTAINED SLOT GEOMETRY AND SAVED POSITIONS",()=>ContainedSlots(paths));
                 check("GPU SLOT DEPTH AND RESOURCE REUSE",()=>SlotGpu(device,paths,effect));
+                check("TIME MODES FIXED TICKS PAUSE AND RESUME",()=>TimeModes());
                 check("ROOM LIGHTING SAVED CONTRIBUTIONS AND MIDNIGHT",()=>LightingRooms(paths));
                 check("GPU DAY NIGHT DEPTH AND RESOURCE REUSE",()=>LightingGpu(device,paths,effect));
                 check("POINTER FOUR ANGLES ZOOMS AND FLOOR HEIGHTS",()=>PointerProjection());
@@ -81,6 +82,52 @@ namespace FreeSims.Tests
             }finally{VM.UseWorld=oldWorld;}
             return result;
         }
+        private static void TimeModes()
+        {
+            foreach(var speed in new[]{VMTimeSpeed.Normal,VMTimeSpeed.Fast,VMTimeSpeed.Ultra})
+            foreach(double dt in new[]{.01,.05,.1,.25}) {
+                var pacing=new VMTimeController();pacing.SetSpeed(speed);
+                var clock=new VMClock{Hours=23,Minutes=59,TicksPerMinute=VMTimeController.TS1TicksPerMinute};
+                int ticks=0;
+                for(int i=0;i<(int)Math.Round(10/dt);i++){
+                    int step=pacing.Advance(dt);ticks+=step;
+                    for(int t=0;t<step;t++)clock.Tick();
+                }
+                if(ticks!=300*pacing.Multiplier || clock.Ticks!=ticks ||
+                    clock.Hours!=(10*pacing.Multiplier-1)/60 ||
+                    clock.Minutes!=(10*pacing.Multiplier-1)%60 || clock.MinuteFractions!=0)
+                    throw new InvalidOperationException("Speed/clock depends on frame rate or lost midnight ticks.");
+                var before=clock.Save();pacing.TogglePause();
+                if(pacing.Advance(100)!=0 || pacing.Speed!=VMTimeSpeed.Paused || clock.Ticks!=before.Ticks)
+                    throw new InvalidOperationException("Pause advanced time.");
+                pacing.TogglePause();
+                if(pacing.Speed!=speed)throw new InvalidOperationException("Pause lost the selected speed.");
+                pacing.Suspend();
+                if(pacing.Advance(100)!=0 || pacing.Advance(.1)!=3*pacing.Multiplier)
+                    throw new InvalidOperationException("Resume caught up suspended time.");
+                if(pacing.Advance(100)>75)throw new InvalidOperationException("Long frame created unbounded tick work.");
+            }
+            var controls=new VMTimeController();
+            controls.ChangeSpeed(1);
+            if(controls.Speed!=VMTimeSpeed.Normal)throw new InvalidOperationException("Initial normal selection failed.");
+            controls.ChangeSpeed(1);controls.ChangeSpeed(1);controls.ChangeSpeed(1);
+            if(controls.Speed!=VMTimeSpeed.Ultra)throw new InvalidOperationException("Speed upper bound failed.");
+            controls.ChangeSpeed(-1);controls.ChangeSpeed(-1);controls.ChangeSpeed(-1);controls.ChangeSpeed(-1);
+            if(controls.Speed!=VMTimeSpeed.Paused)throw new InvalidOperationException("Speed lower bound failed.");
+            controls.TogglePause();controls.Advance(.01);controls.TogglePause();controls.Advance(.1);controls.TogglePause();
+            if(controls.Advance(.09)!=3)throw new InvalidOperationException("Pause discarded fractional ticks or resumed at wrong speed.");
+            foreach(double bad in new[]{double.NaN,double.PositiveInfinity,-1.0}) {
+                bool rejected=false;try{controls.Advance(bad);}catch(ArgumentOutOfRangeException){rejected=true;}
+                if(!rejected)throw new InvalidOperationException("Invalid elapsed time accepted.");
+            }
+            var legacy=new VMClock();for(int t=0;t<150;t++)legacy.Tick();
+            if(legacy.Minutes!=1)throw new InvalidOperationException("Legacy clock fallback changed.");
+            var saved=new VMClock(new VMClock{TicksPerMinute=45,Hours=18,Minutes=59,MinuteFractions=44}.Save());
+            saved.Tick();
+            if(saved.TicksPerMinute!=45||saved.Hours!=19||saved.Minutes!=0)
+                throw new InvalidOperationException("Clock ignored saved tick rate.");
+        }
+
         private static void LightingRooms(GamePaths paths)
         {
             var night=VMArchitecture.OutsideLightAt(0);
