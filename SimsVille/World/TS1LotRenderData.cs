@@ -231,6 +231,7 @@ namespace FSO.LotView
             public string Key, EndA, EndB;
             public Surface Surface;
             public int Offset, Story, TileX, TileY;
+            public Vector2 Center;
             public bool Cut, RequestedCut;
             public double RestoreAt;
             public VertexPositionColorTexture[] Low;
@@ -334,7 +335,7 @@ namespace FSO.LotView
                             if(!wallProfiles.TryGetValue(material,out profile))wallProfiles.Add(material,profile=new WallProfile(material));
                             view.WallSections.Add(new WallSection {
                                 Key=EdgeKey(story,ax,ay,bx,by),EndA=story+":"+ax+":"+ay,EndB=story+":"+bx+":"+by,
-                                Story=story,TileX=x,TileY=y,Surface=surface,Offset=surface.Vertices.Count-6,Low=low,
+                                Story=story,TileX=x,TileY=y,Center=new Vector2((ax+bx)*.5f,(ay+by)*.5f),Surface=surface,Offset=surface.Vertices.Count-6,Low=low,
                                 Full=points.Select(p=>TS1SpriteLayer.ProjectWithDepth(p,zoom,rotation)).ToArray(),
                                 Top=profile.Cap(points[3],points[2],Vector2.Zero,Vector2.UnitX,thickness,zoom,rotation),
                                 LowTop=profile.Cap(lowPoints[3],lowPoints[2],lowUV[3],lowUV[2],thickness,zoom,rotation),
@@ -505,6 +506,8 @@ namespace FSO.LotView
             }
             return nearest;
         }
+        // World units keep the neighborhood stable across zoom, pan and rotation.
+        public const float WallCutawayRadiusTiles=2f;
         public const double WallRestoreDelaySeconds=.75;
         public bool UpdateWalls(View view,TS1WallMode mode,Vector2? pointer,Matrix camera,int width,int height,double timeSeconds=0)
         {
@@ -515,10 +518,11 @@ namespace FSO.LotView
                 view.LastPointer=pointer;view.LastCamera=camera;
                 var hit=mode==TS1WallMode.Cutaway&&pointer.HasValue&&view.Level!=3?PickWall(view,pointer.Value,camera,width,height):null;
                 // Pick the full face even while cut, avoiding visibility feedback/flicker.
-                // Only the pointed wall requests a cut; a room must not keep previous walls hidden.
+                // Cut a bounded neighborhood of the hit, never retain an entire room history.
                 view.LastWall=hit==null?null:hit.Key;
                 foreach(var section in view.WallSections) {
-                    bool requested=ReferenceEquals(section,hit);
+                    bool requested=hit!=null&&section.Story==hit.Story&&
+                        Vector2.DistanceSquared(section.Center,hit.Center)<=WallCutawayRadiusTiles*WallCutawayRadiusTiles;
                     if(modeChanged) {section.RequestedCut=false;section.RestoreAt=0;}
                     // Start once on leaving the target. Stationary updates cannot extend it.
                     if(section.RequestedCut&&!requested)section.RestoreAt=timeSeconds+WallRestoreDelaySeconds;

@@ -1,4 +1,4 @@
-# Wall geometry and balcony materials 0.13.2.0
+# Wall cutaway neighborhood 0.13.3.0
 
 Update the existing Offline Probe; keep the already uploaded game files.
 Menu runs the optional suite: expect 27/27 PASS.
@@ -17,10 +17,10 @@ Check both lots, four angles and three zooms:
 2. DOWN: the selected story becomes low textured wall stubs. Lower stories
    and persistent fences/banisters remain full. Hosted doors/windows and
    wall objects marked HideForCutaway disappear with their host walls.
-3. CUTAWAY: enable the pointer and point at an opaque wall segment to cut it.
+3. CUTAWAY: point at an opaque wall to cut it and walls within two tiles of its center on the selected story. The radius is independent of zoom and rotation.
    Move off it and wait: it must restore after 0.75 seconds, even with the
    pointer still. No room history is retained. Pointing at another wall must
-   let the first restore independently. Re-enter before expiry: the current
+   let walls outside the new neighborhood restore independently. Re-enter before expiry: the current
    wall stays cut. Authored openings allow picking through their holes.
 4. Repeat on floor 2: the cuts must stay on floor 2. ROOF keeps the complete
    building, regardless of the wall mode; use RB to return to a room view.
@@ -61,3 +61,17 @@ The new colored batch is preallocated once per view and hard-limited to 4 MiB.
 CPU contours are cached per lot, coalesced along straight mask boundaries and
 released with it. Visibility scratch sets/buffers are reused. No new textures,
 shaders, assets, simulation callbacks or accepted roof mesh changes.
+
+0.13.3 changes only the shared cutaway radius. Neighboring solid wall centers
+within two tiles cut together, with independent restoration deadlines.
+House 2 upper tile (24,24) is saved with brown floor pattern 5; its authored
+material is preserved at the user's request, rather than overriding a lot tile.
+The 0.13.2 hardware session in the supplied 0.13/proof.log has no logged
+errors/OOM and a peak sampled usage of 289.13 MiB / 1024 MiB.
+
+Generality: geometry, masks, material mapping and cutaway belong to the shared
+renderer. The viewer currently admits House 2 and 28 for validation. Existing
+stair visual and pool attachment compatibility rules are keyed to object types
+and saved geometry, not house IDs or fixed coordinates. Future lots still
+require asset/footprint coverage checks; this is not a promise of support for
+all untested object types or stories.

@@ -95,7 +95,7 @@ namespace FreeSims.Tests
                 var clip=Vector3.Transform(point,camera);
                 var pointer=new Vector2((clip.X+1)*width/2,(1-clip.Y)*height/2);
                 lot.UpdateWalls(view,TS1WallMode.Cutaway,pointer,camera,width,height);
-                bool hit=view.LastWall!=null&&view.LastWall!=exclude;
+                bool hit=view.LastWall!=null&&view.LastWall!=exclude&&!view.WallSections.Any(s=>s.RequestedCut&&s.Key==exclude);
                 lot.UpdateWalls(view,TS1WallMode.Up,null,camera,width,height);
                 if(hit)return pointer;
             }
@@ -123,7 +123,12 @@ namespace FreeSims.Tests
                         };
                         var baseline=draw();int textures=renderer.TextureCount;long bytes=renderer.TextureBytes;
                         lot.UpdateWalls(view,TS1WallMode.Cutaway,hover,camera,640,360,1);
-                        if(!view.WallSections.Any(s=>s.Cut))throw new InvalidOperationException("Timed wall did not cut.");
+                        if(view.WallSections.Count(s=>s.RequestedCut)<2)throw new InvalidOperationException("Cutaway did not include neighboring walls.");
+                        var hit=view.WallSections.Single(s=>s.Key==view.LastWall);
+                        foreach(var section in view.WallSections) {
+                            bool nearby=section.Story==hit.Story&&Vector2.DistanceSquared(section.Center,hit.Center)<=TS1LotRenderData.WallCutawayRadiusTiles*TS1LotRenderData.WallCutawayRadiusTiles;
+                            if(section.RequestedCut!=nearby)throw new InvalidOperationException("Cutaway radius crossed its world/story boundary.");
+                        }
                         lot.UpdateWalls(view,TS1WallMode.Cutaway,hover,camera,640,360,50);
                         if(!view.WallSections.Any(s=>s.Cut))throw new InvalidOperationException("Actively hovered wall expired.");
                         // Moving onto unoccupied ground releases every requested cut.
@@ -149,7 +154,7 @@ namespace FreeSims.Tests
                         lot.UpdateWalls(view,TS1WallMode.Cutaway,otherHover,camera,640,360,75.1);
                         string secondWall=view.LastWall;
                         lot.UpdateWalls(view,TS1WallMode.Cutaway,otherHover,camera,640,360,76);
-                        if(view.WallSections.Any(s=>s.Cut&&s.Key!=secondWall)||!view.WallSections.Any(s=>s.Cut&&s.Key==secondWall))
+                        if(view.WallSections.Any(s=>s.Cut!=s.RequestedCut)||view.WallSections.Single(s=>s.Key==firstWall).Cut||!view.WallSections.Any(s=>s.Cut&&s.Key==secondWall))
                             throw new InvalidOperationException("Previous wall stayed hidden while pointing at a different wall.");
                         lot.UpdateWalls(view,TS1WallMode.Down,null,camera,640,360,80);
                         lot.UpdateWalls(view,TS1WallMode.Down,null,camera,640,360,90);

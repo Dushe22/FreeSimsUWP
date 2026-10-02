@@ -66,3 +66,8 @@ Signed handoffs require clean committed source, native x64 compilation,
 identity/signature/block-map/shader audit and no private keys/game data.
 Desktop checks do not certify Xbox FPS or memory: confirm on hardware and
 record memory/view timings in proof.log with captures.
+
+Cutaway neighborhoods use wall centers in lot units (two tiles), only on the
+selected story. Each section keeps its own 0.75 s restoration deadline; moving
+the pointer must not renew deadlines for walls outside the current radius.
+This shared rule applies to any loaded footprint, without lot IDs/coordinates.
