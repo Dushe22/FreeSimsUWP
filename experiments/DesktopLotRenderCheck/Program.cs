@@ -17,7 +17,28 @@ VM.UseWorld=false;
 using(var c=new Control()) using(var d=new GraphicsDevice(GraphicsAdapter.DefaultAdapter,GraphicsProfile.HiDef,new PresentationParameters {BackBufferWidth=1280,BackBufferHeight=720,DeviceWindowHandle=c.Handle})) {
 var effect=File.ReadAllBytes("experiments/XboxOfflineProbe/Effects/TS1SpriteDepth.mgfxo");
 if(!FreeSims.Tests.LotRenderTests.Run(d,paths,effect,Console.WriteLine).All(x=>x.StartsWith("PASS "))) return 1;
-if(args.Contains("--lighting-qa")) {
+if(args.Contains("--simulation-qa")) {
+var qa=Path.GetFullPath("artifacts/simulation-qa");Directory.CreateDirectory(qa);
+foreach(int house in new[]{2,28})foreach(int rotation in new[]{0,2})using(var lot=new TS1LotRenderData(paths,house,true)) {
+var data=lot.Build(2,rotation,2);
+using(var renderer=new TS1LotRenderer(d,data,effect))using(var target=new RenderTarget2D(d,1280,720,false,SurfaceFormat.Color,DepthFormat.Depth24)) {
+var camera=TS1LotRenderer.Camera(lot.Size,2,rotation,1280,720,Vector2.Zero);
+lot.UpdateWalls(data,TS1WallMode.Cutaway,null,camera,1280,720);
+renderer.UpdateLighting(12);
+foreach(int phase in new[]{0,300,6000}) {
+while(lot.CompletedTicks<phase) {
+if(lot.AdvanceSimulation(Math.Min(75,phase-lot.CompletedTicks),data))renderer.UpdateSimulation();
+}
+d.SetRenderTarget(target);d.Clear(ClearOptions.Target|ClearOptions.DepthBuffer,new Microsoft.Xna.Framework.Color(16,24,39),1,0);
+renderer.Draw(camera,TS1WallMode.Cutaway);d.SetRenderTarget(null);
+var pixels=new Microsoft.Xna.Framework.Color[1280*720];target.GetData(pixels);
+SavePixels(pixels,1280,720,Path.Combine(qa,"house"+house+"-r"+rotation+"-ticks"+phase+".png"));
+Console.WriteLine("SIM QA house="+house+" r="+rotation+" ticks="+phase+" active="+lot.ActiveObjects+" textures="+renderer.TextureCount+" bytes="+renderer.TextureBytes);
+}
+}
+}
+return 0;
+}if(args.Contains("--lighting-qa")) {
 var qa=Path.GetFullPath("artifacts/lighting-qa");Directory.CreateDirectory(qa);
 foreach(int house in new[]{2,28})using(var lot=new TS1LotRenderData(paths,house))
 for(int level=1;level<=3;level++)foreach(int r in new[]{0,2}) {

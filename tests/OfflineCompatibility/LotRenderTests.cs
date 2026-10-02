@@ -12,7 +12,7 @@ namespace FreeSims.Tests
 {
     public static class LotRenderTests
     {
-        public const int Count=32;
+        public const int Count=36;
         public static List<string> Run(GraphicsDevice device,GamePaths paths,byte[] effect,Action<string> log)
         {
             var result=new List<string>();bool oldWorld=VM.UseWorld;VM.UseWorld=false;
@@ -22,6 +22,10 @@ namespace FreeSims.Tests
                 check("GPU SHARED SPRITES AND RESOURCE DISPOSAL",()=>SharedSprites(device,paths,effect));
                 check("CONTAINED SLOT GEOMETRY AND SAVED POSITIONS",()=>ContainedSlots(paths));
                 check("GPU SLOT DEPTH AND RESOURCE REUSE",()=>SlotGpu(device,paths,effect));
+                check("SPR2 COMPLETE ROWS WITHOUT END MARKER AND TRUNCATION",()=>SpriteRowBounds());
+                check("LIVE OBJECTS GPU CHANGES AND BOUNDED RESOURCE REUSE",()=>LiveObjects(device,paths,effect,log));
+                check("LIVE PRELOAD FOUR ANGLES THREE ZOOMS AND SESSION GUARDS",()=>LiveViews(paths));
+                check("DISPOSED LIVE LOTS RELEASE VM AND FRAME DATA",()=>ReleasedLive(paths));
                 check("TIME MODES FIXED TICKS PAUSE AND RESUME",()=>TimeModes());
                 check("ROOM LIGHTING SAVED CONTRIBUTIONS AND MIDNIGHT",()=>LightingRooms(paths));
                 check("GPU DAY NIGHT DEPTH AND RESOURCE REUSE",()=>LightingGpu(device,paths,effect));
@@ -81,6 +85,113 @@ namespace FreeSims.Tests
                 });
             }finally{VM.UseWorld=oldWorld;}
             return result;
+        }
+        private static void SpriteRowBounds()
+        {
+            Func<bool,bool,FSO.Files.Formats.IFF.Chunks.SPR2Frame> read=(complete,marker)=>{
+                var iff=new FSO.Files.Formats.IFF.IffFile();
+                var palette=new FSO.Files.Formats.IFF.Chunks.PALT {ChunkID=1,ChunkProcessed=true,Colors=new Color[256]};
+                iff.AddChunk(palette);
+                var sprite=new FSO.Files.Formats.IFF.Chunks.SPR2 {ChunkID=1,ChunkProcessed=true,DefaultPaletteID=1};iff.AddChunk(sprite);
+                using(var stream=new System.IO.MemoryStream()) {
+                    var writer=new System.IO.BinaryWriter(stream);
+                    writer.Write((ushort)1);writer.Write((ushort)1);writer.Write((uint)3);
+                    writer.Write((ushort)1);writer.Write((ushort)0);writer.Write((short)0);writer.Write((short)0);
+                    if(complete)writer.Write((ushort)0x8001); // one fully transparent row
+                    else writer.Write((ushort)4); // row header with missing pixel payload
+                    if(marker)writer.Write((ushort)0xA000);
+                    writer.Flush();stream.Position=0;
+                    var frame=new FSO.Files.Formats.IFF.Chunks.SPR2Frame(sprite);
+                    using(var io=FSO.Files.Utils.IoBuffer.FromStream(stream,FSO.Files.Utils.ByteOrder.LITTLE_ENDIAN))frame.ReadDeferred(1001,io);
+                    return frame;
+                }
+            };
+            var withMarker=read(true,true);var without=read(true,false);
+            if(!withMarker.PixelData.SequenceEqual(without.PixelData)||!withMarker.ZBufferData.SequenceEqual(without.ZBufferData)||
+                without.PixelData[0].A!=0||without.ZBufferData[0]!=255)throw new InvalidOperationException("Complete frame terminator changes pixels.");
+            bool rejected=false;try{read(false,false);}catch(System.IO.EndOfStreamException){rejected=true;}
+            if(!rejected)throw new InvalidOperationException("Truncated row accepted.");
+        }
+        private static void LiveObjects(GraphicsDevice device,GamePaths paths,byte[] effect,Action<string> log)
+        {
+            var previous=device.GetRenderTargets();var viewport=device.Viewport;
+            try {foreach(int house in new[]{2,28})using(var lot=new TS1LotRenderData(paths,house,true)) {
+                var view=lot.Build(1,0,2);
+                if(!view.Live||view.Unsupported!=0||lot.ActiveObjects==0||(house==28&&lot.ActiveObjects!=80))
+                    throw new InvalidOperationException("Invalid controlled behavior/preload coverage: house="+house+" active="+lot.ActiveObjects+" unsupported="+view.Unsupported);
+                var camera=TS1LotRenderer.Camera(lot.Size,1,0,640,360,Vector2.Zero);
+                lot.UpdateWalls(view,TS1WallMode.Up,null,camera,640,360);
+                using(var renderer=new TS1LotRenderer(device,view,effect))
+                using(var target=new RenderTarget2D(device,640,360,false,SurfaceFormat.Color,DepthFormat.Depth24)) {
+                    Func<Color[]> draw=()=>{
+                        device.SetRenderTarget(target);device.Clear(ClearOptions.Target|ClearOptions.DepthBuffer,Color.Transparent,1,0);
+                        renderer.Draw(camera,TS1WallMode.Up);device.SetRenderTargets(previous);device.Viewport=viewport;
+                        var pixels=new Color[640*360];target.GetData(pixels);return pixels;
+                    };
+                    renderer.UpdateLighting(12);
+                    var before=draw();
+                    // Preloading hidden states must preserve the static baseline exactly.
+                    using(var original=new TS1LotRenderData(paths,house))
+                    using(var staticRenderer=new TS1LotRenderer(device,original.Build(1,0,2),effect)) {
+                        var staticView=staticRenderer.Data;original.UpdateWalls(staticView,TS1WallMode.Up,null,camera,640,360);
+                        staticRenderer.UpdateLighting(12);device.SetRenderTarget(target);
+                        device.Clear(ClearOptions.Target|ClearOptions.DepthBuffer,Color.Transparent,1,0);
+                        staticRenderer.Draw(camera,TS1WallMode.Up);device.SetRenderTargets(previous);device.Viewport=viewport;
+                        var pixels=new Color[640*360];target.GetData(pixels);
+                        if(!before.SequenceEqual(pixels))throw new InvalidOperationException("Hidden live states altered initial pixels.");
+                    }
+                    int textures=renderer.TextureCount,capacity=renderer.WallGeometryCapacity,count=view.Sprites.Count;
+                    long bytes=renderer.TextureBytes;var pixelsRefs=view.Sprites.Select(x=>x.Layer.Pixels).ToArray();
+                    long start=lot.Clock.Ticks;
+                    for(int batch=0;batch<80;batch++) {
+                        if(lot.AdvanceSimulation(75,view))renderer.UpdateSimulation();
+                        if(batch%4==0)draw();
+                        if(renderer.TextureCount!=textures||renderer.TextureBytes!=bytes||renderer.WallGeometryCapacity!=capacity||view.Sprites.Count!=count)
+                            throw new InvalidOperationException("Live ticks allocated/rebuilt scene resources.");
+                    }
+                    if(lot.Clock.Ticks!=start+6000||lot.CompletedTicks!=6000||lot.SimulationFault!=null||!lot.SimulationStopped||
+                        lot.AdvanceSimulation(1,view)||!pixelsRefs.SequenceEqual(view.Sprites.Select(x=>x.Layer.Pixels)))
+                        throw new InvalidOperationException("Live limit/clock/frame ownership mismatch.");
+                    if(house==28&&(view.SpriteRevision==0||view.LightRevision==0||before.SequenceEqual(draw())))
+                        throw new InvalidOperationException("Behavior changes did not reach GPU sprites/lighting.");
+                    if(view.SlottedRendered!=(house==28?11:0))throw new InvalidOperationException("Live trial changed SLOT coverage.");
+                    log("LIVE GPU house="+house+" active="+lot.ActiveObjects+" ticks="+lot.CompletedTicks+
+                        " sprites="+count+" spriteRevision="+view.SpriteRevision+" lightRevision="+view.LightRevision+
+                        " textures="+textures+" bytes="+bytes+" clockRate="+lot.Clock.TicksPerMinute);
+                }
+            }}finally{device.SetRenderTargets(previous);device.Viewport=viewport;}
+        }
+        private static void LiveViews(GamePaths paths)
+        {
+            foreach(int house in new[]{2,28})using(var lot=new TS1LotRenderData(paths,house,true)) {
+                for(int r=0;r<4;r++)for(int zoom=1;zoom<=3;zoom++) {
+                    var view=lot.Build(zoom,r,2);long ticks=lot.Clock.Ticks;
+                    if(lot.AdvanceSimulation(0,view)||ticks!=lot.Clock.Ticks)throw new InvalidOperationException("Pause changed live state.");
+                    foreach(int bad in new[]{-1,76}) {
+                        bool rejected=false;try{lot.AdvanceSimulation(bad,view);}catch(ArgumentOutOfRangeException){rejected=true;}
+                        if(!rejected)throw new InvalidOperationException("Unbounded live tick batch accepted.");
+                    }
+                    bool foreign=false;try{lot.AdvanceSimulation(1,new TS1LotRenderData.View());}catch(InvalidOperationException){foreign=true;}
+                    if(!foreign||lot.Clock.Ticks!=ticks)throw new InvalidOperationException("Foreign view consumed ticks.");
+                    lot.AdvanceSimulation(1,view);
+                    if(view.Unsupported!=0||view.Sprites.Count>TS1LotRenderData.LiveSpriteBudget)throw new InvalidOperationException("Live view unsupported/oversized.");
+                    foreach(var group in view.Sprites.Where(s=>s.Visible).GroupBy(s=>s.ObjectID))
+                        if(group.Select(s=>s.Graphic).Distinct().Count()>1)throw new InvalidOperationException("Multiple graphic states drawn together.");
+                }
+            }
+        }
+        [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.NoInlining)]
+        private static WeakReference[] DisposedLive(GamePaths paths)
+        {
+            using(var lot=new TS1LotRenderData(paths,28,true)) {
+                var view=lot.Build(1,0,2);lot.AdvanceSimulation(75,view);
+                return new[]{new WeakReference(lot),new WeakReference(view),new WeakReference(view.Sprites.First().Layer.Pixels)};
+            }
+        }
+        private static void ReleasedLive(GamePaths paths)
+        {
+            var refs=DisposedLive(paths);GC.Collect();GC.WaitForPendingFinalizers();GC.Collect();
+            if(refs.Any(r=>r.IsAlive))throw new InvalidOperationException("Live scene/frame data retained after disposal.");
         }
         private static void TimeModes()
         {

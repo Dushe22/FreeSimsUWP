@@ -13,6 +13,14 @@ namespace FSO.SimAntics
     {
         public const int TickLimit = 6000;
         public const int TicksPerSecond = 30;
+        // Compatibility gate shared by headless trials and the live renderer.
+        // Resource families are validated by TS1BehaviorTests, never house IDs.
+        private static readonly System.Collections.Generic.HashSet<string> controlledResources=
+            new System.Collections.Generic.HashSet<string>(StringComparer.OrdinalIgnoreCase) {
+                "FlowersOutdoor.iff","Shrubs.iff","ChairsHD.iff","lampceiling.iff","WallLite.iff",
+                "TablesHD.iff","Sinks.iff","PlantsHangingHD.iff","FishTankBig.iff"
+            };
+        public static bool SupportsControlledBehavior(string resource){return controlledResources.Contains(resource);}
         private TS1LotObjectSession session;
         private long accumulated;
         private bool disposed;
@@ -32,9 +40,7 @@ namespace FSO.SimAntics
             // Construct before replacing: failure leaves the current VM and controls intact.
             var candidate = TS1LotObjectSession.Load(lot, content);
             try {
-                var files = house == 2 ? new[] { "FlowersOutdoor.iff", "Shrubs.iff" } :
-                    new[] { "ChairsHD.iff", "lampceiling.iff", "WallLite.iff", "TablesHD.iff", "Sinks.iff", "PlantsHangingHD.iff", "FishTankBig.iff" };
-                var selected = candidate.VM.Entities.Where(e => files.Contains(e.Object.Resource.Name)).ToArray();
+                var selected = candidate.VM.Entities.Where(e => SupportsControlledBehavior(e.Object.Resource.Name)).ToArray();
                 if (selected.Length == 0) throw new InvalidOperationException("No supported objects in this lot.");
                 candidate.VM.Context.RandomSeed = 12345;
                 foreach (var entity in selected) candidate.RestartMain(entity.ObjectID);

@@ -13,6 +13,7 @@ namespace FSO.LotView
             public Texture2D Color,Depth; public VertexPositionColorTexture[] Vertices;
             public float Nearness; public short ID; public bool HasOpaque, HasAlpha, Hidden;
             public string[] WallHosts; public ushort LightRoom;
+            public TS1LotRenderData.Sprite Source;
             // Textures are owned once by the renderer, not by individual instances.
         }
         private sealed class MaterialItem
@@ -36,6 +37,7 @@ namespace FSO.LotView
         public int WallGeometryCapacity {get {return caps==null?0:caps.Length;}}
         private readonly Color[] roomColors;
         private bool lightingEnabled;
+        private int preparedSprites,preparedLights;
         private Color outsideColor=Color.White;
         public double LightingHour {get;private set;}
         public int LightingRevision {get;private set;}
@@ -53,7 +55,8 @@ namespace FSO.LotView
             if(double.IsNaN(hour)||double.IsInfinity(hour))throw new ArgumentOutOfRangeException("hour");
             LightingHour=hour-Math.Floor(hour/24)*24;
             var outside=enabled?FSO.SimAntics.VMArchitecture.OutsideLightAt(LightingHour/24):Color.White;
-            if(lightingEnabled==enabled&&outside==outsideColor)return false;
+            if(lightingEnabled==enabled&&outside==outsideColor&&preparedLights==Data.LightRevision)return false;
+            preparedLights=Data.LightRevision;
             lightingEnabled=enabled;outsideColor=outside;LightingRevision++;
             for(int i=0;i<roomColors.Length;i++)
                 roomColors[i]=i<Data.Lighting.Length?Data.Lighting[i].ColorAt(outside,Data.OutsideRooms[i]):outside;
@@ -103,7 +106,7 @@ namespace FSO.LotView
                     item.Texture=colorTexture(source.Material.Width,source.Material.Height,source.Material.Pixels);
                 }
                 foreach(var source in data.Sprites) {
-                    var layer=source.Layer;var item=new Item {Nearness=source.BackNearness,ID=source.ObjectID,WallHosts=source.WallHosts,LightRoom=source.LightRoom};items.Add(item);
+                    var layer=source.Layer;var item=new Item {Nearness=source.BackNearness,ID=source.ObjectID,WallHosts=source.WallHosts,LightRoom=source.LightRoom,Source=source};items.Add(item);
                     item.Color=colorTexture(layer.Width,layer.Height,layer.Pixels);
                     Texture2D depth;
                     if(!depths.TryGetValue(layer.Depth,out depth)) {
@@ -135,6 +138,17 @@ namespace FSO.LotView
                 caps=new VertexPositionColor[capCapacity];
                 alphaItems=items.Where(i=>i.HasAlpha).OrderBy(i=>i.Nearness).ThenBy(i=>i.ID).ToArray();
             } catch {Dispose();throw;}
+        }
+        // Synchronize only primitive render state; no resource uploads or VM references.
+        public bool UpdateSimulation() {
+            if(preparedSprites==Data.SpriteRevision&&preparedLights==Data.LightRevision)return false;
+            preparedSprites=Data.SpriteRevision;
+            foreach(var item in items) {
+                item.LightRoom=item.Source.LightRoom;
+                for(int i=0;i<item.Vertices.Length;i++)item.Vertices[i].Color=RoomColor(item.LightRoom);
+            }
+            UpdateLighting(LightingHour,lightingEnabled);
+            return true;
         }
         // Keep the original bool overload for legacy rendering and its pixel regressions.
         public void Draw(Matrix projection,bool showWalls,bool reverseOpaque=false)
@@ -210,12 +224,12 @@ namespace FSO.LotView
             sprites.Parameters["DepthSpan"].SetValue((float)Math.Sqrt(1.5)/0.4f/256f);
             sprites.Parameters["AlphaPass"].SetValue(0f);
             var opaque=reverseOpaque?items.AsEnumerable().Reverse():items;
-            foreach(var item in opaque) if(item.HasOpaque&&(!dynamicWalls||!item.Hidden))DrawItem(item);
+            foreach(var item in opaque) if(item.Source.Visible&&item.HasOpaque&&(!dynamicWalls||!item.Hidden))DrawItem(item);
             // Opaque texels write depth; partial alpha edges only read it, avoiding
             // invisible depth writes. Intersecting translucent surfaces are not OIT.
             device.BlendState=BlendState.AlphaBlend;device.DepthStencilState=DepthStencilState.DepthRead;
             sprites.Parameters["AlphaPass"].SetValue(1f);
-            foreach(var item in alphaItems) if(!dynamicWalls||!item.Hidden)DrawItem(item);
+            foreach(var item in alphaItems) if(item.Source.Visible&&(!dynamicWalls||!item.Hidden))DrawItem(item);
         }
         private void DrawSurface(VertexPositionColor[] vertices) {DrawSurface(vertices,vertices.Length);}
         private void DrawSurface(VertexPositionColor[] vertices,int count)

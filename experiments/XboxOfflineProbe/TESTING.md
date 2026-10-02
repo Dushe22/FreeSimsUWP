@@ -1,47 +1,61 @@
-# Time modes and room lighting 0.15.1.0
+# Controlled simulation/rendering 0.16.0.0
 
-Update the Offline Probe and keep the already uploaded game files.
-Menu runs the optional suite: expect 32/32 PASS. No extra assets are needed.
+Update the Offline Probe and retain the existing uploaded game files.
+Menu runs the optional suite: expect 36/36 PASS. No new assets are needed.
 
-Time controls:
-- D-pad right: PAUSED -> NORMAL -> FAST -> ULTRA (stops at ULTRA).
-- D-pad left: lower speed, ending at PAUSED.
-- Right-stick click: pause/resume the last running speed.
-- Initial time: 12:00, paused. The viewer advances its own VMClock.
+This milestone connects selected object Main routines to the displayed lot.
+House 2 starts 134 flower/shrub objects; House 28 starts 80 chair/table/sink/
+hanging-plant/light/aquarium objects. Other saved threads remain held.
+The resource compatibility gate is shared with the headless controller and
+applies to future lots using the same object families. Sims, interaction,
+saved stack resumption, object creation/movement and full saves remain later work.
+Automatic turbo was cancelled by the user and has not been implemented.
 
-Normal advances one sim minute per real second; Fast currently 3x, Ultra 10x.
-These are implementation rates pending original-executable calibration.
-The original Deluxe manual confirms Pause/Normal/High/Ultra modes:
-https://www.manuallib.com/download/2023-10-18/The%20Sims%E2%84%A2%20Deluxe%20Edition%20Manual.pdf
-Behavior-based automatic acceleration for sleeping/away Sims is later work.
+Controls:
+- D-pad right/left: PAUSED / NORMAL / FAST / ULTRA (current 1x / 3x / 10x).
+- Right-stick click: pause/resume the selected running speed.
+- Initial state: paused at the imported lot's saved clock time.
+- LS click pointer/camera; LS pointer/pan, RS pan; Y wall modes; A rotate;
+  X switches to a fresh lot; LB zoom; RB floor/roof; View centers; Menu tests.
 
-Existing controls: LS click pointer/camera; LS moves pointer or pans; RS pans;
-Y UP/DOWN/CUTAWAY, A rotate, X lots, LB zoom, RB floor/roof, View center,
-Menu tests, B exit.
+The live VM preserves its imported 150 ticks/minute at 30 base ticks/second.
+This controlled compatibility trial therefore takes about five real seconds
+per sim minute at Normal, rather than the separate 30-ticks/minute preview
+in 0.15.1. Exact original-executable timing calibration is still pending;
+do not alter the imported rate or double-advance a preview clock to hide it.
 
-Hardware checks:
-1. At noon, confirm all architecture, stair handrails, openings and SLOT objects.
-2. In each speed, measure ten real seconds: about 10 / 30 / 100 sim minutes,
-   allowing input/measurement error. Pause freezes the clock; camera and timed
-   cutaway restore (~0.75 s) remain usable. RS resumes the selected speed.
-3. Change lot/floor/zoom and run Menu while Ultra is selected. Time must not
-   jump by the time spent loading/testing. Home/return and disconnect/reconnect
-   the controller: the paused interval is not caught up on return.
-4. On Ultra, run two full days (~144 s/day). Confirm continuous midnight,
-   day/night lighting, no compounded tint and no steadily growing memory.
-   Night/dawn/noon/dusk checks on both lots, all four angles and three zooms.
-5. Exit/relaunch starts paused at noon. Return proof.log, time measurements
-   and screenshots; report any visual defect, crash or poor responsiveness.
+Each fresh lot trial stops at 6000 ticks (40 imported clock minutes):
+about 200 / 67 / 20 active real seconds at Normal / Fast / Ultra, excluding
+loading/focus-loss intervals. X twice reloads the same lot for another trial.
+A script/render-state fault stops simulation and logs actionable context.
+Camera, wall modes and paused snapshots remain available. No saves are written.
 
-Expect House 28 SLOTTED 11, HELD 0, UNSUPPORTED 0. House 2 preserves its
-original brown stair landing tile. Saved lamp behavior remains unchanged.
-LIGHT logs include hour/speed/multiplier/ticks/room count and resource totals.
-Changing time/cutaway must not allocate replacement textures; relight existing
-vertices and redraw only on palette/visibility changes. Peak memory remains
-below budget. Desktop checks do not certify Xbox performance.
+Hardware gate:
+1. Run Menu and return proof.log showing 36/36. Then switch to House 28.
+2. Use Normal to observe the aquarium from angle 2, floor 2, walls down;
+   compare lamps before/after behaviors initialize. Other idle objects may
+   execute without visibly changing. Confirm counters still show 11 SLOT children.
+3. Pause/resume and change speeds. Pause freezes behavior and clock while
+   pointer cutaway restoration (~0.75 s) and camera remain responsive.
+4. Change rotations, zooms and floors during a run. Home/return, disconnect/
+   reconnect and Menu must not produce a clock catch-up jump.
+5. Complete trials on both houses, including Ultra; switch/reload repeatedly.
+   Check openings, stairs, railings, accepted roofs and pools remain intact.
+   After 6000 ticks the trial must stay stopped until a fresh lot is loaded.
+6. Return screenshots/video plus proof.log, including SIM/MEMORY records.
+   Report responsiveness, crashes or visual defects. Xbox FPS/memory remain
+   unverified until these hardware results are reviewed.
 
-Local evidence: 32 render checks, shared-engine offline compatibility and
-existing lighting GPU coverage/depth/resource tests. Native/hardware separate.
-All timing/rendering rules apply generically to future lots. Terrain remains
-flat, water static. Live simulation/Sims/behavior-triggered lighting remain
-the next milestone; this viewer changes no saved VM entities or files.
+SIM logs include active count, completed ticks, peak update/redraw milliseconds,
+sprite/light revisions and texture bytes/count. Tick updates must retain
+identical texture totals within a view. Preloaded frames use immutable shared
+arrays, bounded sprite/pixel budgets and the existing SPR2 depth shader.
+Room contributions refresh without GPU uploads. Camera/zoom changes still
+rebuild at the existing release-before-upload boundary.
+
+Local evidence: artifacts/live-render-tests-final.log (36 render checks),
+artifacts/simulation-qa (12 images at 0/300/6000 ticks), and
+artifacts/live-offline-tests-final.log. Both lots pass 6000 ticks with fixed
+texture totals. Complete SPR2 rows may omit their terminal marker; the decoder
+now stops at the authored height and still rejects truncated row payloads.
+Next after the Xbox gate: loading/rendering Sims and their saved state.

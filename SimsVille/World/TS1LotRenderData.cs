@@ -35,7 +35,23 @@ namespace FSO.LotView
         public const float StoryHeight = 2.95f, WallJointOverlap = .015f, WallThickness = .09f, LowWallHeight = .22f;
         public int Size { get { return session.VM.Context.Architecture.Width; } }
         public int ObjectCount { get { return session.SavedObjectCount; } }
-        public TS1LotRenderData(GamePaths paths, int house)
+        // Deliberately restricted to behavior families already exercised by TS1BehaviorTests.
+        // This is a compatibility gate by resource, not a correction by house/coordinate.
+        private readonly HashSet<short> liveIDs=new HashSet<short>();
+        private readonly Dictionary<short,Placement> placements=new Dictionary<short,Placement>();
+        private readonly object viewToken=new object();
+        private bool disposed;
+        private struct Placement {public LotTilePos Position;public Direction Direction;public short Container;}
+        public bool Live {get;private set;}
+        public int ActiveObjects {get {return liveIDs.Count;}}
+        public int CompletedTicks {get;private set;}
+        public const int SimulationTickLimit=6000,LiveSpriteBudget=32768;
+        public const long LivePixelBudget=64L*1024*1024;
+        public Exception SimulationFault {get;private set;}
+        public VMClock Clock {get {return session.VM.Context.Clock;}}
+        public bool SimulationStopped {get {return SimulationFault!=null||CompletedTicks>=SimulationTickLimit;}}
+
+        public TS1LotRenderData(GamePaths paths, int house,bool live=false)
         {
             if (house != 2 && house != 28) throw new ArgumentOutOfRangeException("house");
             if (VM.UseWorld) throw new InvalidOperationException("Static lot renderer requires a headless VM.");
@@ -60,6 +76,17 @@ namespace FSO.LotView
                     int expected=stub.Object.OBJ.GUID==0xB7F590C4u?4123:4122;
                     if(stub.EntryPoints[6].ActionFunction!=expected || !stub.ExecuteEntryPoint(6,session.VM.Context,true))
                         throw new InvalidDataException("Unsupported stair visual callback: "+stub.ObjectID);
+                }
+                Live=live;
+                if(live) {
+                    session.VM.Context.RandomSeed=12345;
+                    foreach(var entity in session.VM.Entities) {
+                        placements.Add(entity.ObjectID,new Placement {Position=entity.Position,Direction=entity.Direction,
+                            Container=entity.Container==null?(short)0:entity.Container.ObjectID});
+                        if(TS1SimulationController.SupportsControlledBehavior(entity.Object.Resource.Name)) {
+                            liveIDs.Add(entity.ObjectID);session.RestartMain(entity.ObjectID);
+                        }
+                    }
                 }
                 LoadOpenings();
                 LoadCutawayAttachments();
@@ -221,6 +248,8 @@ namespace FSO.LotView
             public short ObjectID;
             public string[] WallHosts;
             public ushort LightRoom;
+            public int Graphic;
+            public bool Visible=true;
         }
         public sealed class Surface
         {
@@ -254,7 +283,9 @@ namespace FSO.LotView
             public readonly List<WallSection> WallSections = new List<WallSection>();
             public RoomLighting[] Lighting = new RoomLighting[0];
             public bool[] OutsideRooms = new bool[0];
-            public int Zoom, Rotation, Level, WallRevision;
+            internal object Owner;
+            public int Zoom, Rotation, Level, WallRevision, SpriteRevision, LightRevision;
+            public bool Live;
             public TS1WallMode WallMode = (TS1WallMode)(-1);
             public Vector2? LastPointer;
             public Matrix LastCamera;
@@ -268,7 +299,8 @@ namespace FSO.LotView
         {
             if (level < 1 || level > 3) throw new ArgumentOutOfRangeException("level");
             TS1SpriteLayer.Project(Vector3.Zero,zoom,rotation); // validate before allocating
-            var view=new View {Zoom=zoom,Rotation=rotation,Level=level,PoolAttachmentAdjustments=poolAttachmentOffsets.Count/3}; var arch=session.VM.Context.Architecture;
+            if(disposed)throw new ObjectDisposedException("TS1LotRenderData");
+            var view=new View {Owner=viewToken,Live=Live,Zoom=zoom,Rotation=rotation,Level=level,PoolAttachmentAdjustments=poolAttachmentOffsets.Count/3}; var arch=session.VM.Context.Architecture;
             // Snapshot primitive light values only; the view must never retain VM entities.
             var rooms=session.VM.Context.RoomInfo;
             view.Lighting=new RoomLighting[rooms.Length];view.OutsideRooms=new bool[rooms.Length];
@@ -277,6 +309,7 @@ namespace FSO.LotView
                 view.OutsideRooms[i]=rooms[i].Room.IsOutside;
             }
             var spriteFrames=new Dictionary<SPR2Frame,TS1SpriteLayer>();
+
             var terrain=materials.Terrain(grass,Size);
             for(int y=0;y<Size;y++)for(int x=0;x<Size;x++) {
                 var points=new[]{new Vector3(x,y,-.01f),new Vector3(x+1,y,-.01f),new Vector3(x+1,y+1,-.01f),new Vector3(x,y+1,-.01f)};
@@ -379,14 +412,31 @@ namespace FSO.LotView
             foreach(var entity in session.VM.Entities.OrderBy(e=>e.ObjectID)) {
                 if(entity.Position.x<0 || entity.Position.y<0) {view.OutOfWorld++;continue;}
                 if(entity.Position.Level>level) {view.AboveLevel++;continue;}
-                if(entity.GetValue(VMStackObjectVariable.Hidden)!=0) {view.Hidden++;continue;}
+                if(entity.GetValue(VMStackObjectVariable.Hidden)!=0&&!liveIDs.Contains(entity.ObjectID)) {view.Hidden++;continue;}
 
                 if(entity.Object.OBJ.BaseGraphicID==0) {view.NoGraphic++;continue;}
                 try {
                     VMEntity root;bool inheritedHidden;
                     var world=ResolveVisualPosition(entity,out root,out inheritedHidden);
-                    if(inheritedHidden){view.Hidden++;continue;}
+                    if(inheritedHidden&&!liveIDs.Contains(entity.ObjectID)){view.Hidden++;continue;}
                     var layers=TS1SpriteLayer.Read(entity,zoom,rotation,spriteFrames);
+                    int graphic=entity.GetValue(VMStackObjectVariable.Graphic);
+                    bool dynamic=liveIDs.Contains(entity.ObjectID);
+                    if(dynamic) {
+                        int count=entity.Object.OBJ.NumGraphics;
+                        if(count<1)count=1;
+                        if(count>64||graphic<0||graphic>=count)throw new InvalidDataException("Unsupported live graphic range.");
+                        layers=new List<TS1SpriteLayer>();
+                        for(int state=0;state<count;state++) {
+                            var stateLayers=TS1SpriteLayer.ReadState(entity,zoom,rotation,spriteFrames,state,true);
+                            if(view.Sprites.Count+layers.Count+stateLayers.Count>LiveSpriteBudget)throw new InvalidDataException("Live sprite instance budget exceeded before allocation.");
+                            foreach(var layer in stateLayers) {
+                                // Store the state alongside its immutable layer; no VM retained by the view.
+
+                                layers.Add(layer);
+                            }
+                        }
+                    }
                     if(layers.Count==0){view.NoGraphic++;continue;}
 
                     Vector2 poolOffset;if(poolAttachmentOffsets.TryGetValue(root.ObjectID,out poolOffset))world+=new Vector3(poolOffset,0);
@@ -398,6 +448,8 @@ namespace FSO.LotView
                     float attachmentBias=openingNormals.TryGetValue(entity.ObjectID,out openingNormal) && Vector2.Dot(openingNormal,camera)>0 ? (float)Math.Sqrt(1.5)/.4f*8/255 : 0;
                     foreach(var layer in layers) view.Sprites.Add(new Sprite {
                         Layer=layer,Position=point+layer.Offset,ObjectID=entity.ObjectID,
+                        Graphic=dynamic?layer.Graphic:graphic,
+                        Visible=!dynamic||(!inheritedHidden&&entity.GetValue(VMStackObjectVariable.Hidden)==0&&layer.Graphic==graphic&&(layer.DynamicIndex<0||entity.IsDynamicSpriteFlagSet((ushort)layer.DynamicIndex))),
                         LightRoom=EmitsLight(entity)?EmissiveLightRoom:session.VM.Context.GetObjectRoom(root),
                         WallHosts=attachmentEdges.ContainsKey(root.ObjectID)?attachmentEdges[root.ObjectID].ToArray():null,
                         BackNearness=TS1SpriteLayer.ProjectWithDepth(world-new Vector3(0.5f,0.5f,0)+backOffsets[rotation]+layer.WorldOffset,zoom,rotation).Z+attachmentBias
@@ -405,12 +457,64 @@ namespace FSO.LotView
                     view.Rendered++;
                     if(entity.Container!=null)view.SlottedRendered++;
                 } catch(Exception ex) {
+                    if(liveIDs.Contains(entity.ObjectID))throw;
                     if(!(ex is NotSupportedException) && !(ex is InvalidDataException)) throw;
                     view.Unsupported++;view.Issues.Add("OBJECT "+entity.ObjectID+" GUID="+entity.Object.OBJ.GUID.ToString("X8")+" "+ex.Message);
                 }
             }
+            if(view.Sprites.Count>LiveSpriteBudget)throw new InvalidDataException("Live sprite instance budget exceeded.");
+            long pixelBytes=0;
+            foreach(var frame in spriteFrames.Values)pixelBytes=checked(pixelBytes+(long)frame.Pixels.Length*5);
+            if(Live&&pixelBytes>LivePixelBudget)throw new InvalidDataException("Live frame pixel budget exceeded.");
             if(level==3)BuildRoofs(view,zoom,rotation);
             return view;
+        }
+        // One bounded batch from VMTimeController; never another timer or view/texture rebuild.
+        public bool AdvanceSimulation(int ticks,View view)
+        {
+            if(disposed)throw new ObjectDisposedException("TS1LotRenderData");
+            if(!Live||view==null||view.Owner!=viewToken)throw new InvalidOperationException("Live view belongs to another session.");
+            if(ticks<0||ticks>75)throw new ArgumentOutOfRangeException("ticks");
+            if(SimulationFault!=null)throw new InvalidOperationException("Reload the stopped simulation.",SimulationFault);
+            if(ticks==0||CompletedTicks>=SimulationTickLimit)return false;
+            try {
+                for(int i=0;i<ticks&&CompletedTicks<SimulationTickLimit;i++){session.Tick();CompletedTicks++;}
+                if(session.VM.Entities.Count!=placements.Count)throw new NotSupportedException("Live object creation/deletion requires a new rendering milestone.");
+                foreach(var entity in session.VM.Entities) {
+                    Placement saved;
+                    if(!placements.TryGetValue(entity.ObjectID,out saved)||entity.Dead||
+                        entity.Position!=saved.Position||entity.Direction!=saved.Direction||
+                        (entity.Container==null?0:entity.Container.ObjectID)!=saved.Container)
+                        throw new NotSupportedException("Live placement/topology changed: "+entity.ObjectID);
+                }
+                bool changed=false;
+                foreach(var sprite in view.Sprites) {
+
+                    var entity=session.VM.GetObjectById(sprite.ObjectID);
+                    VMEntity root;bool hidden;ResolveVisualPosition(entity,out root,out hidden);
+                    int graphic=entity.GetValue(VMStackObjectVariable.Graphic);
+                    int count=Math.Max(1,(int)entity.Object.OBJ.NumGraphics);
+                    if(graphic<0||graphic>=count)throw new NotSupportedException("Live graphic outside preloaded range: "+entity.ObjectID);
+                    bool visible=!hidden&&entity.GetValue(VMStackObjectVariable.Hidden)==0&&sprite.Graphic==graphic&&
+                        (sprite.Layer.DynamicIndex<0||entity.IsDynamicSpriteFlagSet((ushort)sprite.Layer.DynamicIndex));
+                    ushort room=EmitsLight(entity)?EmissiveLightRoom:session.VM.Context.GetObjectRoom(root);
+                    if(sprite.Visible!=visible||sprite.LightRoom!=room){sprite.Visible=visible;sprite.LightRoom=room;changed=true;}
+                }
+                var rooms=session.VM.Context.RoomInfo;
+                if(rooms.Length!=view.Lighting.Length)throw new NotSupportedException("Live architecture room topology changed.");
+                bool lights=false;
+                for(ushort i=0;i<rooms.Length;i++) {
+                    // Headless lighting cannot depend on WorldUI damage notifications.
+                    session.VM.Context.RefreshLighting(i,false);
+                    if(view.Lighting[i].AmbientLight!=rooms[i].Light.AmbientLight||view.Lighting[i].OutsideLight!=rooms[i].Light.OutsideLight) {
+                        view.Lighting[i].AmbientLight=rooms[i].Light.AmbientLight;
+                        view.Lighting[i].OutsideLight=rooms[i].Light.OutsideLight;lights=true;
+                    }
+                }
+                if(changed)view.SpriteRevision++;
+                if(lights)view.LightRevision++;
+                return changed||lights;
+            } catch(Exception error){SimulationFault=error;throw;}
         }
         private static bool EmitsLight(VMEntity entity)
         {
@@ -664,6 +768,6 @@ namespace FSO.LotView
             var pd=new VertexPositionColor(TS1SpriteLayer.ProjectWithDepth(d,zoom,rotation),color);
             target.Add(pa);target.Add(pb);target.Add(pc);target.Add(pa);target.Add(pc);target.Add(pd);
         }
-        public void Dispose() {wallProfiles.Clear();session.Dispose();}
+        public void Dispose() {if(disposed)return;disposed=true;wallProfiles.Clear();liveIDs.Clear();placements.Clear();session.Dispose();}
     }
 }

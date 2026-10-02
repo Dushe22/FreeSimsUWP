@@ -1,6 +1,6 @@
 # Next session
 
-Branch: xbox-uwp-port. Milestone: Xbox 0.15.1 shared pause/normal/fast/ultra clock; hardware validation pending.
+Branch: xbox-uwp-port. Milestone: Xbox 0.16.0 controlled simulation/rendering; hardware validation pending.
 
 User confirmed the inclined stair handrail fix works normally on Xbox.
 0.11 evidence (UWP Screenshots/0.11): 13/13 PASS, both houses with roofs at all
@@ -139,7 +139,7 @@ fast/ultra use 3x/10x as current implementation values. The original Deluxe
 manual confirms the four modes, but supplies no precise multipliers:
 https://www.manuallib.com/download/2023-10-18/The%20Sims%E2%84%A2%20Deluxe%20Edition%20Manual.pdf
 Do not claim measured original-executable timing parity until calibrated.
-Automatic acceleration for all sleeping/away Sims awaits live Sim state.
+Automatic turbo was cancelled by the user on 2026-10-02; no implementation was made.
 
 VMClock honors its configured/saved TicksPerMinute instead of overwriting
 it at every tick; both the unconfigured fallback and legacy VMContext remain 150, matching their previous effective rate. The viewer advances
@@ -155,3 +155,40 @@ Native handoff: artifacts/offline-time-0151-final, artifacts/xbox-time-*.zip.
 Next after hardware clock/light checks: controlled live simulation/rendering,
 then Sims, interaction and full saves.
 Final local checks: 32/32 render checks pass; OfflineCompatibility 8/8 and live object tests pass (150 ticks, zero script errors); all 91 source game-file SHA256 hashes unchanged. Shared timing changes introduce no texture/geometry/shader edits.
+
+0.16.0 implements roadmap step 3: controlled simulation/rendering.
+The generic resource compatibility gate is shared with TS1SimulationController:
+flowers/shrubs, HD chairs/tables/sinks/hanging plants, ceiling/wall lights and
+large aquariums. House 2 activates 134 objects; House 28 activates 80.
+Fresh Main routines only, other saved threads held; no Init/placement callbacks,
+saved-stack resume, Sim import or save writes. Trials stop at 6000 ticks.
+Topology/placement changes or script faults require a fresh lot; never silently
+reset/delete entities or retry a failed script.
+
+The renderer preloads bounded graphic/dynamic-sprite states, shares original
+color/depth arrays and uploads them once per view. Primitive snapshots select
+the visible states and refresh room contributions. No VM references in views,
+per-tick view rebuilds, pixel decoding or texture uploads. Source placement,
+SLOT children, cutaway, openings, roofs and pool attachment rules are preserved.
+Complete SPR2 row data without an explicit end marker is accepted at Height;
+incomplete row payloads still fail. FlowersOutdoor sprite 203/frame 1, graphic
+3 at zoom 3 exposed this decoder assumption during precache validation.
+
+A single VMTimeController drives the imported clock and behavior together.
+Starts paused at saved time; preserve the imported 150 ticks/minute. At 30 base
+ticks/s this live compatibility gate takes five real seconds/sim minute, unlike
+the independent 30-ticks/minute 0.15.1 preview. Original timing calibration
+remains pending. Normal/Fast/Ultra stay 1x/3x/10x; turbo request cancelled.
+Inactive/loading/test intervals still discard elapsed time and catch-up debt.
+SIM/MEMORY telemetry records resource totals and peak update/redraw cost.
+
+Local render gate: 36 checks, both lots at 6000 ticks, all angles/zooms,
+exact static initial pixel equivalence, frame/texture reuse and live disposal.
+Twelve generated before/after captures: artifacts/simulation-qa; affected samples inspected.
+Logs: artifacts/live-render-tests-final.log, artifacts/live-offline-tests-final.log.
+Native handoff: artifacts/offline-live-0160-final, artifacts/xbox-live-*.zip.
+Hardware instructions: experiments/XboxOfflineProbe/TESTING.md.
+Next after controlled simulation's Xbox memory/performance/visual gate:
+loading/rendering Sims and their saved state, then interaction and full saves.
+
+Final offline gate: 8/8, existing behavior/controller/checkpoint tests pass, both controlled object trials reach 6000 ticks with no script errors, all 91 original game-file hashes unchanged.

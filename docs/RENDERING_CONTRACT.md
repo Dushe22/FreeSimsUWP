@@ -101,3 +101,24 @@ invalid chains; compute only during view builds and share existing frame arrays.
 - Run Test-LotRendering.ps1 -LightingQa for day/night room/depth/resource gates
   and dynamic captures. Run OfflineCompatibility when changing shared engine
   lighting. Signed native/hardware validation remains separate.
+
+## Controlled live object gate
+- Use TS1SimulationController.SupportsControlledBehavior as the common resource
+  compatibility policy; do not select behavior families by house/coordinate.
+- Start fresh Main threads only for validated families. Keep other saved threads
+  held. No restoration of saved stacks or implicit full gameplay.
+- Preload graphic states/dynamic layers at the view boundary. Limit to 64 graphic
+  states/object, 32768 instances/view and 64 MiB of shared premultiplied/depth
+  frame arrays; reject over-budget additions before cloning live frame arrays.
+- Primitive sprite visibility/light-room and room-light snapshots own no VM
+  entities. Update them after one bounded pacing batch; reuse existing vertices,
+  alpha order, textures and targets. Never decode/upload/rebuild on a live tick.
+- Preserve imported clock cadence and advance it only through session.Tick;
+  never tick a parallel preview clock. Discard blocked/background elapsed time.
+- End controlled trials at 6000 ticks. Faults or unsupported topology/placement
+  changes freeze simulation with context and require a fresh lot; no reset/delete
+  recovery, saved-file writes or repeated failed behavior attempts.
+- Run Test-LotRendering -SimulationQa and offline compatibility for this gate.
+  Check exact initial static pixels, live changes, all angles/zooms, bounded
+  ticks, resource reuse and weak-reference release. Inspect before/after captures.
+  Hardware SIM/MEMORY timings and pressure remain the performance gate.

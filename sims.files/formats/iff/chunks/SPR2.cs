@@ -240,7 +240,9 @@ namespace FSO.Files.Formats.IFF.Chunks
             var transparentPixel = palette.Colors[TransparentColorIndex];
             transparentPixel.A = 0;
 
-            while (!endmarker)
+            // Some authored TS1 frames finish exactly at Height without a trailing
+            // end marker. Stop after complete rows; truncated row payloads still fail.
+            while (!endmarker && y < Height)
             {
                 var marker = io.ReadUInt16();
                 var command = marker >> 13;

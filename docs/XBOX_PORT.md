@@ -1889,3 +1889,29 @@ switching remain later work. 31 checks plus day/night architecture captures
 cover source identity, opacity/depth, restore/cut cycles, slots and resource reuse.
 Hardware gate: verify dawn/day/dusk/night, floors/roof and long preview cycles
 without memory growth, then proceed to controlled simulation/rendering.
+
+## 0.16.0: controlled simulation connected to rendering
+
+Roadmap step 3 connects vetted TS1 object Main routines to persistent sprites
+and room lighting. One generic compatibility gate serves both the headless
+controller and renderer. House 2 runs 134 flowers/shrubs, House 28 runs 80
+furniture/plant/light/aquarium objects; unselected threads remain held.
+Trials stop at 6000 ticks. No Sims, interaction, saved stack resume or save writes.
+
+Preloaded graphic/dynamic states reuse immutable authored frame arrays and GPU
+textures. Primitive revisions update visibility and tint; views retain no VM.
+Instance/graphic/pixel budgets reject excessive data. Unsupported movement,
+topology or script faults stop the trial. Original placement, SLOT, openings,
+cutaway, pool and accepted roof rules remain unchanged.
+SPR2 decoding stops at complete authored rows even without a trailing marker,
+while still rejecting truncated row payloads; a dormant flower frame exposed it.
+
+The imported VM clock replaces the independent preview clock. Its preserved
+150-ticks/minute cadence at 30 base ticks/s gives five real seconds per sim minute;
+exact original timing calibration remains pending. Modes remain pause/1x/3x/10x.
+Automatic turbo was cancelled without implementation.
+
+36 render checks include exact static baseline equivalence, live GPU changes,
+both lots at 6000 ticks, all views, resource stability and release. Twelve local
+captures are in artifacts/simulation-qa. Follow TESTING.md and return Xbox SIM/
+MEMORY logs before the Sims milestone; desktop tests do not certify Xbox FPS.

@@ -19,6 +19,8 @@ namespace FSO.LotView
         public Vector3 WorldOffset { get; private set; }
         public Color[] Pixels { get; private set; }
         public byte[] Depth { get; private set; }
+        public int DynamicIndex { get; private set; }
+        public int Graphic { get; private set; }
 
         public static List<TS1SpriteLayer> Read(VMEntity entity, int zoom, int rotation)
         {
@@ -30,13 +32,19 @@ namespace FSO.LotView
         internal static List<TS1SpriteLayer> Read(VMEntity entity, int zoom, int rotation,
             Dictionary<SPR2Frame, TS1SpriteLayer> frames)
         {
+            if(entity==null)throw new ArgumentNullException("entity");
+            return ReadState(entity,zoom,rotation,frames,entity.GetValue(VMStackObjectVariable.Graphic),false);
+        }
+        internal static List<TS1SpriteLayer> ReadState(VMEntity entity,int zoom,int rotation,
+            Dictionary<SPR2Frame,TS1SpriteLayer> frames,int graphicOffset,bool allDynamic)
+        {
             if (entity == null) throw new ArgumentNullException("entity");
             ValidateView(zoom, rotation);
             uint direction = (uint)entity.Direction;
             if (direction != 1 && direction != 4 && direction != 16 && direction != 64)
                 throw new NotSupportedException("Only cardinal object directions are supported.");
             var definition = entity.Object.OBJ;
-            int graphic = definition.BaseGraphicID + entity.GetValue(VMStackObjectVariable.Graphic);
+            int graphic = definition.BaseGraphicID + graphicOffset;
             if (graphic <= 0 || graphic > ushort.MaxValue) throw new InvalidDataException("Invalid object graphic.");
             var group = entity.Object.Resource.Get<DGRP>((ushort)graphic);
             var view = group == null ? null : group.GetImage(direction, (uint)zoom, (uint)rotation);
@@ -47,14 +55,18 @@ namespace FSO.LotView
                 int dynamicIndex = (int)sprite.SpriteID - definition.DynamicSpriteBaseId;
                 if (dynamicIndex >= 0 && dynamicIndex < definition.NumDynamicSprites) {
                     if (dynamicIndex >= 128) throw new NotSupportedException("Dynamic sprite index exceeds VM flags.");
-                    if (!entity.IsDynamicSpriteFlagSet((ushort)dynamicIndex)) continue;
+                    if (!allDynamic && !entity.IsDynamicSpriteFlagSet((ushort)dynamicIndex)) continue;
                 }
                 var resource = entity.Object.Resource.Get<SPR2>((ushort)sprite.SpriteID);
                 if (resource == null) throw new NotSupportedException("This renderer requires SPR2.");
                 if (resource.Frames == null || sprite.SpriteFrameIndex >= resource.Frames.Length)
                     throw new InvalidDataException("Missing SPR2 frame.");
                 var frame = resource.Frames[sprite.SpriteFrameIndex];
-                frame.DecodeIfRequired();
+                try {frame.DecodeIfRequired();}
+                catch(EndOfStreamException error) {
+                    throw new InvalidDataException("Truncated SPR2: resource="+entity.Object.Resource.Name+" graphic="+graphicOffset+
+                        " sprite="+sprite.SpriteID+" frame="+sprite.SpriteFrameIndex+" size="+frame.Width+"x"+frame.Height+" zoom="+zoom+" rotation="+rotation,error);
+                }
                 int count = checked(frame.Width * frame.Height);
                 if (frame.Width == 0 && frame.Height == 0) continue; // valid empty animation frame
                 if (frame.Width <= 0 || frame.Height <= 0 || frame.PixelData == null || frame.PixelData.Length != count ||
@@ -62,6 +74,11 @@ namespace FSO.LotView
                     throw new InvalidDataException("Missing SPR2 color/depth pixels: sprite="+sprite.SpriteID+" frame="+sprite.SpriteFrameIndex+" size="+frame.Width+"x"+frame.Height+" flags="+frame.Flags);
                 TS1SpriteLayer shared;
                 if (frames == null || !frames.TryGetValue(frame, out shared)) {
+                    if(allDynamic&&frames!=null) {
+                        long bytes=(long)count*5;
+                        foreach(var cached in frames.Values)bytes=checked(bytes+(long)cached.Pixels.Length*5);
+                        if(bytes>TS1LotRenderData.LivePixelBudget)throw new InvalidDataException("Live frame pixel budget exceeded before allocation.");
+                    }
                     var pixels = new Color[count];
                     for (int i = 0; i < count; i++) pixels[i] = Premultiply(frame.PixelData[i]);
                     shared = new TS1SpriteLayer {Pixels = pixels, Depth = (byte[])frame.ZBufferData.Clone()};
@@ -73,7 +90,8 @@ namespace FSO.LotView
                 offset.Y -= frame.Height; // shared ground anchor, excluding the legacy render-target padding
                 result.Add(new TS1SpriteLayer {
                     Width = frame.Width, Height = frame.Height, Offset = new Vector2((int)offset.X, (int)offset.Y),
-                    WorldOffset = relative, Flip = sprite.Flip, Pixels = shared.Pixels, Depth = shared.Depth
+                    WorldOffset = relative, Flip = sprite.Flip, Pixels = shared.Pixels, Depth = shared.Depth,
+                    Graphic = graphicOffset, DynamicIndex = dynamicIndex >= 0 && dynamicIndex < definition.NumDynamicSprites ? dynamicIndex : -1
                 });
             }
             return result;

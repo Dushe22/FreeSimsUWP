@@ -27,20 +27,23 @@ namespace FreeSims.Xbox.Proof
         private int memoryPressure;
         private double wallTime;
         private readonly VMTimeController timeControl=new VMTimeController();
-        private readonly VMClock previewClock=new VMClock{Hours=12,TicksPerMinute=VMTimeController.TS1TicksPerMinute};
-        private double LightingHour {get{return previewClock.Hours+(previewClock.Minutes+previewClock.MinuteFractions/(double)previewClock.TicksPerMinute)/60.0;}}
+        private VMClock SimulationClock {get{return lot==null?emptyClock:lot.Clock;}}
+        private readonly VMClock emptyClock=new VMClock{Hours=12};
+        private double LightingHour {get{return SimulationClock.Hours+(SimulationClock.Minutes+SimulationClock.MinuteFractions/(double)SimulationClock.TicksPerMinute)/60.0;}}
         private int lightingMinute=720;
+        private double peakSimulationMs,peakRedrawMs;
+        private static double CostMs(long started){return (Stopwatch.GetTimestamp()-started)*1000.0/Stopwatch.Frequency;}
         private void LogLighting(){
             if(renderer==null)return;
             ProofLog.Write("LIGHT hour="+LightingHour.ToString("F2",System.Globalization.CultureInfo.InvariantCulture)+
-                " speed="+timeControl.Speed+" multiplier="+timeControl.Multiplier+" ticks="+previewClock.Ticks+" rooms="+renderer.Data.Lighting.Length+" outside="+renderer.OutsideColor+
+                " speed="+timeControl.Speed+" multiplier="+timeControl.Multiplier+" ticks="+SimulationClock.Ticks+" rooms="+renderer.Data.Lighting.Length+" outside="+renderer.OutsideColor+
                 " textures="+renderer.TextureCount+" uploadBytes="+renderer.TextureBytes+" revision="+renderer.LightingRevision);
         }
         private Vector2 pan; private string error; private Rectangle lastViewport;
         public OfflineProbeGame()
         {
             graphics=new GraphicsDeviceManager(this){PreferredBackBufferWidth=1280,PreferredBackBufferHeight=720,GraphicsProfile=GraphicsProfile.HiDef,SynchronizeWithVerticalRetrace=true};
-            IsFixedTimeStep=false;
+            IsFixedTimeStep=false;timeControl.SetSpeed(VMTimeSpeed.Paused);
             Activated+=(s,e)=>{Program.RequestPause();ProofLog.Write("ACTIVATED");};
             Deactivated+=(s,e)=>{Program.RequestPause();ProofLog.Write("DEACTIVATED");};
             graphics.DeviceReset+=(s,e)=>{reset=true;ProofLog.Write("GRAPHICS DEVICE RESET");};
@@ -87,7 +90,8 @@ namespace FreeSims.Xbox.Proof
         {
             // Release the previous VM and GPU scene before allocating a new lot.
             timeControl.Suspend();ReleaseLot();CollectReleasedMemory();var timer=Stopwatch.StartNew();LogMemory("load-begin");
-            try{lot=new TS1LotRenderData(UwpGameStorage.CreatePaths(),house);TryRebuild();}
+            try{lot=new TS1LotRenderData(UwpGameStorage.CreatePaths(),house,true);TryRebuild();
+                ProofLog.Write("SIM LOAD active="+lot.ActiveObjects+" held="+(lot.ObjectCount-lot.ActiveObjects)+" limit="+TS1LotRenderData.SimulationTickLimit+" clockRate="+lot.Clock.TicksPerMinute);}
             catch(Exception ex){ReleaseLot();error="LOT LOAD FAILED - SEE LOG";ProofLog.Write("LOT LOAD FAILED house="+house+" "+ex);}
             ProofLog.Write("LOT LOAD ms="+timer.ElapsedMilliseconds);LogMemory("load-end");
         }
@@ -101,7 +105,7 @@ namespace FreeSims.Xbox.Proof
             try{
                 var data=source.Build(zoom,rotation,level);candidate=new TS1LotRenderer(GraphicsDevice,data,effect);candidate.UpdateLighting((int)(LightingHour*12)/12.0);
                 target=new RenderTarget2D(GraphicsDevice,1280,530,false,SurfaceFormat.Color,DepthFormat.Depth24);Render(candidate,target,source.Size);
-                if(renderer!=null)renderer.Dispose();if(image!=null)image.Dispose();renderer=candidate;candidate=null;image=target;target=null;error=null;
+                if(renderer!=null)renderer.Dispose();if(image!=null)image.Dispose();renderer=candidate;candidate=null;image=target;target=null;error=source.SimulationFault==null?null:"SIM STOPPED - X LOAD FRESH LOT";
                 ProofLog.Write("LOT VIEW house="+house+" rotation="+rotation+" zoom="+zoom+" level="+level+" walls="+walls+" rendered="+data.Rendered+" hidden="+data.Hidden+" slotted="+data.SlottedRendered+" contained="+data.Contained+" unsupported="+data.Unsupported+" floors="+data.FloorTiles+" wallEdges="+data.WallEdges+" floorMaterials="+data.FloorMaterials.Count+" wallMaterials="+data.WallMaterials.Count+" openings="+data.OpeningEdges+" joints="+data.StoryJoints+" roofTriangles="+data.RoofTriangles+" terrain="+data.TerrainTiles+" pools="+data.PoolTiles+" water="+data.WaterTiles+" poolAttachments="+data.PoolAttachmentAdjustments);
                 foreach(var issue in data.Issues)ProofLog.Write(issue);
                 ProofLog.Write("VIEW COST ms="+timer.ElapsedMilliseconds+" textures="+renderer.TextureCount+" uploadBytes="+renderer.TextureBytes+" wallGeometryVertices="+renderer.WallCapVertexCount+" wallGeometryCapacity="+renderer.WallGeometryCapacity+" wallGeometryBatchBytes="+((long)renderer.WallGeometryCapacity*VertexPositionColor.VertexDeclaration.VertexStride));
@@ -125,9 +129,10 @@ namespace FreeSims.Xbox.Proof
         }
         private void Render(TS1LotRenderer scene,RenderTarget2D target,int size)
         {
+            long renderStarted=Stopwatch.GetTimestamp();
             var old=GraphicsDevice.GetRenderTargets();var viewport=GraphicsDevice.Viewport;
             try{GraphicsDevice.SetRenderTarget(target);GraphicsDevice.Clear(ClearOptions.Target|ClearOptions.DepthBuffer,new Color(16,24,39),1,0);var camera=TS1LotRenderer.Camera(size,zoom,rotation,target.Width,target.Height,pan);lot.UpdateWalls(scene.Data,walls,pointerMode?(Vector2?)(pointer-new Vector2(0,88)):null,camera,target.Width,target.Height,wallTime);scene.Draw(camera,walls);}
-            finally{GraphicsDevice.SetRenderTargets(old);GraphicsDevice.Viewport=viewport;}
+            finally{GraphicsDevice.SetRenderTargets(old);GraphicsDevice.Viewport=viewport;peakRedrawMs=Math.Max(peakRedrawMs,CostMs(renderStarted));}
         }
         protected override void Update(GameTime time)
         {
@@ -154,13 +159,29 @@ namespace FreeSims.Xbox.Proof
                 timeControl.ChangeSpeed(pressed(Buttons.DPadRight)?1:-1);lightControl=true;
             }
             if(pressed(Buttons.RightStick)){timeControl.TogglePause();lightControl=true;}
-            // Same shared tick pacing will drive offline simulation. This rendering
-            // gate advances only its independent VMClock, never saved entities.
+            // One pacing source drives the imported VM; no second preview clock.
             int ticks=0;
             if(rebuild||pressed(Buttons.Start)||pressed(Buttons.X)||renderer==null)timeControl.Suspend();
-            else ticks=timeControl.Advance(time.ElapsedGameTime.TotalSeconds);
-            for(int tick=0;tick<ticks;tick++)previewClock.Tick();
-            int minute=(previewClock.Hours*60+previewClock.Minutes)/5*5;
+            else if(lot!=null&&!lot.SimulationStopped)ticks=timeControl.Advance(time.ElapsedGameTime.TotalSeconds);
+                        if(ticks>0&&lot!=null&&renderer!=null) {
+                long simulationStarted=Stopwatch.GetTimestamp();
+                try {
+                    if(lot.AdvanceSimulation(ticks,renderer.Data)&&renderer.UpdateSimulation())redraw=true;
+                    peakSimulationMs=Math.Max(peakSimulationMs,CostMs(simulationStarted));
+                    if(lot.CompletedTicks==ticks||lot.CompletedTicks/300!=(lot.CompletedTicks-ticks)/300) {
+                        ProofLog.Write("SIM ticks="+lot.CompletedTicks+" active="+lot.ActiveObjects+" peakUpdateMs="+peakSimulationMs.ToString("F2",System.Globalization.CultureInfo.InvariantCulture)+
+                            " peakRedrawMs="+peakRedrawMs.ToString("F2",System.Globalization.CultureInfo.InvariantCulture)+
+                            " spriteRevision="+renderer.Data.SpriteRevision+" lightRevision="+renderer.Data.LightRevision+
+                            " textures="+renderer.TextureCount+" uploadBytes="+renderer.TextureBytes);
+                        LogMemory("simulation");peakSimulationMs=peakRedrawMs=0;
+                    }
+                    if(lot.SimulationStopped){timeControl.SetSpeed(VMTimeSpeed.Paused);ProofLog.Write("SIM LIMIT REACHED - RELOAD LOT");}
+                } catch(Exception ex) {
+                    timeControl.SetSpeed(VMTimeSpeed.Paused);error="SIM STOPPED - X LOAD FRESH LOT";
+                    ProofLog.Write("SIM STOPPED ticks="+lot.CompletedTicks+" "+ex);
+                }
+            }
+            int minute=(SimulationClock.Hours*60+SimulationClock.Minutes)/5*5;
             if(lightControl||minute!=lightingMinute){
                 lightingMinute=minute;
                 if(renderer!=null&&renderer.UpdateLighting(minute/60.0))redraw=true;
@@ -194,7 +215,7 @@ namespace FreeSims.Xbox.Proof
             Text(status,970,24,2,error!=null?Color.OrangeRed:results.Count==0?Color.LightGray:passed?Color.LimeGreen:Color.OrangeRed);
             Text("COMMIT "+BuildInfo.Commit.Substring(0,12)+" - HOUSE "+house+" - ANGLE "+rotation+" - LEVEL "+(level==3?"ROOF":level.ToString())+" - ZOOM "+zoom,32,52,2,Color.LightGray);
             if(image!=null)batch.Draw(image,new Vector2(0,88),Color.White);
-            Text("WALLS "+walls.ToString().ToUpperInvariant()+" - "+(pointerMode?"POINTER ON":"CAMERA")+" - "+previewClock.Hours.ToString("00")+":"+previewClock.Minutes.ToString("00")+" - "+timeControl.Speed.ToString().ToUpperInvariant()+" - STATIC",32,625,2,Color.Gold);
+            Text("WALLS "+walls.ToString().ToUpperInvariant()+" - "+(pointerMode?"POINTER ON":"CAMERA")+" - "+SimulationClock.Hours.ToString("00")+":"+SimulationClock.Minutes.ToString("00")+" - "+timeControl.Speed.ToString().ToUpperInvariant()+" - SIM "+(lot==null?0:lot.CompletedTicks),32,625,2,Color.Gold);
             if(pointerMode) {
                 int px=(int)pointer.X,py=(int)pointer.Y;
                 batch.Draw(pixel,new Rectangle(px-7,py-1,15,3),Color.Black);batch.Draw(pixel,new Rectangle(px-1,py-7,3,15),Color.Black);
