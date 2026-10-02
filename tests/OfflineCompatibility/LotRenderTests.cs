@@ -12,7 +12,7 @@ namespace FreeSims.Tests
 {
     public static class LotRenderTests
     {
-        public const int Count=27;
+        public const int Count=29;
         public static List<string> Run(GraphicsDevice device,GamePaths paths,byte[] effect,Action<string> log)
         {
             var result=new List<string>();bool oldWorld=VM.UseWorld;VM.UseWorld=false;
@@ -20,6 +20,8 @@ namespace FreeSims.Tests
             try {
                 check("DISPOSED LOTS RELEASE VM AND CONTENT",()=>ReleasedLots(paths));
                 check("GPU SHARED SPRITES AND RESOURCE DISPOSAL",()=>SharedSprites(device,paths,effect));
+                check("CONTAINED SLOT GEOMETRY AND SAVED POSITIONS",()=>ContainedSlots(paths));
+                check("GPU SLOT DEPTH AND RESOURCE REUSE",()=>SlotGpu(device,paths,effect));
                 check("POINTER FOUR ANGLES ZOOMS AND FLOOR HEIGHTS",()=>PointerProjection());
                 check("THREE WALL MODES HOVER AND STORY BOUNDARIES",()=>WallModes(paths));
                 check("TIMED WALL RESTORE STATIONARY POINTER AND GPU",()=>TimedWallRestore(device,paths,effect));
@@ -87,6 +89,92 @@ namespace FreeSims.Tests
                 var restored=TS1LotRenderData.TileAtPointer(pointer,camera,dimensions.X,dimensions.Y,zoom,r,level);
                 if(Vector2.Distance(restored,new Vector2(tile.X,tile.Y))>.001f)throw new InvalidOperationException("Pointer failed rotated/panned floor projection.");
             }
+        }
+        private static void ContainedSlots(GamePaths paths)
+        {
+            var standard=new FSO.Files.Formats.IFF.Chunks.SLOTItem {Type=0,Height=4,Offset=new Vector3(16,0,100)};
+            var directions=new[]{Direction.NORTH,Direction.EAST,Direction.SOUTH,Direction.WEST};
+            var expected=new[]{new Vector3(1,0,.8f),new Vector3(0,1,.8f),new Vector3(-1,0,.8f),new Vector3(0,-1,.8f)};
+            for(int i=0;i<4;i++)if(Vector3.Distance(TS1LotRenderData.SlotOffset(standard,directions[i]),expected[i])>.00001f)
+                throw new InvalidOperationException("SLOT units, standard height or parent rotation incorrect.");
+            standard.Height=5;standard.Offset=new Vector3(8,-16,2.5f);
+            if(TS1LotRenderData.SlotOffset(standard,Direction.NORTH)!=new Vector3(.5f,-1,.5f))throw new InvalidOperationException("Custom SLOT height ignored.");
+            standard.Height=0;bool invalid=false;
+            try {TS1LotRenderData.SlotOffset(standard,Direction.NORTH);}catch(System.IO.InvalidDataException){invalid=true;}
+            if(!invalid)throw new InvalidOperationException("Malformed SLOT height accepted.");
+            foreach(int house in new[]{2,28}) {
+                var iff=new FSO.Files.Formats.IFF.IffFile(new NeighborhoodStore(paths,0).GetReadPath("Houses/House"+house.ToString("00")+".iff"));
+                using(var saved=TS1LotObjectSession.Load(iff,new FSO.Content.TS1.TS1ObjectProvider(paths)))using(var lot=new TS1LotRenderData(paths,house)) {
+                    var children=saved.VM.Entities.Where(e=>e.Container!=null).ToArray();
+                    if(children.Length!=(house==28?11:0))throw new InvalidOperationException("Changed saved containment count.");
+                    foreach(var child in children) {
+                        var position=child.Position;var direction=child.Direction;short slot=child.ContainerSlot;var parent=child.Container;
+                        var visual=TS1LotRenderData.VisualPosition(child);
+                        var floor=new Vector3(parent.Position.x/16f,parent.Position.y/16f,(parent.Position.Level-1)*TS1LotRenderData.StoryHeight);
+                        if(Vector3.Distance(visual,floor+new Vector3(0,0,.8f))>.00001f)throw new InvalidOperationException("Saved counter child is not on its surface.");
+                        if(child.Position!=position||child.Direction!=direction||child.ContainerSlot!=slot||child.Container!=parent)
+                            throw new InvalidOperationException("SLOT rendering mutated saved placement.");
+                    }
+                    for(int zoom=1;zoom<=3;zoom++)for(int r=0;r<4;r++) {
+                        var data=lot.Build(zoom,r,2);
+                        if(data.Contained!=0||data.SlottedRendered!=children.Length||data.Unsupported!=0)
+                            throw new InvalidOperationException("Contained children held/missing/unsupported.");
+                        foreach(var child in children) {
+                            var sprites=data.Sprites.Where(s=>s.ObjectID==child.ObjectID).ToArray();
+                            if(sprites.Length==0)throw new InvalidOperationException("Missing contained sprite.");
+                            var visual=TS1LotRenderData.VisualPosition(child);
+                            foreach(var sprite in sprites)if(Vector2.Distance(sprite.Position,TS1SpriteLayer.Project(visual,zoom,r)+sprite.Layer.Offset)>.001f)
+                                throw new InvalidOperationException("Contained sprite not projected from its SLOT.");
+                        }
+                    }
+                    if(children.Length==0)continue;
+                    // Independent nested layout exercises general composition, not lot coordinates.
+                    var root=new VMGameObject(children[0].Container.Object,null){Position=new LotTilePos(160,320,2),Direction=Direction.EAST};
+                    var middle=new VMGameObject(root.Object,null){Direction=Direction.SOUTH};var leaf=new VMGameObject(children[0].Object,null){Direction=Direction.NORTH};
+                    Func<float,FSO.Files.Formats.IFF.Chunks.SLOT> slots=z=>new FSO.Files.Formats.IFF.Chunks.SLOT {Slots=new Dictionary<ushort,List<FSO.Files.Formats.IFF.Chunks.SLOTItem>> {{0,new List<FSO.Files.Formats.IFF.Chunks.SLOTItem>{new FSO.Files.Formats.IFF.Chunks.SLOTItem{Type=0,Height=5,Offset=new Vector3(16,0,z)}}}}};
+                    root.Slots=slots(5);middle.Slots=slots(2.5f);root.Contained=new VMEntity[1];middle.Contained=new VMEntity[1];
+                    root.PlaceInSlot(middle,0,false,saved.VM.Context);middle.PlaceInSlot(leaf,0,false,saved.VM.Context);
+                    if(Vector3.Distance(TS1LotRenderData.VisualPosition(leaf),new Vector3(9,21,TS1LotRenderData.StoryHeight+1.5f))>.0001f)
+                        throw new InvalidOperationException("Nested SLOT composition used child direction or double-counted story.");
+                    // A malformed graph must terminate, rather than hang a view build.
+                    leaf.Slots=slots(0);leaf.Contained=new VMEntity[]{root};root.Container=leaf;root.ContainerSlot=0;invalid=false;
+                    try {TS1LotRenderData.VisualPosition(leaf);}catch(System.IO.InvalidDataException){invalid=true;}
+                    if(!invalid)throw new InvalidOperationException("Cyclic SLOT graph accepted.");
+                }
+            }
+        }
+        private static void SlotGpu(GraphicsDevice device,GamePaths paths,byte[] effect)
+        {
+            var previous=device.GetRenderTargets();var viewport=device.Viewport;
+            try {using(var lot=new TS1LotRenderData(paths,28))
+                for(int zoom=1;zoom<=3;zoom++)for(int r=0;r<4;r++) {
+                    var view=lot.Build(zoom,r,1);
+                    var first=view.Sprites.Where(s=>s.ObjectID==400).ToArray();var second=view.Sprites.Where(s=>s.ObjectID==401).ToArray();
+                    if(first.Length==0||first.Length!=second.Length||Enumerable.Range(0,first.Length).Any(i=>!ReferenceEquals(first[i].Layer.Pixels,second[i].Layer.Pixels)||!ReferenceEquals(first[i].Layer.Depth,second[i].Layer.Depth)))
+                        throw new InvalidOperationException("Repeated slotted objects duplicated frame arrays.");
+                    view.TerrainMaterials.Clear();view.FloorMaterials.Clear();view.WallMaterials.Clear();view.WallSections.Clear();
+                    view.Sprites.RemoveAll(s=>s.ObjectID!=552&&s.ObjectID!=561);var child=view.Sprites.Where(s=>s.ObjectID==561).ToArray();
+                    if(child.Length==0)throw new InvalidOperationException("Missing counter register fixture.");
+                    var baseCamera=TS1LotRenderer.Camera(lot.Size,zoom,r,640,360,Vector2.Zero);
+                    var pointer=TS1LotRenderData.PointerAtTile(new Vector3(19,26,.4f),baseCamera,640,360,zoom,r);
+                    var camera=TS1LotRenderer.Camera(lot.Size,zoom,r,640,360,new Vector2(320,180)-pointer);
+                    Func<Color[]> draw=()=> {
+                        using(var renderer=new TS1LotRenderer(device,view,effect))using(var target=new RenderTarget2D(device,640,360,false,SurfaceFormat.Color,DepthFormat.Depth24)) {
+                            lot.UpdateWalls(view,TS1WallMode.Up,null,camera,640,360);
+                            device.SetRenderTarget(target);device.Clear(ClearOptions.Target|ClearOptions.DepthBuffer,new Color(16,24,39),1,0);renderer.Draw(camera,TS1WallMode.Up);
+                            device.SetRenderTargets(previous);device.Viewport=viewport;var pixels=new Color[640*360];target.GetData(pixels);
+                            int textures=renderer.TextureCount;long bytes=renderer.TextureBytes;
+                            lot.UpdateWalls(view,TS1WallMode.Cutaway,null,camera,640,360);renderer.Draw(camera,TS1WallMode.Cutaway);
+                            if(renderer.TextureCount!=textures||renderer.TextureBytes!=bytes)throw new InvalidOperationException("SLOT visibility allocated textures.");
+                            return pixels;
+                        }
+                    };
+                    var both=draw();var reordered=view.Sprites.OrderByDescending(s=>s.ObjectID).ToArray();view.Sprites.Clear();view.Sprites.AddRange(reordered);
+                    if(!both.SequenceEqual(draw()))throw new InvalidOperationException("SLOT depth depends on insertion order.");
+                    view.Sprites.RemoveAll(s=>s.ObjectID==561);var parentOnly=draw();
+                    if(both.Zip(parentOnly,(a,b)=>a!=b).Count(changed=>changed)<3)throw new InvalidOperationException("Contained register missing/occluded by its counter.");
+                }
+            }finally{device.SetRenderTargets(previous);device.Viewport=viewport;}
         }
         private static Vector2 FindWallHover(TS1LotRenderData lot,TS1LotRenderData.View view,Matrix camera,int width,int height,string exclude=null)
         {

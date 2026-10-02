@@ -92,7 +92,7 @@ namespace FreeSims.Xbox.Proof
                 var data=source.Build(zoom,rotation,level);candidate=new TS1LotRenderer(GraphicsDevice,data,effect);
                 target=new RenderTarget2D(GraphicsDevice,1280,530,false,SurfaceFormat.Color,DepthFormat.Depth24);Render(candidate,target,source.Size);
                 if(renderer!=null)renderer.Dispose();if(image!=null)image.Dispose();renderer=candidate;candidate=null;image=target;target=null;error=null;
-                ProofLog.Write("LOT VIEW house="+house+" rotation="+rotation+" zoom="+zoom+" level="+level+" walls="+walls+" rendered="+data.Rendered+" hidden="+data.Hidden+" contained="+data.Contained+" unsupported="+data.Unsupported+" floors="+data.FloorTiles+" wallEdges="+data.WallEdges+" floorMaterials="+data.FloorMaterials.Count+" wallMaterials="+data.WallMaterials.Count+" openings="+data.OpeningEdges+" joints="+data.StoryJoints+" roofTriangles="+data.RoofTriangles+" terrain="+data.TerrainTiles+" pools="+data.PoolTiles+" water="+data.WaterTiles+" poolAttachments="+data.PoolAttachmentAdjustments);
+                ProofLog.Write("LOT VIEW house="+house+" rotation="+rotation+" zoom="+zoom+" level="+level+" walls="+walls+" rendered="+data.Rendered+" hidden="+data.Hidden+" slotted="+data.SlottedRendered+" contained="+data.Contained+" unsupported="+data.Unsupported+" floors="+data.FloorTiles+" wallEdges="+data.WallEdges+" floorMaterials="+data.FloorMaterials.Count+" wallMaterials="+data.WallMaterials.Count+" openings="+data.OpeningEdges+" joints="+data.StoryJoints+" roofTriangles="+data.RoofTriangles+" terrain="+data.TerrainTiles+" pools="+data.PoolTiles+" water="+data.WaterTiles+" poolAttachments="+data.PoolAttachmentAdjustments);
                 foreach(var issue in data.Issues)ProofLog.Write(issue);
                 ProofLog.Write("VIEW COST ms="+timer.ElapsedMilliseconds+" textures="+renderer.TextureCount+" uploadBytes="+renderer.TextureBytes+" wallGeometryVertices="+renderer.WallCapVertexCount+" wallGeometryCapacity="+renderer.WallGeometryCapacity+" wallGeometryBatchBytes="+((long)renderer.WallGeometryCapacity*VertexPositionColor.VertexDeclaration.VertexStride));
                 LogMemory("view-end");
@@ -175,7 +175,7 @@ namespace FreeSims.Xbox.Proof
             }
             Text("A ROTATE - X HOUSE - Y WALLS - LB ZOOM - RB FLOOR/ROOF",32,653,2,Color.White);
             Text("LS CLICK POINTER - LS MOVE - RS PAN - VIEW CENTER - MENU TESTS - B EXIT",32,681,1,Color.LightGray);
-            if(renderer!=null)Text("DRAWN "+renderer.Data.Rendered+" - SLOTTED HELD "+renderer.Data.Contained+" - UNSUPPORTED "+renderer.Data.Unsupported+" - RUN "+runs,32,76,1,Color.LightGray);
+            if(renderer!=null)Text("DRAWN "+renderer.Data.Rendered+" - SLOTTED "+renderer.Data.SlottedRendered+" - HELD "+renderer.Data.Contained+" - UNSUPPORTED "+renderer.Data.Unsupported+" - RUN "+runs,32,76,1,Color.LightGray);
             if(error!=null)Text(error,32,596,2,Color.OrangeRed);
             batch.End();base.Draw(time);
         }

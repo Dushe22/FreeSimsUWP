@@ -71,3 +71,9 @@ Cutaway neighborhoods use wall centers in lot units (two tiles), only on the
 selected story. Each section keeps its own 0.75 s restoration deadline; moving
 the pointer must not renew deadlines for walls outside the current radius.
 This shared rule applies to any loaded footprint, without lot IDs/coordinates.
+
+Contained sprites use their root's world position plus each parent's rotated
+SLOT offset. Horizontal units are 1/16 tile; vertical units are 1/5 tile, using
+standard surface heights or the custom Z field. Preserve saved placement and
+child direction, inherit root cutaway hosting and ancestor hidden state. Bound
+invalid chains; compute only during view builds and share existing frame arrays.

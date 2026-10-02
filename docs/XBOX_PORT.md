@@ -1856,3 +1856,15 @@ materials and disposal/resource reuse. Captures: artifacts/architecture-qa.
 Hardware checks: experiments/XboxOfflineProbe/TESTING.md. Follow
 docs/RENDERING_CONTRACT.md for future memory/rendering work.
 Accepted roof geometry remains unchanged.
+
+## 0.14.0: contained SLOT rendering
+
+The static renderer resolves the saved containment chain instead of holding its
+children. SLOT standard/custom heights and rotated offsets apply to every loaded
+object type and footprint, including nested containers. House 28's 11 children
+now render on counters; House 2 is unchanged. VM/save placement is untouched.
+Parent hidden/cutaway hosting follows the container; invalid chains are bounded.
+No new shader or persistent cache. Existing SPR2 depth and frame/texture sharing
+remain. The 29-check suite covers placement, nesting, counter depth, resource
+sharing/release and previous architecture/terrain/pool regressions. Hardware
+validation is pending; lighting is the next rendering milestone after this gate.

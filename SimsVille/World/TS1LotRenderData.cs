@@ -255,7 +255,7 @@ namespace FSO.LotView
             public string LastWall;
             public int OpeningEdges, StoryJoints, RoofTriangles;
             public int TerrainTiles, PoolTiles, WaterTiles, PoolAttachmentAdjustments;
-            public int Rendered, Hidden, OutOfWorld, Contained, NoGraphic, Unsupported, AboveLevel, FloorTiles, WallEdges;
+            public int Rendered, SlottedRendered, Hidden, OutOfWorld, Contained, NoGraphic, Unsupported, AboveLevel, FloorTiles, WallEdges;
             public readonly List<string> Issues = new List<string>();
         }
         public View Build(int zoom,int rotation,int level)
@@ -362,13 +362,16 @@ namespace FSO.LotView
                 if(entity.Position.x<0 || entity.Position.y<0) {view.OutOfWorld++;continue;}
                 if(entity.Position.Level>level) {view.AboveLevel++;continue;}
                 if(entity.GetValue(VMStackObjectVariable.Hidden)!=0) {view.Hidden++;continue;}
-                if(entity.Container!=null) {view.Contained++;continue;} // SLOT visual offsets are a separate rendering step
+
                 if(entity.Object.OBJ.BaseGraphicID==0) {view.NoGraphic++;continue;}
                 try {
+                    VMEntity root;bool inheritedHidden;
+                    var world=ResolveVisualPosition(entity,out root,out inheritedHidden);
+                    if(inheritedHidden){view.Hidden++;continue;}
                     var layers=TS1SpriteLayer.Read(entity,zoom,rotation,spriteFrames);
                     if(layers.Count==0){view.NoGraphic++;continue;}
-                    var world=new Vector3(entity.Position.x/16f,entity.Position.y/16f,(entity.Position.Level-1)*StoryHeight);
-                    Vector2 poolOffset;if(poolAttachmentOffsets.TryGetValue(entity.ObjectID,out poolOffset))world+=new Vector3(poolOffset,0);
+
+                    Vector2 poolOffset;if(poolAttachmentOffsets.TryGetValue(root.ObjectID,out poolOffset))world+=new Vector3(poolOffset,0);
                     var point=TS1SpriteLayer.Project(world,zoom,rotation);
                     Vector2 openingNormal;
                     // Near-face frames are decals on the host wall. A bounded
@@ -377,10 +380,11 @@ namespace FSO.LotView
                     float attachmentBias=openingNormals.TryGetValue(entity.ObjectID,out openingNormal) && Vector2.Dot(openingNormal,camera)>0 ? (float)Math.Sqrt(1.5)/.4f*8/255 : 0;
                     foreach(var layer in layers) view.Sprites.Add(new Sprite {
                         Layer=layer,Position=point+layer.Offset,ObjectID=entity.ObjectID,
-                        WallHosts=attachmentEdges.ContainsKey(entity.ObjectID)?attachmentEdges[entity.ObjectID].ToArray():null,
+                        WallHosts=attachmentEdges.ContainsKey(root.ObjectID)?attachmentEdges[root.ObjectID].ToArray():null,
                         BackNearness=TS1SpriteLayer.ProjectWithDepth(world-new Vector3(0.5f,0.5f,0)+backOffsets[rotation]+layer.WorldOffset,zoom,rotation).Z+attachmentBias
                     });
                     view.Rendered++;
+                    if(entity.Container!=null)view.SlottedRendered++;
                 } catch(Exception ex) {
                     if(!(ex is NotSupportedException) && !(ex is InvalidDataException)) throw;
                     view.Unsupported++;view.Issues.Add("OBJECT "+entity.ObjectID+" GUID="+entity.Object.OBJ.GUID.ToString("X8")+" "+ex.Message);
@@ -388,6 +392,43 @@ namespace FSO.LotView
             }
             if(level==3)BuildRoofs(view,zoom,rotation);
             return view;
+        }
+        // SLOT offsets are authored in sixteenths of a tile horizontally and
+        // fifths vertically, with standard surface heights overriding Offset.Z.
+        public static Vector3 SlotOffset(SLOTItem slot,Direction direction)
+        {
+            if(slot==null || slot.Type!=0 || slot.Height<1 || slot.Height>SLOT.HeightOffsets.Length ||
+                float.IsNaN(slot.Offset.X)||float.IsInfinity(slot.Offset.X)||
+                float.IsNaN(slot.Offset.Y)||float.IsInfinity(slot.Offset.Y)||
+                float.IsNaN(slot.Offset.Z)||float.IsInfinity(slot.Offset.Z))
+                throw new InvalidDataException("Invalid containment SLOT geometry.");
+            int facing=(int)direction;
+            if(facing<1||facing>128||(facing&(facing-1))!=0)throw new InvalidDataException("Invalid container direction.");
+            float height=slot.Height==5?slot.Offset.Z:SLOT.HeightOffsets[slot.Height-1];
+            var offset=new Vector3(slot.Offset.X/16f,slot.Offset.Y/16f,height/5f);
+            return Vector3.Transform(offset,Matrix.CreateRotationZ((float)(Math.Log(facing,2)*Math.PI/4)));
+        }
+        public static Vector3 VisualPosition(VMEntity entity)
+        {
+            VMEntity root;bool hidden;return ResolveVisualPosition(entity,out root,out hidden);
+        }
+        private static Vector3 ResolveVisualPosition(VMEntity entity,out VMEntity root,out bool hidden)
+        {
+            if(entity==null)throw new ArgumentNullException("entity");
+            var offset=Vector3.Zero;root=entity;hidden=false;int depth=0;
+            // No VM references escape the build; bound malformed/cyclic chains.
+            while(true) {
+                hidden|=root.GetValue(VMStackObjectVariable.Hidden)!=0;
+                var parent=root.Container;if(parent==null)break;
+                if(++depth>64)throw new InvalidDataException("Containment SLOT chain is cyclic or too deep.");
+                if(!(parent is VMGameObject))throw new NotSupportedException("Avatar containment needs bone positioning.");
+                List<SLOTItem> slots;
+                if(parent.Slots==null || !parent.Slots.Slots.TryGetValue(0,out slots) ||
+                    root.ContainerSlot<0 || root.ContainerSlot>=slots.Count || !ReferenceEquals(parent.GetSlot(root.ContainerSlot),root))
+                    throw new InvalidDataException("Missing/mismatched containment SLOT.");
+                offset+=SlotOffset(slots[root.ContainerSlot],parent.Direction);root=parent;
+            }
+            return new Vector3(root.Position.x/16f,root.Position.y/16f,(root.Position.Level-1)*StoryHeight)+offset;
         }
         private sealed class WallProfile
         {

@@ -1,6 +1,6 @@
 # Next session
 
-Branch: xbox-uwp-port. Milestone: Xbox 0.13.2 masked wall thickness and balcony materials.
+Branch: xbox-uwp-port. Milestone: Xbox 0.14.0 contained SLOT objects; hardware validation pending.
 
 User confirmed the inclined stair handrail fix works normally on Xbox.
 0.11 evidence (UWP Screenshots/0.11): 13/13 PASS, both houses with roofs at all
@@ -27,7 +27,7 @@ railings remain. User reported that 0.13.0 retained hovered cuts indefinitely.
 segment restores 0.75 s after leaving it, even with a stationary/disabled
 pointer. Re-entry cancels expiry; switching targets does not retain the old wall.
 UP restores immediately; DOWN remains down. Textures/geometry buffers are reused.
-Next gate: Xbox 0.13.2 floor seams, door thresholds/reveals and balcony colors,
+Previous gate: Xbox 0.13.2 floor seams, door thresholds/reveals and balcony colors,
 plus unchanged timed restoration. Captures: artifacts/architecture-qa.
 Lower caps/faces end below the upper floor; opening contours cut caps and add
 inner depth. Fences use their style instead of reverse wallpaper.
@@ -62,7 +62,7 @@ Offline compatibility suite also passes. Latest 0.12.2 hardware proof confirms
 20/20 PASS, two launches and 46 view changes without logged failures/OOM;
 peak logged usage 425.48 MiB against a 1024 MiB budget.
 
-After the terrain/pool hardware gate: resolve the 11 held contained objects in
+Historical next step after terrain/pools: resolve the 11 held contained objects in
 House 28 using SLOT visual offsets, then lighting. Keep the lot viewer static
 until these rendering gates pass; connect controlled simulation/rendering next,
 then Sims, interaction/gameplay and full save support.
@@ -76,3 +76,21 @@ moving VM entities or writing the save. Other ladders remain in place.
 An additional regression covers attachment directions and both houses at every
 angle/zoom. LOT VIEW logs poolAttachments=1 for House 28, 0 for House 2.
 
+
+Current 0.14.0: all 11 saved House 28 children now render through generic SLOT
+surface offsets, rotated by their parent and accumulated through nested containers.
+Counters use height 4/5 = 0.8 tile; custom heights use Offset.Z/5. No house/GUID
+placement patches, saved position edits, new simulation callbacks or caches.
+Parent hidden/cutaway host state follows the container root. Malformed chains
+are bounded and diagnosed. Expected slotted=11, held=0, unsupported=0; floor 1
+at zoom 1/3 renders 398 objects, upper/roof 508. House 2 has no contained children.
+Two new CPU/GPU checks bring Menu to 29/29; frame sharing and disposal still pass.
+Local log: artifacts/slot-tests-final.log; captures: artifacts/architecture-qa.
+Native handoff: artifacts/offline-slots-0140-final and artifacts/xbox-slots-*.zip.
+Install/testing: experiments/XboxOfflineProbe/TESTING.md. Next is lighting only
+after hardware placement/depth and memory validation.
+
+0.13.3 hardware proof.log: commit 62886dbee225, 27/27 PASS, no logged failures
+or OOM in its session, peak sampled app usage 339.48 MiB / 1024 MiB. Cutaway uses
+a two-tile radius and independent 0.75 s restoration. Preserve original House 2
+brown stair tile (24,24), as explicitly requested after saved-material diagnosis.
