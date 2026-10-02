@@ -12,12 +12,14 @@ namespace FreeSims.Tests
 {
     public static class LotRenderTests
     {
-        public const int Count=18;
+        public const int Count=20;
         public static List<string> Run(GraphicsDevice device,GamePaths paths,byte[] effect,Action<string> log)
         {
             var result=new List<string>();bool oldWorld=VM.UseWorld;VM.UseWorld=false;
             Action<string,Action> check=(name,action)=>{try{action();result.Add("PASS "+name);}catch(Exception ex){result.Add("FAIL "+name);log(ex.ToString());}log(result.Last());};
             try {
+                check("DISPOSED LOTS RELEASE VM AND CONTENT",()=>ReleasedLots(paths));
+                check("GPU SHARED SPRITES AND RESOURCE DISPOSAL",()=>SharedSprites(device,paths,effect));
                 check("CAMERA DEPTH AND WALL HEIGHT",()=>{if(!LotProjectionTests.Run())throw new InvalidOperationException("Projection checks failed.");});
                 check("GPU DEPTH HOLES AND ALPHA",()=>DepthFixture(device,effect));
                 check("TS1 MATERIAL MAPPING AND FENCE ALPHA",()=>MaterialMapping(paths));
@@ -67,6 +69,58 @@ namespace FreeSims.Tests
                 });
             }finally{VM.UseWorld=oldWorld;}
             return result;
+        }
+        [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.NoInlining)]
+        private static WeakReference[] DisposedSessions(GamePaths paths)
+        {
+            var iff=new FSO.Files.Formats.IFF.IffFile(new NeighborhoodStore(paths,0).GetReadPath("Houses/House02.iff"));
+            var content=new FSO.Content.TS1.TS1ObjectProvider(paths);
+            using(var first=TS1LotObjectSession.Load(iff,content))using(var second=TS1LotObjectSession.Load(iff,content)) {
+                var bhav=first.VM.Entities.SelectMany(e=>e.Object.Resource.List<FSO.Files.Formats.IFF.Chunks.BHAV>()).First();
+                var a=first.VM.Assemble(bhav);var b=second.VM.Assemble(bhav);
+                if(!ReferenceEquals(a.VM,first.VM)||!ReferenceEquals(b.VM,second.VM)||ReferenceEquals(a,b))
+                    throw new InvalidOperationException("Routine cache crossed VM ownership.");
+                VM.BHAVChanged(bhav);
+                var changed=first.VM.Assemble(bhav);
+                if(ReferenceEquals(a,changed)||changed.RuntimeVer!=bhav.RuntimeVer||!second.VM.BHAVDirty)
+                    throw new InvalidOperationException("Routine edit invalidation failed.");
+                return new[]{new WeakReference(first.VM),new WeakReference(second.VM),new WeakReference(content),new WeakReference(bhav)};
+            }
+        }
+        private static void ReleasedLots(GamePaths paths)
+        {
+            var references=DisposedSessions(paths);
+            GC.Collect();GC.WaitForPendingFinalizers();GC.Collect();
+            if(references.Any(r=>r.IsAlive))throw new InvalidOperationException("Disposed VM/content retained by process-wide roots.");
+        }
+        private static void SharedSprites(GraphicsDevice device,GamePaths paths,byte[] effect)
+        {
+            using(var lot=new TS1LotRenderData(paths,28)) {
+                var data=lot.Build(3,0,1);
+                long before=data.Sprites.Sum(s=>(long)s.Layer.Pixels.Length*5);
+                long after=data.Sprites.Select(s=>s.Layer.Pixels).Distinct().Sum(p=>(long)p.Length*5);
+                if(after>=before*.8)throw new InvalidOperationException("Repeated sprites still allocate per-instance pixels.");
+                var previous=device.GetRenderTargets();var viewport=device.Viewport;
+                using(var target=new RenderTarget2D(device,640,360,false,SurfaceFormat.Color,DepthFormat.Depth24)) {
+                    Color[] baseline=null;
+                    for(int repeat=0;repeat<3;repeat++) {
+                        var renderer=new TS1LotRenderer(device,data,effect);
+                        try {
+                            int expected=data.Sprites.Select(s=>s.Layer.Pixels).Distinct().Count()+data.Sprites.Select(s=>s.Layer.Depth).Distinct().Count()+
+                                data.TerrainMaterials.Concat(data.FloorMaterials).Concat(data.WallMaterials).Concat(data.RoofMaterials).Select(s=>s.Material.Pixels).Distinct().Count();
+                            if(renderer.TextureCount!=expected)throw new InvalidOperationException("Duplicate GPU texture uploads.");
+                            device.SetRenderTarget(target);device.Clear(ClearOptions.Target|ClearOptions.DepthBuffer,new Color(16,24,39),1,0);
+                            renderer.Draw(TS1LotRenderer.Camera(lot.Size,3,0,640,360,Vector2.Zero),true);
+                            device.SetRenderTargets(previous);device.Viewport=viewport;
+                            var pixels=new Color[640*360];target.GetData(pixels);
+                            if(pixels.Count(p=>p!=new Color(16,24,39))<10000 || (baseline!=null&&!pixels.SequenceEqual(baseline)))
+                                throw new InvalidOperationException("Recreated shared textures changed the rendered view.");
+                            baseline=pixels;
+                        } finally {device.SetRenderTargets(previous);device.Viewport=viewport;renderer.Dispose();}
+                        if(renderer.TextureCount!=0)throw new InvalidOperationException("Disposed renderer retained textures.");
+                    }
+                }
+            }
         }
         private static void PoolLadderAttachments(GamePaths paths)
         {

@@ -8,11 +8,11 @@ namespace FSO.LotView
 {
     public sealed class TS1LotRenderer : IDisposable
     {
-        private sealed class Item : IDisposable
+        private sealed class Item
         {
             public Texture2D Color,Depth; public VertexPositionColorTexture[] Vertices;
-            public float Nearness; public short ID;
-            public void Dispose() {if(Color!=null)Color.Dispose();if(Depth!=null)Depth.Dispose();}
+            public float Nearness; public short ID; public bool HasOpaque, HasAlpha;
+            // Textures are owned once by the renderer, not by individual instances.
         }
         private sealed class MaterialItem
         {
@@ -24,6 +24,10 @@ namespace FSO.LotView
         private readonly AlphaTestEffect materials;
         private readonly Effect sprites;
         private readonly List<Item> items=new List<Item>();
+        private Item[] alphaItems;
+        private readonly List<Texture2D> textures=new List<Texture2D>();
+        public int TextureCount {get {return textures.Count;}}
+        public long TextureBytes {get; private set;}
         private readonly VertexPositionColor[] ground,walls;
         public readonly TS1LotRenderData.View Data;
         public TS1LotRenderer(GraphicsDevice device,TS1LotRenderData.View data,byte[] effect)
@@ -33,14 +37,36 @@ namespace FSO.LotView
                 surfaces=new BasicEffect(device) {VertexColorEnabled=true};sprites=new Effect(device,effect);
                 materials=new AlphaTestEffect(device) {VertexColorEnabled=true,ReferenceAlpha=128,AlphaFunction=CompareFunction.GreaterEqual};
                 ground=data.Ground.ToArray();walls=data.Walls.ToArray();
+                var colors=new Dictionary<Color[],Texture2D>();
+                var depths=new Dictionary<byte[],Texture2D>();
+                var alphaKinds=new Dictionary<Color[],int>();
+                Func<int,int,Color[],Texture2D> colorTexture=(width,height,pixels)=> {
+                    Texture2D texture;
+                    if(!colors.TryGetValue(pixels,out texture)) {
+                        texture=new Texture2D(device,width,height);textures.Add(texture);
+                        texture.SetData(pixels);colors.Add(pixels,texture);TextureBytes+=(long)width*height*4;
+                    }
+                    return texture;
+                };
                 foreach(var source in data.TerrainMaterials.Concat(data.FloorMaterials).Concat(data.WallMaterials).Concat(data.RoofMaterials)) {
                     var item=new MaterialItem {Wall=data.WallMaterials.Contains(source) && !source.KeepWhenWallsHidden,Roof=data.RoofMaterials.Contains(source),Vertices=source.Vertices.ToArray()};materialItems.Add(item);
-                    item.Texture=new Texture2D(device,source.Material.Width,source.Material.Height);item.Texture.SetData(source.Material.Pixels);
+                    item.Texture=colorTexture(source.Material.Width,source.Material.Height,source.Material.Pixels);
                 }
                 foreach(var source in data.Sprites) {
                     var layer=source.Layer;var item=new Item {Nearness=source.BackNearness,ID=source.ObjectID};items.Add(item);
-                    item.Color=new Texture2D(device,layer.Width,layer.Height);item.Color.SetData(layer.Pixels);
-                    item.Depth=new Texture2D(device,layer.Width,layer.Height,false,SurfaceFormat.Alpha8);item.Depth.SetData(layer.Depth);
+                    item.Color=colorTexture(layer.Width,layer.Height,layer.Pixels);
+                    Texture2D depth;
+                    if(!depths.TryGetValue(layer.Depth,out depth)) {
+                        depth=new Texture2D(device,layer.Width,layer.Height,false,SurfaceFormat.Alpha8);textures.Add(depth);
+                        depth.SetData(layer.Depth);depths.Add(layer.Depth,depth);TextureBytes+=(long)layer.Width*layer.Height;
+                    }
+                    item.Depth=depth;
+                    int kind;
+                    if(!alphaKinds.TryGetValue(layer.Pixels,out kind)) {
+                        kind=0;foreach(var pixel in layer.Pixels){if(pixel.A==255)kind|=1;else if(pixel.A>0)kind|=2;if(kind==3)break;}
+                        alphaKinds.Add(layer.Pixels,kind);
+                    }
+                    item.HasOpaque=(kind&1)!=0;item.HasAlpha=(kind&2)!=0;
                     float l=layer.Flip?1:0,r=1-l;var p=source.Position;float z=source.BackNearness;
                     var a=new VertexPositionColorTexture(new Vector3(p,z),Color.White,new Vector2(l,0));
                     var b=new VertexPositionColorTexture(new Vector3(p.X+layer.Width,p.Y,z),Color.White,new Vector2(r,0));
@@ -48,6 +74,7 @@ namespace FSO.LotView
                     var d=new VertexPositionColorTexture(new Vector3(p.X,p.Y+layer.Height,z),Color.White,new Vector2(l,1));
                     item.Vertices=new[]{a,b,c,a,c,d};
                 }
+                alphaItems=items.Where(i=>i.HasAlpha).OrderBy(i=>i.Nearness).ThenBy(i=>i.ID).ToArray();
             } catch {Dispose();throw;}
         }
         public void Draw(Matrix projection,bool showWalls,bool reverseOpaque=false)
@@ -69,12 +96,12 @@ namespace FSO.LotView
             sprites.Parameters["DepthSpan"].SetValue((float)Math.Sqrt(1.5)/0.4f/256f);
             sprites.Parameters["AlphaPass"].SetValue(0f);
             var opaque=reverseOpaque?items.AsEnumerable().Reverse():items;
-            foreach(var item in opaque) DrawItem(item);
+            foreach(var item in opaque) if(item.HasOpaque)DrawItem(item);
             // Opaque texels write depth; partial alpha edges only read it, avoiding
             // invisible depth writes. Intersecting translucent surfaces are not OIT.
             device.BlendState=BlendState.AlphaBlend;device.DepthStencilState=DepthStencilState.DepthRead;
             sprites.Parameters["AlphaPass"].SetValue(1f);
-            foreach(var item in items.OrderBy(i=>i.Nearness).ThenBy(i=>i.ID)) DrawItem(item);
+            foreach(var item in alphaItems) DrawItem(item);
         }
         private void DrawSurface(VertexPositionColor[] vertices)
         {
@@ -93,6 +120,6 @@ namespace FSO.LotView
             return Matrix.CreateScale(scale,scale,1)*Matrix.CreateTranslation(width/2f-center.X*scale+pan.X,height/2f-center.Y*scale+pan.Y,0)*
                 Matrix.CreateOrthographicOffCenter(0,width,height,0,-128,128);
         }
-        public void Dispose() {foreach(var item in materialItems)if(item.Texture!=null)item.Texture.Dispose();materialItems.Clear();foreach(var item in items)item.Dispose();items.Clear();if(surfaces!=null)surfaces.Dispose();if(materials!=null)materials.Dispose();if(sprites!=null)sprites.Dispose();}
+        public void Dispose() {foreach(var texture in textures)texture.Dispose();textures.Clear();materialItems.Clear();items.Clear();alphaItems=null;if(surfaces!=null)surfaces.Dispose();if(materials!=null)materials.Dispose();if(sprites!=null)sprites.Dispose();}
     }
 }

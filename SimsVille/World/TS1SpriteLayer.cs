@@ -22,6 +22,14 @@ namespace FSO.LotView
 
         public static List<TS1SpriteLayer> Read(VMEntity entity, int zoom, int rotation)
         {
+            return Read(entity, zoom, rotation, null);
+        }
+
+        // Cache only for one view. Repeated objects share immutable upload data;
+        // callers of the public Read API still receive independent pixel arrays.
+        internal static List<TS1SpriteLayer> Read(VMEntity entity, int zoom, int rotation,
+            Dictionary<SPR2Frame, TS1SpriteLayer> frames)
+        {
             if (entity == null) throw new ArgumentNullException("entity");
             ValidateView(zoom, rotation);
             uint direction = (uint)entity.Direction;
@@ -52,15 +60,20 @@ namespace FSO.LotView
                 if (frame.Width <= 0 || frame.Height <= 0 || frame.PixelData == null || frame.PixelData.Length != count ||
                     frame.ZBufferData == null || frame.ZBufferData.Length != count)
                     throw new InvalidDataException("Missing SPR2 color/depth pixels: sprite="+sprite.SpriteID+" frame="+sprite.SpriteFrameIndex+" size="+frame.Width+"x"+frame.Height+" flags="+frame.Flags);
-                var pixels = new Color[count];
-                for (int i = 0; i < count; i++) pixels[i] = Premultiply(frame.PixelData[i]);
+                TS1SpriteLayer shared;
+                if (frames == null || !frames.TryGetValue(frame, out shared)) {
+                    var pixels = new Color[count];
+                    for (int i = 0; i < count; i++) pixels[i] = Premultiply(frame.PixelData[i]);
+                    shared = new TS1SpriteLayer {Pixels = pixels, Depth = (byte[])frame.ZBufferData.Clone()};
+                    if (frames != null) frames.Add(frame, shared);
+                }
                 float angle = direction == 4 ? MathHelper.PiOver2 : direction == 16 ? MathHelper.Pi : direction == 64 ? MathHelper.Pi * 1.5f : 0;
                 var relative = Vector3.Transform(sprite.ObjectOffset * new Vector3(1/16f, 1/16f, 1/5f), Matrix.CreateRotationZ(angle));
                 var offset = sprite.SpriteOffset + Project(relative, zoom, rotation);
                 offset.Y -= frame.Height; // shared ground anchor, excluding the legacy render-target padding
                 result.Add(new TS1SpriteLayer {
                     Width = frame.Width, Height = frame.Height, Offset = new Vector2((int)offset.X, (int)offset.Y),
-                    WorldOffset = relative, Flip = sprite.Flip, Pixels = pixels, Depth = (byte[])frame.ZBufferData.Clone()
+                    WorldOffset = relative, Flip = sprite.Flip, Pixels = shared.Pixels, Depth = shared.Depth
                 });
             }
             return result;

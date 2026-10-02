@@ -149,7 +149,14 @@ namespace FSO.SimAntics
 
         private void VM_OnBHAVChange()
         {
+            lock (_Assembled) _Assembled.Clear();
             BHAVDirty = true;
+        }
+
+        internal void ReleaseRuntimeReferences()
+        {
+            OnBHAVChange -= VM_OnBHAVChange;
+            lock (_Assembled) _Assembled.Clear();
         }
 
         /// <summary>
@@ -432,7 +439,9 @@ namespace FSO.SimAntics
             return true;
         }
 
-        private static Dictionary<BHAV, VMRoutine> _Assembled = new Dictionary<BHAV, VMRoutine>();
+        // A routine contains its owning VM. A process-wide cache retains discarded
+        // lots and can return a routine belonging to a different VM.
+        private readonly Dictionary<BHAV, VMRoutine> _Assembled = new Dictionary<BHAV, VMRoutine>();
         private static event VMBHAVChangeDelegate OnBHAVChange;
 
         /// <summary>
@@ -450,6 +459,7 @@ namespace FSO.SimAntics
                     return _Assembled[bhav];
                 }
                 var routine = VMTranslator.Assemble(this, bhav);
+                routine.RuntimeVer = bhav.RuntimeVer;
                 _Assembled.Add(bhav, routine);
                 return routine;
             }
@@ -457,11 +467,7 @@ namespace FSO.SimAntics
 
         public static void BHAVChanged(BHAV bhav)
         {
-            lock (_Assembled)
-            {
-                bhav.RuntimeVer++;
-                if (_Assembled.ContainsKey(bhav)) _Assembled.Remove(bhav);
-            }
+            bhav.RuntimeVer++;
             if (OnBHAVChange != null) OnBHAVChange();
         }
 

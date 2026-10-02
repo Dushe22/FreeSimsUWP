@@ -212,6 +212,7 @@ namespace FSO.LotView
             if (level < 1 || level > 3) throw new ArgumentOutOfRangeException("level");
             TS1SpriteLayer.Project(Vector3.Zero,zoom,rotation); // validate before allocating
             var view=new View {PoolAttachmentAdjustments=poolAttachmentOffsets.Count/3}; var arch=session.VM.Context.Architecture;
+            var spriteFrames=new Dictionary<SPR2Frame,TS1SpriteLayer>();
             var terrain=materials.Terrain(grass,Size);
             for(int y=0;y<Size;y++)for(int x=0;x<Size;x++) {
                 var points=new[]{new Vector3(x,y,-.01f),new Vector3(x+1,y,-.01f),new Vector3(x+1,y+1,-.01f),new Vector3(x,y+1,-.01f)};
@@ -283,7 +284,7 @@ namespace FSO.LotView
                 if(entity.Container!=null) {view.Contained++;continue;} // SLOT visual offsets are a separate rendering step
                 if(entity.Object.OBJ.BaseGraphicID==0) {view.NoGraphic++;continue;}
                 try {
-                    var layers=TS1SpriteLayer.Read(entity,zoom,rotation);
+                    var layers=TS1SpriteLayer.Read(entity,zoom,rotation,spriteFrames);
                     if(layers.Count==0){view.NoGraphic++;continue;}
                     var world=new Vector3(entity.Position.x/16f,entity.Position.y/16f,(entity.Position.Level-1)*2.95f);
                     Vector2 poolOffset;if(poolAttachmentOffsets.TryGetValue(entity.ObjectID,out poolOffset))world+=new Vector3(poolOffset,0);

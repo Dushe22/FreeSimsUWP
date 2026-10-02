@@ -194,6 +194,6 @@ namespace FSO.SimAntics
             if (!VM.ScriptExecutionStopped) driver.Tick(VM);
             if (VM.ScriptExecutionStopped) throw new InvalidOperationException("Saved lot simulation stopped after a script fault.", VM.ScriptFault);
         }
-        public void Dispose() { if (!disposed) { driver.CloseNet(); disposed = true; } }
+        public void Dispose() { if (!disposed) { driver.CloseNet(); VM.ReleaseRuntimeReferences(); disposed = true; } }
     }
 }

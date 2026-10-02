@@ -1766,3 +1766,27 @@ frames at four rotations/three zooms and a foreground occlusion guard. Existing
 roof, stair, terrain and pool regressions remain intact. Local log:
 artifacts/openings-release-tests.log. Signed build: artifacts/offline-openings-final;
 handoff: artifacts/xbox-openings-*.zip. Xbox confirmation is pending.
+
+## 0.12.2: retained lots and view allocation peaks
+
+The 0.12.1 Xbox log records OutOfMemoryException after House 28 zoom changes.
+Full visual checks passed, but neither those checks nor process restart exposed
+retained VM lifetimes. The static BHAV event retained every imported VM; the
+static assembled-routine cache independently retained VM/content through each
+routine. Session disposal now unregisters the event, and routines are cached per
+VM with edit invalidation preserved. Regression checks cover actual collection,
+shared-content VM ownership and repeated GPU upload/disposal.
+
+Sprite frame copies and GPU uploads are shared within a view. Opaque/alpha
+classification and translucent ordering are computed once. Rebuilds release the
+previous scene before allocating the next; house changes release their VM first.
+Startup no longer runs the exhaustive suite; Menu still runs it explicitly and
+shows its result. Budget/usage and view timings are logged, with a single low-zoom
+recovery on OOM and no stale image masquerading as a newly selected view.
+
+Desktop verification: 20 render checks and offline compatibility pass; 144 view
+rebuilds / 288 draws across both houses, all zooms, rotations and levels pass.
+Disposed managed footprint after four loads drops from 234 MiB to below 1 MiB.
+Uploaded bytes are reduced 34-40% across the stress views. All 48 regenerated
+whole-lot images match the previous build byte-for-byte. Hardware verification
+remains pending; these memory/timing figures are desktop measurements.

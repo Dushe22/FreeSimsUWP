@@ -1,6 +1,6 @@
 # Next session
 
-Branch: xbox-uwp-port. Milestone: Xbox 0.12.1 opening frames.
+Branch: xbox-uwp-port. Milestone: Xbox 0.12.2 memory/stability fix.
 
 User confirmed the inclined stair handrail fix works normally on Xbox.
 0.11 evidence (UWP Screenshots/0.11): 13/13 PASS, both houses with roofs at all
@@ -14,19 +14,38 @@ adjacency with the camera and composes concave pool corners around islands.
 Ground remains flat, water static; no broader simulation or new lighting.
 No extra game assets are needed beyond the 0.11 upload.
 
-Local suite: 18 checks pass, including all 256 adjacency masks, four rotations,
+Local suite: 20 checks pass, including all 256 adjacency masks, four rotations,
 three zooms, deterministic saved grass, GPU pool coverage and existing architecture/
 stair regressions. Full renders: artifacts/lot-render-check (48 views).
-Logs: artifacts/openings-release-tests.log; close-ups: artifacts/architecture-inspect.
-Native build/audit: artifacts/offline-openings-final.
-Handoff: artifacts/xbox-openings-*.zip. Use XboxOfflineProbe/TESTING.md.
+Logs: artifacts/stability-tests.log; close-ups: artifacts/architecture-inspect.
+Native build/audit: artifacts/offline-stability-final.
+Handoff: artifacts/xbox-stability-*.zip. Use XboxOfflineProbe/TESTING.md.
 The user's 0.12 PNG shows 17/17 PASS and clipped House 28 window/door trim.
 0.12.1 keeps a separate authored opening mask for each wall face and applies a
 bounded eight-sample SPR2 depth bias only to the camera-facing architectural
 half. Other faces and unrelated sprites retain their depth. Real three-section
 window/double-door GPU fixtures cover four angles/three zooms, frame coverage
 and foreground occlusion. No mask enlargement or asset/save edits.
-Xbox 0.12.1 validation is pending per XboxOfflineProbe/TESTING.md.
+Xbox 0.12.1 proof.log confirms OutOfMemoryException at 2026-10-02 06:05:42 UTC
+while changing House 28 zoom, despite 18/18 PASS. User clarified they did not
+observe a separate visual defect. Root causes: VM.OnBHAVChange held every
+imported VM after Dispose, and the static assembled-routine cache retained
+VM/content through VMRoutine.VM. Routines now belong to their VM, and session
+Dispose unregisters the event and clears its cache. Shared frame pixels and
+GPU textures remove per-instance duplicates. The old scene/lot is released
+before allocating its replacement. Alpha ordering is cached at upload and
+passes without matching alpha texels are skipped. No geometry/shader changes.
+The complete test suite runs only on Menu, not startup; the initial label is
+MENU: TESTS. Memory usage/budget and view costs are logged. OOM has one zoom-1
+recovery attempt, and failed views no longer display stale imagery as current.
+Evidence: artifacts/memory-before.log and memory-after.log (retained managed
+memory after four unloaded lots: 234 MiB before, below 1 MiB after; weak VM
+references now dead). artifacts/stability-stress.log: 144 view rebuilds,
+288 GPU draws, no retained scene/pixel arrays after each lot; shared uploads
+reduce total pixel bytes by 34-40%. This is desktop evidence, not Xbox FPS.
+48 regenerated whole-lot PNGs are byte-identical to the previous render set.
+Offline compatibility suite also passes. Xbox 0.12.2 hardware validation pending;
+follow XboxOfflineProbe/TESTING.md and inspect MEMORY lines in new proof.log.
 
 After the terrain/pool hardware gate: resolve the 11 held contained objects in
 House 28 using SLOT visual offsets, then lighting. Keep the lot viewer static
@@ -41,3 +60,4 @@ reconciles all three parts one tile east to the adjacent paved deck, without
 moving VM entities or writing the save. Other ladders remain in place.
 An additional regression covers attachment directions and both houses at every
 angle/zoom. LOT VIEW logs poolAttachments=1 for House 28, 0 for House 2.
+
