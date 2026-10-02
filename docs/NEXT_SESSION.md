@@ -10,8 +10,7 @@ exposed-side layers. No Init/Main or wider simulation is enabled.
 
 Local renderer suite: 8/8, both houses, all rotations and levels; stair layers
 checked at all three zooms. Existing floor and persistent-railing checks pass.
-Xbox 0.10.3 validation pending: House 2 angle 0 zoom 3, levels 1/2, then rotations,
-wall toggle, Home/return and B/relaunch. Existing game files suffice.
+Xbox 0.10.3: user confirmed the stair handrail now works normally (2026-10-01). The reported handrail bug is resolved. Existing game files suffice.
 
 Logs: artifacts/stair-fix-test.log and artifacts/stair-fix-native.log.
 Package audit: artifacts/offline-stair-fix-final/AUDIT.txt.
