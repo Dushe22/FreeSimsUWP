@@ -16,7 +16,7 @@ namespace FreeSims.Tests
 {
     public static class TS1BehaviorTests
     {
-        public const int Count = 10;
+        public const int Count = 11;
         private static void Require(bool value, string message) { if (!value) throw new InvalidOperationException(message); }
         private static void Reject<T>(Action action) where T : Exception
         {
@@ -105,6 +105,20 @@ namespace FreeSims.Tests
                 });
                 check("CEILING LIGHT ZONING RESPONSE", () => Lights(paths, content, "lampceiling.iff", 14, log));
                 check("WALL LIGHT ZONING RESPONSE", () => Lights(paths, content, "WallLite.iff", 27, log));
+                check("RESIDENTIAL LAMP AUTHORED POWER WITHOUT INIT", () => {
+                    using(var session=TS1LotObjectSession.Load(House(paths,5),new TS1ObjectProvider(paths,includeCharacters:true),true)) {
+                        var lamps=Select(session,"Lamps.iff");
+                        Require(lamps.Length==3,"Missing residential lamps.");
+                        foreach(var lamp in lamps) {
+                            var data=(short[])lamp.ObjectData.Clone();var thread=lamp.Thread;var pos=lamp.Position;
+                            var temps=(short[])thread.TempRegisters.Clone();short state=lamp.GetAttribute(0);
+                            TS1SimulationController.PrepareControlledBehavior(lamp,session.VM.Context);
+                            Require(lamp.GetAttribute(2)==(lamp.ObjectID==123?75:50),"Authored lamp power not recovered.");
+                            Require(data.SequenceEqual(lamp.ObjectData)&&temps.SequenceEqual(thread.TempRegisters)&&ReferenceEquals(thread,lamp.Thread)&&pos==lamp.Position&&state==lamp.GetAttribute(0),"Lamp preparation executed Init or changed saved state.");
+                        }
+                        log("LAMP POWER=75,50,50 INIT_EXECUTED=0 SAVED_STATE_UNCHANGED=1");
+                    }
+                });
                 check("MIXED SAVED OBJECTS LONG RUN", () => {
                     using (var session = TS1LotObjectSession.Load(House(paths, 28), content)) {
                         session.VM.Context.RandomSeed = 12345;

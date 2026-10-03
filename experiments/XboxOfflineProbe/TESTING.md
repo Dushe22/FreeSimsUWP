@@ -1,17 +1,31 @@
-# Saved-Sim visual import 0.17.0.0
+# Shared stair, lamp and roof corrections 0.17.1.0
 
 Update the Offline Probe and retain the existing uploaded game files.
-Upload the PRIVATE artifacts/sim-probe-upload.zip GameData tree alongside your
-existing LocalState/GameData files, preserving subfolders. The seven originals
-are separate from APPX; do not distribute them. Menu expects 39/39 PASS and
+Keep the seven-file PRIVATE artifacts/sim-probe-upload.zip upload from 0.17.
+Additionally upload artifacts/shared-lot-assets-0171.zip, preserving its GameData
+subfolders. It supplies the missing original GameData/Roofs/r3_.bmp separately
+from APPX; do not distribute these originals. Menu expects 41/41 PASS and
 requires House05, its three Characters and the referenced avatar archives.
 
 X cycles House 2 -> 28 -> 5 -> 2. House 5 renders the saved Mortimer, Bella and
 Cassandra with their original appearance and pose. These are stationary visual
 snapshots; Sim behavior, movement and full saved execution remain later work.
 Shared import logic applies to compatible future lots. Houses 2/28 contain no
-saved people. One existing House5 object (203) lacks a DGRP view, so expect
-UNSUPPORTED 1 there; SIMS must be 3. No substitute graphics are invented.
+saved people. House5 must show UNSUPPORTED 0 at both floors and roof, SIMS 3.
+Its zero-graphic multipart stair stubs are nonvisual, not missing artwork.
+The accepted roof geometry/shading/sampling and original floor materials remain.
+
+Stair rails use the common stair resource callbacks and visible upper-wall state,
+not model GUIDs. Test floors 1/2, all angles/zooms, Down/Cutaway/Up and timed
+restoration; upper rail segments must appear with their host walls absent/cut.
+Up restores the original wall-side selection, including House5's enclosed stair.
+
+Lamps.iff now runs its original Main. Only kind/power arguments are read from
+its original initializer; Init/placement are not executed. Room light, emissive
+graphics and all states reuse existing GPU resources. Empty residential rooms
+remain off according to the original routine. Saved Sims are still detached
+visuals, so room occupancy/sleep-driven lighting requires the later executable
+Sim milestone; this build does not pretend those residents are VM avatars.
 
 This milestone connects selected object Main routines to the displayed lot.
 House 2 starts 134 flower/shrub objects; House 28 starts 80 chair/table/sink/
@@ -46,7 +60,7 @@ A script/render-state fault stops simulation and logs actionable context.
 Camera, wall modes and paused snapshots remain available. No saves are written.
 
 Hardware gate:
-1. Run Menu and return proof.log showing 39/39. Then switch to House 28.
+1. Run Menu and return proof.log showing 41/41. Then switch to House 28.
 2. Use Normal to observe the aquarium from angle 2, floor 2, walls down;
    compare lamps before/after behaviors initialize. Other idle objects may
    execute without visibly changing. Confirm counters still show 11 SLOT children.
@@ -84,8 +98,10 @@ now stops at the authored height and still rejects truncated row payloads.
 0.16.1 local evidence: artifacts/clock-render-tests.log and artifacts/clock-offline-tests.log.
 These cover complete days at four frame rates, exact speeds and preserved import
 phase, plus actual VM trials and GPU resource stability.
-0.17 local evidence: artifacts/sim-render-tests-release.log (39 checks),
-artifacts/sims-qa.log and eight captures in artifacts/sims-qa. All three Sims use
+0.17.1 local evidence: artifacts/shared-render-final.log (41 checks),
+artifacts/shared-offline-final.log and artifacts/shared-sims-qa.log, with 24
+captures of House5 floors/roof, four angles and Down/Up in artifacts/sims-qa.
+All three Sims use
 13 mesh parts; GPU resources remain constant on relight, and disposed Sim views
 and pixel/vertex arrays are released. Invalid/truncated BCF input fails explicitly.
 Next after this Xbox visual/memory gate: controlled Sim animation/movement,

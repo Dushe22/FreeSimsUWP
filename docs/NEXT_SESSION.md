@@ -1,6 +1,31 @@
 # Next session
 
-Branch: xbox-uwp-port. Milestone: Xbox 0.16.1 clock operation confirmed by the user; next is Sims import/rendering.
+Branch: xbox-uwp-port. Current milestone: shared House5 regressions, 0.17.1.
+
+0.17 hardware evidence on commit 394364d: 39/39 PASS, House5 detached Sims
+render, but upper stair rails clipped, lamps never emit, and roof view reports
+FileNotFoundException for GameData/Roofs/r3_.bmp. This is a controlled view
+failure; do not attribute older proof.log crash sessions to this build.
+
+Shared corrections remove stair GUID selection, use original callbacks with
+visible upper-wall state, and preload rail layers for Down/Cutaway/Up restoration.
+House5's closed upper stair needs both rails exposed when those walls are absent.
+Zero-graphic multipart stubs are now counted as nonvisual (unsupported=0).
+Lamps.iff is admitted by the common behavior gate; its saved initialization
+attributes are zero, so bounded pure initializer arguments restore original
+kind/power (75/50/50 here) without running Init or changing saved placement.
+Original Main changes graphics/contributions. Empty residential interiors stay
+off; detached Sims do not yet supply awake-room occupancy. Complete that with
+executable Sims, not by forcing lamps on or fabricating avatars.
+
+Full render gate now covers 2/5/28, all floors/roof, four angles and three zooms.
+SimsQa/SimInspect also include House5 roof and derive material dependencies.
+Keep prior seven-file avatar delta and add PRIVATE shared-lot-assets-0171.zip
+(original r3_.bmp), separate from the signed 0.17.1 APPX and Git.
+Evidence: artifacts/shared-render-final.log, shared-offline-final.log,
+shared-sims-qa.log and artifacts/sims-qa (24 current images). Hardware gate:
+41/41 Menu, House5 rails/restoration/roof, existing 2/28 visuals, memory and SIM
+records. Preserve accepted roof geometry and original brown stair floor tile.
 
 User confirmed the inclined stair handrail fix works normally on Xbox.
 0.11 evidence (UWP Screenshots/0.11): 13/13 PASS, both houses with roofs at all

@@ -47,6 +47,11 @@ namespace FSO.LotView
             int graphic = definition.BaseGraphicID + graphicOffset;
             if (graphic <= 0 || graphic > ushort.MaxValue) throw new InvalidDataException("Invalid object graphic.");
             var group = entity.Object.Resource.Get<DGRP>((ushort)graphic);
+            // Nonvisual multipart stubs may retain a style's graphic base in
+            // OBJD. Zero declared graphics plus no group means no drawable part;
+            // missing declared graphics/views still report corrupted content.
+            if(group==null && definition.NumGraphics==0 && entity.MultitileGroup!=null && entity.MultitileGroup.MultiTile)
+                return new List<TS1SpriteLayer>();
             var view = group == null ? null : group.GetImage(direction, (uint)zoom, (uint)rotation);
             if (view == null || view.Sprites == null) throw new InvalidDataException("Missing DGRP view.");
             var result = new List<TS1SpriteLayer>();

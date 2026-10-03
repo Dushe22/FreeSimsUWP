@@ -1960,3 +1960,13 @@ initial visuals. House5 retains one existing non-person missing DGRP view; all
 three persons load. Hardware memory/performance/visual validation remains pending.
 Native 0.17 handoff and private seven-file game-data delta are separate; APPX/Git
 contain no licensed game data. See experiments/XboxOfflineProbe/TESTING.md.
+
+0.17.1 closes the new-lot architecture coverage gap: common stair callbacks now
+follow visible upper-wall state across styles, and nonvisual multipart stubs no
+longer count as missing graphics. Lamps.iff Main is enabled with authored pure
+initialization parameters; room contribution/state changes reuse all GPU assets.
+Detached saved Sims still do not satisfy executable room occupancy queries.
+Whole-lot tests cover 2/5/28, floors/roof, four angles and three zooms (41 Menu
+checks). House5 QA now includes the roof dependency; PRIVATE r3_.bmp is supplied
+separately. Accepted roofs remain unchanged. See RENDERING_CONTRACT.md for the
+required shared resource/data validation gate and TESTING.md for hardware checks.

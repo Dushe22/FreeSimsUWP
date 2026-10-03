@@ -20,18 +20,20 @@ if(args.Contains("--sims-qa")) {
 var qa=Path.GetFullPath("artifacts/sims-qa");Directory.CreateDirectory(qa);
 using(var lot=new TS1LotRenderData(paths,5)) {
 foreach(var file in lot.SimSourceFiles)Console.WriteLine("SIM SOURCE "+file);
-for(int rotation=0;rotation<4;rotation++)foreach(var mode in new[]{TS1WallMode.Down,TS1WallMode.Up}) {
-var data=lot.Build(3,rotation,1);
+for(int level=1;level<=3;level++)for(int rotation=0;rotation<4;rotation++)foreach(var mode in new[]{TS1WallMode.Down,TS1WallMode.Up}) {
+var data=lot.Build(3,rotation,level);
+if(data.Unsupported!=0 || (level==3&&data.RoofTriangles==0))throw new InvalidDataException("Incomplete House5 view: "+string.Join(";",data.Issues));
 using(var renderer=new TS1LotRenderer(d,data,effect))using(var target=new RenderTarget2D(d,1280,720,false,SurfaceFormat.Color,DepthFormat.Depth24)) {
 var point=TS1SpriteLayer.Project(new Vector3(27,24,0),3,rotation);
 var camera=Matrix.CreateTranslation(640-point.X,430-point.Y,0)*Matrix.CreateOrthographicOffCenter(0,1280,720,0,-128,128);
 lot.UpdateWalls(data,mode,null,camera,1280,720);renderer.UpdateLighting(12);
 d.SetRenderTarget(target);d.Clear(ClearOptions.Target|ClearOptions.DepthBuffer,new Microsoft.Xna.Framework.Color(16,24,39),1,0);renderer.Draw(camera,mode);d.SetRenderTarget(null);
 var pixels=new Microsoft.Xna.Framework.Color[1280*720];target.GetData(pixels);
-SavePixels(pixels,1280,720,Path.Combine(qa,"house5-r"+rotation+"-"+mode+".png"));
-Console.WriteLine("SIM QA r="+rotation+" walls="+mode+" sims="+data.SimsRendered+" parts="+data.SimMaterials.Count+" unsupported="+data.Unsupported+" textures="+renderer.TextureCount+" bytes="+renderer.TextureBytes);
+SavePixels(pixels,1280,720,Path.Combine(qa,"house5-level"+level+"-r"+rotation+"-"+mode+".png"));
+Console.WriteLine("SIM QA house=5 level="+level+" r="+rotation+" walls="+mode+" sims="+data.SimsRendered+" parts="+data.SimMaterials.Count+" unsupported="+data.Unsupported+" textures="+renderer.TextureCount+" bytes="+renderer.TextureBytes+" roof="+data.RoofTriangles);
 }
 }
+foreach(var file in lot.MaterialSourceFiles)Console.WriteLine("LOT SOURCE "+file);
 }
 return 0;
 }

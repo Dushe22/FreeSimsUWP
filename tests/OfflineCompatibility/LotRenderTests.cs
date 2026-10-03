@@ -13,7 +13,7 @@ namespace FreeSims.Tests
 {
     public static class LotRenderTests
     {
-        public const int Count=39;
+        public const int Count=41;
         public static List<string> Run(GraphicsDevice device,GamePaths paths,byte[] effect,Action<string> log)
         {
             var result=new List<string>();bool oldWorld=VM.UseWorld;VM.UseWorld=false;
@@ -22,6 +22,7 @@ namespace FreeSims.Tests
                 check("TS1 AVATAR BCF LAYOUT AND MALFORMED COUNTS",()=>AvatarFormats());
                 check("SAVED SIM IDENTITY APPEARANCE AND DETACHED POSE",()=>SavedSims(paths));
                 check("GPU SIMS FOUR ANGLES THREE ZOOMS AND LIGHTING REUSE",()=>SimGpu(device,paths,effect));
+                check("RESIDENTIAL LAMP STATES LIGHTING AND GPU REUSE",()=>ResidentialLamps(device,paths,effect));
                 check("DISPOSED LOTS RELEASE VM AND CONTENT",()=>ReleasedLots(paths));
                 check("GPU SHARED SPRITES AND RESOURCE DISPOSAL",()=>SharedSprites(device,paths,effect));
                 check("CONTAINED SLOT GEOMETRY AND SAVED POSITIONS",()=>ContainedSlots(paths));
@@ -56,16 +57,18 @@ namespace FreeSims.Tests
                 check("AUTHORED POOL AND WATER BORDERS",()=>WaterMaterials(paths));
                 check("GPU POOLS FOUR ANGLES THREE ZOOMS",()=>WaterViews(device,paths,effect));
                 check("POOL LADDER ATTACHMENT FOUR ANGLES THREE ZOOMS",()=>PoolLadderAttachments(paths));
-                foreach(int house in new[]{2,28}) check("HOUSE "+house+" FOUR ANGLES THREE LEVELS",()=> {
+                foreach(int house in new[]{2,5,28}) check("HOUSE "+house+" FOUR ANGLES THREE LEVELS THREE ZOOMS",()=> {
                     using(var lot=new TS1LotRenderData(paths,house)) {
+                        for(int zoom=1;zoom<=3;zoom++)
                         for(int level=1;level<=3;level++) {
                             int floorCount=-1,wallCount=-1;
                             for(int rotation=0;rotation<4;rotation++) {
-                                var data=lot.Build(1,rotation,level);
+                                var data=lot.Build(zoom,rotation,level);
                                 if(level==3 && (data.RoofTriangles==0 || data.RoofMaterials.Count==0))throw new InvalidOperationException("Missing saved roof.");
-                                if(data.Rendered+data.Hidden+data.OutOfWorld+data.Contained+data.NoGraphic+data.Unsupported+data.AboveLevel!=lot.ObjectCount)
+                                if(data.Rendered+data.Hidden+data.OutOfWorld+data.Contained+data.NoGraphic+data.Unsupported+data.AboveLevel+lot.SimCount!=lot.ObjectCount)
                                     throw new InvalidOperationException("Unaccounted saved objects.");
-                                if(level==2 && !data.WallMaterials.Any(s=>s.KeepWhenWallsHidden && s.Material.Name=="wall:251")) throw new InvalidOperationException("Saved banisters missing from persistent geometry.");
+                                if(house!=5 && level==2 && !data.WallMaterials.Any(s=>s.KeepWhenWallsHidden && s.Material.Name=="wall:251")) throw new InvalidOperationException("Saved banisters missing from persistent geometry.");
+                                if(data.Unsupported!=0)throw new InvalidOperationException("Unsupported saved drawable: "+string.Join(";",data.Issues));
                                 if(data.Rendered!=data.Sprites.Select(s=>s.ObjectID).Distinct().Count()) throw new InvalidOperationException("Visible object count mismatch.");
                                 if(data.Rendered<20 || data.FloorTiles==0 || data.WallEdges==0 || data.FloorMaterials.Count<3 || data.WallMaterials.Count<3) throw new InvalidOperationException("Missing lot geometry/content.");
                                 if(floorCount>=0 && (data.FloorTiles!=floorCount || data.WallEdges!=wallCount)) throw new InvalidOperationException("Camera changed architecture.");
@@ -75,14 +78,14 @@ namespace FreeSims.Tests
                                 using(var target=new RenderTarget2D(device,640,360,false,SurfaceFormat.Color,DepthFormat.Depth24)) {
                                     try {
                                         device.SetRenderTarget(target);device.Clear(ClearOptions.Target|ClearOptions.DepthBuffer,new Color(16,24,39),1,0);
-                                        renderer.Draw(TS1LotRenderer.Camera(lot.Size,1,rotation,640,360,Vector2.Zero),true);
+                                        renderer.Draw(TS1LotRenderer.Camera(lot.Size,zoom,rotation,640,360,Vector2.Zero),true);
                                         device.SetRenderTargets(previous);device.Viewport=viewport;
                                         var pixels=new Color[640*360];target.GetData(pixels);
                                         if(pixels.Count(p=>p!=new Color(16,24,39))<10000 || pixels.Select(p=>p.PackedValue).Distinct().Count()<100)
                                             throw new InvalidOperationException("Rendered lot is empty or lacks object colors.");
                                     }finally{device.SetRenderTargets(previous);device.Viewport=viewport;}
                                 }
-                                log("LOT GPU house="+house+" level="+level+" rotation="+rotation+" drawn="+data.Rendered+" unsupported="+data.Unsupported+" contained="+data.Contained+" floors="+floorCount+" walls="+wallCount+" openings="+data.OpeningEdges+" joints="+data.StoryJoints+" roofTriangles="+data.RoofTriangles);
+                                log("LOT GPU house="+house+" zoom="+zoom+" level="+level+" rotation="+rotation+" drawn="+data.Rendered+" unsupported="+data.Unsupported+" contained="+data.Contained+" floors="+floorCount+" walls="+wallCount+" openings="+data.OpeningEdges+" joints="+data.StoryJoints+" roofTriangles="+data.RoofTriangles);
                             }
                         }
                     }
@@ -1101,16 +1104,23 @@ namespace FreeSims.Tests
         }
         private static void StairHandrails(GamePaths paths)
         {
-            using(var lot=new TS1LotRenderData(paths,2)) {
+            foreach(int house in new[]{2,5})using(var lot=new TS1LotRenderData(paths,house)) {
                 for(int zoom=1;zoom<=3;zoom++) for(int rotation=0;rotation<4;rotation++) {
                     var lower=lot.Build(zoom,rotation,1);
                     var upper=lot.Build(zoom,rotation,2);
-                    foreach(short id in new short[]{101,107}) {
-                        // House 2: two static layers plus the exposed-side dynamic
-                        // handrail. The wall-side dynamic layer stays hidden.
-                        if(lower.Sprites.Count(s=>s.ObjectID==id)!=3 || upper.Sprites.Count(s=>s.ObjectID==id)!=3)
+                    var camera=TS1LotRenderer.Camera(lot.Size,zoom,rotation,640,360,Vector2.Zero);
+                    lot.UpdateWalls(upper,TS1WallMode.Down,null,camera,640,360);
+                    foreach(short id in (house==2?new short[]{101,107}:new short[]{202,208})) {
+                        // Both upper rails are exposed when their host walls are
+                        // absent/cut. Restore the authored wall-side choice on Up.
+                        if(lower.Sprites.Count(s=>s.ObjectID==id&&s.Visible&&s.Layer.DynamicIndex>=0)!=2 ||
+                            upper.Sprites.Count(s=>s.ObjectID==id&&s.Visible&&s.Layer.DynamicIndex>=0)!=2 ||
+                            lower.Sprites.Count(s=>s.ObjectID==id)!=upper.Sprites.Count(s=>s.ObjectID==id))
                             throw new InvalidOperationException("Missing/extra stair handrail: "+id+" zoom="+zoom+" rotation="+rotation);
                     }
+                    lot.UpdateWalls(upper,TS1WallMode.Up,null,camera,640,360);
+                    foreach(short id in (house==2?new short[]{101,107}:new short[]{202,208}))
+                        if(upper.Sprites.Count(s=>s.ObjectID==id&&s.Visible&&s.Layer.DynamicIndex>=0)!=(house==2?1:0))throw new InvalidOperationException("Stair rails did not restore behind upper walls.");
                     var repeat=lot.Build(zoom,rotation,2);
                     if(repeat.Sprites.Count!=upper.Sprites.Count) throw new InvalidOperationException("Stair view rebuild changed sprite state.");
                 }
@@ -1252,6 +1262,32 @@ namespace FreeSims.Tests
             }
             var references=DisposedSims(paths);GC.Collect();GC.WaitForPendingFinalizers();GC.Collect();
             if(references.Any(x=>x.IsAlive))throw new InvalidOperationException("Disposed Sim view or appearance retained by process-wide roots.");
+        }
+        private static void ResidentialLamps(GraphicsDevice device,GamePaths paths,byte[] effect) {
+            using(var lot=new TS1LotRenderData(paths,5,true)) {
+                var field=typeof(TS1LotRenderData).GetField("session",System.Reflection.BindingFlags.Instance|System.Reflection.BindingFlags.NonPublic);
+                var session=(TS1LotObjectSession)field.GetValue(lot);
+                var lamps=session.VM.Entities.Where(e=>e.Object.Resource.Name.Equals("Lamps.iff",StringComparison.OrdinalIgnoreCase)).ToArray();
+                if(lamps.Length!=3||!FSO.SimAntics.TS1SimulationController.SupportsControlledBehavior("Lamps.iff"))throw new InvalidOperationException("Residential lamp family omitted.");
+                var view=lot.Build(3,2,2);
+                using(var renderer=new TS1LotRenderer(device,view,effect)) {
+                    int textures=renderer.TextureCount;long bytes=renderer.TextureBytes;
+                    // Actual original Main, with a controlled zoning transition.
+                    // Community interiors turn on without people; empty residential
+                    // interiors must turn off. Never manufacture executable Sims.
+                    session.VM.GlobalState[10]=28;lot.Clock.Hours=12;
+                    for(int i=0;i<12;i++)lot.AdvanceSimulation(75,view);
+                    renderer.UpdateSimulation();
+                    if(lamps.Any(e=>e.GetAttribute(0)!=1||e.GetValue(FSO.SimAntics.Model.VMStackObjectVariable.LightingContribution)<=0))throw new InvalidOperationException("Original lamp on state does not emit light.");
+                    if(!view.Lighting.Any(l=>l.AmbientLight>25))throw new InvalidOperationException("Lamp light did not reach room geometry.");
+                    foreach(var lamp in lamps)if(!view.Sprites.Any(s=>s.ObjectID==lamp.ObjectID&&s.Visible&&s.LightRoom==TS1LotRenderData.EmissiveLightRoom))throw new InvalidOperationException("Lit lamp graphic was not preloaded/selected.");
+                    session.VM.GlobalState[10]=5;lot.Clock.Hours=19;
+                    for(int i=0;i<12;i++)lot.AdvanceSimulation(75,view);
+                    renderer.UpdateSimulation();
+                    if(lamps.Any(e=>e.GetAttribute(0)!=0||e.GetValue(FSO.SimAntics.Model.VMStackObjectVariable.LightingContribution)!=0))throw new InvalidOperationException("Empty residential lamp remained on.");
+                    if(renderer.TextureCount!=textures||renderer.TextureBytes!=bytes||lot.SimulationFault!=null)throw new InvalidOperationException("Lamp state changes allocated textures or faulted.");
+                }
+            }
         }
         [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.NoInlining)]
         private static WeakReference[] DisposedSims(GamePaths paths) {

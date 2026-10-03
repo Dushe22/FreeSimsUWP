@@ -139,7 +139,28 @@ invalid chains; compute only during view builds and share existing frame arrays.
 - Share uploaded texture arrays across mesh parts and reuse them on relight.
   Submit opaque Sim geometry between opaque and partial-alpha sprite passes,
   using the same projection/depth buffer. No per-tick decoding/uploads.
-- Use Test-LotRendering -SimInspect for the CPU diagnostic, -SimsQa for eight
-  captures, and the full 39-check suite for GPU/release regression coverage.
+- Use Test-LotRendering -SimInspect for the CPU diagnostic, -SimsQa for 24
+  captures including both floors and roof, and the full 41-check suite for
+  GPU/release regression coverage. Every introduced lot must exercise all
+  available floors/roof, four angles and three zooms before shipping its data.
   Original-game deltas remain private, separate from Git/APPX. Xbox validation
   precedes controlled Sim animation/movement and complete save support.
+
+## Shared resource and asset integration gate
+- Stair models share the original upper visual callbacks through their resource
+  family and multipart group. Never select a correction by model GUID, lot ID or
+  coordinate. Use temporary visible-wall adjacency for absent/cut upper hosts;
+  restore structural adjacency and original rail selection on Up/hover expiry.
+  Preload dynamic rail layers once; visibility changes do not decode/upload.
+- Zero declared graphics plus an absent DGRP on a multipart stub means no
+  drawable part. Missing declared graphics or views still fail visibly.
+- Lamps.iff Main needs authored initialization kind/power. Read only bounded
+  pure temp assignments and original initializer call arguments, never execute
+  Init/placement against saved objects or force residential lamps always on.
+  Fail unsupported initializer schemas before running. Occupancy-driven light
+  requires executable people; detached visual snapshots are not VM avatars.
+- Derive private material dependencies from successful complete-view QA,
+  including the roof named by HOUS. Prepare-SimProbeData must reject incomplete
+  floor-only QA and preserve source hashes; validate the merged uploaded data
+  with the full render suite. No roof substitutions, original edits or game
+  assets/keys in Git/APPX.

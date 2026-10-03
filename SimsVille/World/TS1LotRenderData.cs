@@ -24,6 +24,7 @@ namespace FSO.LotView
         private readonly TS1SimVisuals simVisuals;
         public int SimCount {get{return simVisuals==null?0:simVisuals.People.Count;}}
         public IEnumerable<string> SimSourceFiles {get{return simVisuals==null?new string[0]:simVisuals.UsedFiles;}}
+        public IEnumerable<string> MaterialSourceFiles {get{return materials.UsedFiles;}}
         private readonly byte[] floorFlags, grass;
         private readonly string roofName;
         private readonly VMRoomMap[] roofRooms = new VMRoomMap[2];
@@ -41,6 +42,9 @@ namespace FSO.LotView
         // Deliberately restricted to behavior families already exercised by TS1BehaviorTests.
         // This is a compatibility gate by resource, not a correction by house/coordinate.
         private readonly HashSet<short> liveIDs=new HashSet<short>();
+        private sealed class StairStub {public VMEntity Entity;public short SavedAdjacency,AppliedAdjacency=short.MinValue;}
+        private readonly List<StairStub> stairStubs=new List<StairStub>();
+        private readonly HashSet<short> stairRails=new HashSet<short>();
         private readonly Dictionary<short,Placement> placements=new Dictionary<short,Placement>();
         private readonly object viewToken=new object();
         private bool disposed;
@@ -77,12 +81,16 @@ namespace FSO.LotView
             try {
                 simVisuals=new TS1SimVisuals(paths,objectMap,content);
                 // OBJM loading holds behaviors and does not reconstruct dynamic sprite
-                // flags. Refresh only the known TS1 stair upper-stub visual callbacks;
+                // flags. Refresh the shared TS1 stair upper-stub visual callbacks;
                 // never run Init/Main or placement callbacks on saved objects.
-                foreach(var stub in session.VM.Entities.Where(e=>e.Object.OBJ.GUID==0xB7F590C4u || e.Object.OBJ.GUID==0x9431BD2Au).ToArray()) {
-                    int expected=stub.Object.OBJ.GUID==0xB7F590C4u?4123:4122;
-                    if(stub.EntryPoints[6].ActionFunction!=expected || !stub.ExecuteEntryPoint(6,session.VM.Context,true))
-                        throw new InvalidDataException("Unsupported stair visual callback: "+stub.ObjectID);
+                // All styles share these callbacks and traverse their own multipart
+                // group. GUIDs identify styles, not the handrail behavior contract.
+                foreach(var stub in session.VM.Entities.Where(e=>
+                    e.Object.Resource.Name.Equals("stair.iff",StringComparison.OrdinalIgnoreCase) &&
+                    e.MultitileGroup!=null && e.Object.OBJ.NumGraphics==0 &&
+                    (e.EntryPoints[6].ActionFunction==4122 || e.EntryPoints[6].ActionFunction==4123)).ToArray()) {
+                    stairStubs.Add(new StairStub {Entity=stub,SavedAdjacency=stub.GetValue(VMStackObjectVariable.WallAdjacencyFlags)});
+                    foreach(var part in stub.MultitileGroup.Objects.Where(e=>e.Object.OBJ.NumDynamicSprites>0))stairRails.Add(part.ObjectID);
                 }
                 Live=live;
                 if(live) {
@@ -105,6 +113,35 @@ namespace FSO.LotView
                     roofRooms[story].GenerateMap(session.VM.Context.Architecture.Walls[story], new FloorTile[Size * Size], Size, Size, roofRoomData);
                 }
             } catch {if(simVisuals!=null)simVisuals.Dispose();session.Dispose();throw;}
+        }
+        private bool RefreshStairVisuals(int level,View view)
+        {
+            foreach(var stub in stairStubs) {
+                var entity=stub.Entity;
+                // Upper walls are absent below their story, and cut walls cannot
+                // suppress the attached rail. Keep the saved structural adjacency
+                // intact; run the original visual callback with a temporary mask.
+                bool exposed=entity.Position.Level>level || (view!=null && view.Level!=3 &&
+                    entity.Position.Level==view.Level && (view.WallMode==TS1WallMode.Down ||
+                    view.WallSections.Any(s=>s.Cut && s.Story==entity.Position.Level-1 &&
+                        s.TileX==entity.Position.TileX && s.TileY==entity.Position.TileY)));
+                short adjacency=exposed?(short)0:stub.SavedAdjacency;
+                if(adjacency==stub.AppliedAdjacency)continue;
+                try {
+                    entity.SetValue(VMStackObjectVariable.WallAdjacencyFlags,adjacency);
+                    if(!entity.ExecuteEntryPoint(6,session.VM.Context,true))throw new InvalidDataException("Unsupported stair visual callback: "+entity.ObjectID);
+                    stub.AppliedAdjacency=adjacency;
+                } finally {entity.SetValue(VMStackObjectVariable.WallAdjacencyFlags,stub.SavedAdjacency);}
+            }
+            bool changed=false;
+            if(view!=null)foreach(var sprite in view.Sprites.Where(s=>stairRails.Contains(s.ObjectID))) {
+                var entity=session.VM.GetObjectById(sprite.ObjectID);
+                bool visible=entity.GetValue(VMStackObjectVariable.Hidden)==0 &&
+                    (sprite.Layer.DynamicIndex<0 || entity.IsDynamicSpriteFlagSet((ushort)sprite.Layer.DynamicIndex));
+                if(sprite.Visible!=visible){sprite.Visible=visible;changed=true;}
+            }
+            if(changed)view.SpriteRevision++;
+            return changed;
         }
         private void LoadPoolAttachments()
         {
@@ -310,6 +347,7 @@ namespace FSO.LotView
             if (level < 1 || level > 3) throw new ArgumentOutOfRangeException("level");
             TS1SpriteLayer.Project(Vector3.Zero,zoom,rotation); // validate before allocating
             if(disposed)throw new ObjectDisposedException("TS1LotRenderData");
+            RefreshStairVisuals(level,null);
             var view=new View {Owner=viewToken,Live=Live,Zoom=zoom,Rotation=rotation,Level=level,PoolAttachmentAdjustments=poolAttachmentOffsets.Count/3}; var arch=session.VM.Context.Architecture;
             // Snapshot primitive light values only; the view must never retain VM entities.
             var rooms=session.VM.Context.RoomInfo;
@@ -432,6 +470,8 @@ namespace FSO.LotView
                     var layers=TS1SpriteLayer.Read(entity,zoom,rotation,spriteFrames);
                     int graphic=entity.GetValue(VMStackObjectVariable.Graphic);
                     bool dynamic=liveIDs.Contains(entity.ObjectID);
+                    bool rail=stairRails.Contains(entity.ObjectID);
+                    if(rail)layers=TS1SpriteLayer.ReadState(entity,zoom,rotation,spriteFrames,graphic,true);
                     if(dynamic) {
                         int count=entity.Object.OBJ.NumGraphics;
                         if(count<1)count=1;
@@ -459,7 +499,7 @@ namespace FSO.LotView
                     foreach(var layer in layers) view.Sprites.Add(new Sprite {
                         Layer=layer,Position=point+layer.Offset,ObjectID=entity.ObjectID,
                         Graphic=dynamic?layer.Graphic:graphic,
-                        Visible=!dynamic||(!inheritedHidden&&entity.GetValue(VMStackObjectVariable.Hidden)==0&&layer.Graphic==graphic&&(layer.DynamicIndex<0||entity.IsDynamicSpriteFlagSet((ushort)layer.DynamicIndex))),
+                        Visible=(!dynamic&&!rail)||(!inheritedHidden&&entity.GetValue(VMStackObjectVariable.Hidden)==0&&layer.Graphic==graphic&&(layer.DynamicIndex<0||entity.IsDynamicSpriteFlagSet((ushort)layer.DynamicIndex))),
                         LightRoom=EmitsLight(entity)?EmissiveLightRoom:session.VM.Context.GetObjectRoom(root),
                         WallHosts=attachmentEdges.ContainsKey(root.ObjectID)?attachmentEdges[root.ObjectID].ToArray():null,
                         BackNearness=TS1SpriteLayer.ProjectWithDepth(world-new Vector3(0.5f,0.5f,0)+backOffsets[rotation]+layer.WorldOffset,zoom,rotation).Z+attachmentBias
@@ -752,7 +792,7 @@ namespace FSO.LotView
                 if(cut!=section.Cut){section.Cut=cut;changed=true;}
             }
             if(changed)view.WallRevision++;
-            return changed;
+            return RefreshStairVisuals(view.Level,view)||changed;
         }
 
         public static byte WaterNeighbors(FloorTile[] floors,int size,int x,int y,ushort pattern)
@@ -800,6 +840,6 @@ namespace FSO.LotView
             var pd=new VertexPositionColor(TS1SpriteLayer.ProjectWithDepth(d,zoom,rotation),color);
             target.Add(pa);target.Add(pb);target.Add(pc);target.Add(pa);target.Add(pc);target.Add(pd);
         }
-        public void Dispose() {if(disposed)return;disposed=true;wallProfiles.Clear();liveIDs.Clear();placements.Clear();if(simVisuals!=null)simVisuals.Dispose();session.Dispose();}
+        public void Dispose() {if(disposed)return;disposed=true;wallProfiles.Clear();liveIDs.Clear();stairRails.Clear();stairStubs.Clear();placements.Clear();if(simVisuals!=null)simVisuals.Dispose();session.Dispose();}
     }
 }

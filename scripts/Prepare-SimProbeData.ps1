@@ -11,10 +11,12 @@ $destinationRoot=[IO.Path]::GetFullPath($Destination)
 $artifactRoot=[IO.Path]::GetFullPath((Join-Path $repo 'artifacts')).TrimEnd('\','/')+'\'
 if(!$destinationRoot.StartsWith($artifactRoot,[StringComparison]::OrdinalIgnoreCase)){throw 'Destination must remain inside this workspace artifacts directory.'}
 $log=@(Get-Content -LiteralPath $SourceLog)
-if(@($log | Where-Object {$_ -like 'SIM QA *'}).Count -ne 8 -or @($log | Where-Object {$_ -match '^FAIL|Unhandled exception|SIM INSPECT FAILED'}).Count){throw 'Expected a complete successful eight-view Sim QA log.'}
+if(@($log | Where-Object {$_ -like 'SIM QA house=5 *'}).Count -ne 24 -or @($log | Where-Object {$_ -match '^FAIL|Unhandled exception|SIM INSPECT FAILED'}).Count){throw 'Expected successful House5 QA across all floors, roof, four angles and both wall modes (24 views).'}
 $sources=@($log | Where-Object {$_ -like 'SIM SOURCE *'} | ForEach-Object {$_.Substring(11)})
 if($sources.Count -lt 6){throw 'Run Test-LotRendering -SimsQa successfully before preparing the asset delta.'}
 $sources+=Join-Path $sourceRoot 'UserData/Houses/House05.iff'
+$sources+=@($log | Where-Object {$_ -like 'LOT SOURCE *'} | ForEach-Object {$_.Substring(11)})
+if(@($log | Where-Object {$_ -like 'LOT SOURCE *.bmp'}).Count -eq 0){throw 'Roof dependencies were not exercised before packaging.'}
 $manifest=@()
 foreach($source in ($sources | Sort-Object -Unique)) {
     $absolute=[IO.Path]::GetFullPath($source)

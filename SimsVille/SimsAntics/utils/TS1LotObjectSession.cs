@@ -204,6 +204,7 @@ namespace FSO.SimAntics
             if (VM.ScriptExecutionStopped) throw new InvalidOperationException("Discard the faulted lot before restarting behavior.", VM.ScriptFault);
             var entity = VM.GetObjectById(savedID);
             if (entity == null) throw new ArgumentException("Unknown saved object ID.", "savedID");
+            TS1SimulationController.PrepareControlledBehavior(entity,VM.Context);
             entity.Thread = new VMThread(VM.Context, entity, entity.Object.OBJ.StackSize);
         }
         public void Tick()

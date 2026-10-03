@@ -22,10 +22,14 @@ class Program
             {
                 Console.WriteLine("SIM COUNT "+lot.SimCount);
                 foreach(var file in lot.SimSourceFiles)Console.WriteLine("SIM SOURCE "+file);
-                var view=lot.Build(3,0,1);
+                for(int level=1;level<=3;level++)for(int rotation=0;rotation<4;rotation++) {
+                var view=lot.Build(3,rotation,level);
+                if(view.Unsupported!=0 || (level==3 && view.RoofTriangles==0))throw new InvalidDataException("Incomplete saved view: "+string.Join(";",view.Issues));
                 foreach(var issue in view.Issues)Console.WriteLine("ISSUE "+issue);
                 foreach(var part in view.SimMaterials)Console.WriteLine("PART "+part.Material.Name+" vertices="+part.Vertices.Count);
-                Console.WriteLine("PASS SIM INSPECT house="+house+" sims="+view.SimsRendered+" parts="+view.SimMaterials.Count+" unsupported="+view.Unsupported);
+                Console.WriteLine("PASS SIM INSPECT house="+house+" level="+level+" rotation="+rotation+" sims="+view.SimsRendered+" parts="+view.SimMaterials.Count+" unsupported="+view.Unsupported+" roof="+view.RoofTriangles);
+                }
+                foreach(var file in lot.MaterialSourceFiles)Console.WriteLine("LOT SOURCE "+file);
             }
             return 0;
         }

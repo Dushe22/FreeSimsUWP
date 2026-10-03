@@ -40,6 +40,8 @@ namespace FSO.Content.TS1
         private readonly Dictionary<ushort, string> floors, walls;
         private readonly IffFile floorGlobals, wallGlobals;
         private readonly GamePaths paths;
+        private readonly HashSet<string> used=new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        public IEnumerable<string> UsedFiles {get{return used.OrderBy(x=>x,StringComparer.Ordinal).ToArray();}}
         private readonly int[] wallInset = new int[2], wallSpan = new int[2];
         public TS1MaterialProvider(GamePaths paths, IffFile lot)
         {
@@ -223,6 +225,7 @@ namespace FSO.Content.TS1
             string file = Files(directory).FirstOrDefault(p => string.Equals(Path.GetFileName(p), name + ".bmp", StringComparison.OrdinalIgnoreCase));
             if (file == null) throw new FileNotFoundException("Upload GameData/Roofs/" + name + ".bmp from your TS1 installation.");
             using(var stream = File.OpenRead(file)) result = DecodeRoofBitmap(stream, key);
+            used.Add(file);
             cache.Add(key, result); return result;
         }
         public static Material DecodeRoofBitmap(Stream stream, string name)
@@ -286,6 +289,7 @@ namespace FSO.Content.TS1
                 Source source;
                 if (!sources.TryGetValue(name, out source)) throw new FileNotFoundException("Missing TS1 material: " + name);
                 iff = source.Read();
+                used.Add(source.Path);
             } else iff = floor ? floorGlobals : wallGlobals;
             if (floor) {
                 var sprite = iff.Get<SPR2>((ushort)(512 + (mapped ? 1 : id)));

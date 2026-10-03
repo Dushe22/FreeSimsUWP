@@ -3,6 +3,12 @@ using System.Linq;
 using FSO.Content;
 using FSO.Content.TS1;
 using FSO.Files.Formats.IFF;
+using System.IO;
+using FSO.SimAntics.Engine;
+using FSO.SimAntics.Engine.Scopes;
+using FSO.SimAntics.Engine.Utils;
+using FSO.SimAntics.Engine.Primitives;
+using FSO.SimAntics.Primitives;
 
 namespace FSO.SimAntics
 {
@@ -18,9 +24,38 @@ namespace FSO.SimAntics
         private static readonly System.Collections.Generic.HashSet<string> controlledResources=
             new System.Collections.Generic.HashSet<string>(StringComparer.OrdinalIgnoreCase) {
                 "FlowersOutdoor.iff","Shrubs.iff","ChairsHD.iff","lampceiling.iff","WallLite.iff",
-                "TablesHD.iff","Sinks.iff","PlantsHangingHD.iff","FishTankBig.iff"
+                "TablesHD.iff","Sinks.iff","PlantsHangingHD.iff","FishTankBig.iff","Lamps.iff"
             };
         public static bool SupportsControlledBehavior(string resource){return controlledResources.Contains(resource);}
+        // Some shipped residential saves have zero lamp initialization attributes.
+        // Recover only the original initializer's kind/power arguments, without
+        // executing Init, placement, creation or modifying saved threads/positions.
+        public static void PrepareControlledBehavior(VMEntity entity,VMContext context) {
+            if(!entity.Object.Resource.Name.Equals("Lamps.iff",StringComparison.OrdinalIgnoreCase))return;
+            var init=entity.GetBHAVWithOwner(entity.EntryPoints[0].ActionFunction,context);
+            if(init==null)throw new InvalidDataException("Missing lamp initializer.");
+            var temps=(short[])entity.Thread.TempRegisters.Clone();
+            var frame=new VMStackFrame {Caller=entity,Callee=entity,CodeOwner=init.owner,StackObject=entity,Thread=entity.Thread};
+            int index=0;
+            for(int steps=0;steps<64;steps++) {
+                if(index>=init.bhav.Instructions.Length)break;
+                var instruction=init.bhav.Instructions[index];
+                if(instruction.Opcode==8194) {
+                    var call=new VMSubRoutineOperand();call.Read(instruction.Operand);
+                    short kind=call.Arg0==-1?temps[0]:call.Arg0;
+                    short power=call.Arg1==-1?temps[1]:call.Arg1;
+                    if(kind<0||kind>100||power<=0||power>100)break;
+                    entity.SetAttribute(1,kind);entity.SetAttribute(2,power);return;
+                }
+                if(instruction.Opcode!=2)break;
+                var expression=new VMExpressionOperand();expression.Read(instruction.Operand);
+                if(expression.Operator!=VMExpressionOperator.Assign || expression.LhsOwner!=VMVariableScope.Temps ||
+                    expression.LhsData<0 || expression.LhsData>=temps.Length || (expression.RhsOwner!=VMVariableScope.Literal && expression.RhsOwner!=VMVariableScope.Tuning))break;
+                temps[expression.LhsData]=VMMemory.GetVariable(frame,expression.RhsOwner,expression.RhsData);
+                index=instruction.TruePointer;
+            }
+            throw new InvalidDataException("Unsupported lamp initialization contract: "+entity.ObjectID);
+        }
         private TS1LotObjectSession session;
         private long accumulated;
         private bool disposed;
